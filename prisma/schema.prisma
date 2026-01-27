@@ -1,0 +1,51 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                  String             @id @default(uuid())
+  email               String             @unique
+  passwordHash        String
+  preferredIndustries String             @default("[]") // JSON array stored as string
+  createdAt           DateTime           @default(now())
+  savedOpportunities  SavedOpportunity[]
+}
+
+model Opportunity {
+  id                  String             @id @default(uuid())
+  title               String
+  organization        String
+  description         String?
+  location            String?
+  isRemote            Boolean            @default(false)
+  eventDate           DateTime?
+  cfpDeadline         DateTime?
+  format              String             // conference, meetup, podcast, etc.
+  industries          String             @default("[]") // JSON array stored as string
+  compensationType    String?            // paid, travel, exposure
+  compensationAmount  Int?               // Amount in USD (for range filtering)
+  compensationDetails String?
+  applyUrl            String
+  source              String
+  sourceUrl           String?
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+  savedBy             SavedOpportunity[]
+}
+
+model SavedOpportunity {
+  id            String      @id @default(uuid())
+  userId        String
+  opportunityId String
+  category      String      @default("interested")
+  createdAt     DateTime    @default(now())
+  user          User        @relation(fields: [userId], references: [id])
+  opportunity   Opportunity @relation(fields: [opportunityId], references: [id])
+
+  @@unique([userId, opportunityId])
+}
