@@ -102,7 +102,7 @@ async function performLinkupSearch(
       return [];
     }
 
-    const data: LinkupResponse = await response.json();
+    const data = (await response.json()) as LinkupResponse;
     const searchResults = data.results || data.sources || [];
 
     for (const item of searchResults) {

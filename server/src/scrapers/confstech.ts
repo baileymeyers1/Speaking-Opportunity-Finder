@@ -61,7 +61,7 @@ async function fetchTopicConferences(
     if (!response.ok) {
       return [];
     }
-    return await response.json();
+    return (await response.json()) as ConfsTechConference[];
   } catch {
     return [];
   }

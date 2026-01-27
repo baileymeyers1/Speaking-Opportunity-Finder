@@ -88,7 +88,7 @@ async function searchWithLinkup(
       return [];
     }
 
-    const data: LinkupResponse = await response.json();
+    const data = (await response.json()) as LinkupResponse;
     return data.results || [];
   } catch (error) {
     console.error('Linkup search failed:', error);

@@ -100,7 +100,7 @@ export async function scrapeJavaConferences(): Promise<ScraperResult[]> {
       return [];
     }
 
-    const conferences: JavaConference[] = await response.json();
+    const conferences = (await response.json()) as JavaConference[];
 
     for (const conf of conferences) {
       const result = mapToScraperResult(conf);
