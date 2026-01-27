@@ -10,7 +10,7 @@ services:
     name: speaking-opportunity-finder-api
     runtime: node
     plan: free
-    buildCommand: npm install && cp prisma/schema.production.prisma prisma/schema.prisma && cd server && npm run build && npx prisma generate && npx prisma db push
+    buildCommand: npm install --include=dev && cp prisma/schema.production.prisma prisma/schema.prisma && cd server && npm run build && npx prisma generate && npx prisma db push
     startCommand: cd server && npm start
     envVars:
       - key: NODE_ENV
@@ -35,7 +35,7 @@ services:
   - type: web
     name: speaking-opportunity-finder
     runtime: static
-    buildCommand: npm install && cd client && npm run build
+    buildCommand: npm install --include=dev && cd client && npm run build
     staticPublishPath: ./client/dist
     pullRequestPreviewsEnabled: true
     headers:
