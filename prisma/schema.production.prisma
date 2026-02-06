@@ -31,6 +31,7 @@ model Opportunity {
   compensationAmount  Int?
   compensationDetails String?
   applyUrl            String
+  qualityScore        Int?
   source              String
   sourceUrl           String?
   createdAt           DateTime           @default(now())
