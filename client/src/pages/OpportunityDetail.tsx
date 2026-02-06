@@ -58,9 +58,13 @@ export function OpportunityDetail() {
           description: opportunity.description,
           location: opportunity.location,
           isRemote: opportunity.isRemote,
+          eventDate: opportunity.eventDate,
           cfpDeadline: opportunity.cfpDeadline,
           format: opportunity.format,
           industries: opportunity.industries,
+          compensationType: opportunity.compensationType,
+          compensationAmount: opportunity.compensationAmount,
+          compensationDetails: opportunity.compensationDetails,
           applyUrl: opportunity.applyUrl,
           liveSearchUrl: opportunity.liveSearchUrl,
         });

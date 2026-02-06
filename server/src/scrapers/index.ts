@@ -6,6 +6,7 @@ import { scrapeLinkupCFPs } from './linkupcfp.js';
 import { scrapeSessionize } from './sessionize.js';
 import { scrapePaperCall } from './papercall.js';
 import { scrapeWikiCFP } from './wikicfp.js';
+import { scrapeUsMegaEvents } from './usMegaEvents.js';
 import { config } from '../config/index.js';
 
 const prisma = new PrismaClient();
@@ -93,12 +94,14 @@ export async function runWeeklyScrapers(): Promise<ScraperResult[]> {
 
   // Run Linkup sequentially (rate limited)
   const linkupResults = await scrapeLinkupCFPs(config.scrapers?.webSearch);
+  const megaEventResults = await scrapeUsMegaEvents();
 
   const results = deduplicateResults([
     ...sessionizeResults,
     ...paperCallResults,
     ...wikiCFPResults,
     ...linkupResults,
+    ...megaEventResults,
   ]);
 
   console.log(`Weekly scrapers found ${results.length} opportunities`);

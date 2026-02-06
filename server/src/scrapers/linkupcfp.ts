@@ -54,6 +54,14 @@ const INDUSTRY_CFP_QUERIES = [
   { query: withUsFocus('venture capital startup conference call for speakers'), industries: ['venture capital', 'startups'] },
   { query: withUsFocus('conference call for speakers CFP'), industries: ['cross-industry'] },
   { query: withUsFocus('speaker application open CFP conference'), industries: ['cross-industry'] },
+  { query: withUsFocus('conference call for speakers New York'), industries: ['cross-industry'] },
+  { query: withUsFocus('conference call for speakers San Francisco'), industries: ['cross-industry'] },
+  { query: withUsFocus('conference call for speakers Chicago'), industries: ['cross-industry'] },
+  { query: withUsFocus('conference call for speakers Austin'), industries: ['cross-industry'] },
+  { query: withUsFocus('conference call for speakers Las Vegas'), industries: ['cross-industry'] },
+  { query: withUsFocus('conference call for speakers Washington DC'), industries: ['cross-industry'] },
+  { query: withUsFocus('conference call for speakers Boston'), industries: ['cross-industry'] },
+  { query: withUsFocus('conference call for speakers Seattle'), industries: ['cross-industry'] },
 ];
 
 function extractOrganization(title: string): string {
@@ -143,6 +151,27 @@ function extractCompensation(content: string) {
   return { compensationType, compensationAmount };
 }
 
+function extractEventDate(content: string): Date | undefined {
+  const patterns = [
+    /(?:event date|event dates|conference dates|takes place|held on|when)[:\s]*(\w+ \d{1,2},?\s*\d{4})/i,
+    /(?:event dates|conference dates)[:\s]*(\w+ \d{1,2})\s*[-–]\s*(\w+ \d{1,2},?\s*\d{4})/i,
+    /(\w+ \d{1,2},?\s*\d{4})/,
+  ];
+
+  for (const pattern of patterns) {
+    const match = content.match(pattern);
+    if (match) {
+      const dateStr = match[2] || match[1];
+      const parsed = new Date(dateStr);
+      if (!isNaN(parsed.getTime())) {
+        return parsed;
+      }
+    }
+  }
+
+  return undefined;
+}
+
 async function searchWithLinkup(
   query: string,
   apiKey: string
@@ -158,7 +187,7 @@ async function searchWithLinkup(
         q: query,
         depth: 'standard',
         outputType: 'searchResults',
-        maxResults: 10,
+        maxResults: 25,
       }),
     });
 
@@ -193,6 +222,7 @@ function mapToScraperResult(
   const cfpDeadline = extractDeadline(result.content);
   const location = extractLocation(result.content);
   const compensation = extractCompensation(result.content);
+  const eventDate = extractEventDate(result.content);
 
   return {
     title: result.name,
@@ -202,7 +232,7 @@ function mapToScraperResult(
     isRemote: result.content.toLowerCase().includes('online') ||
               result.content.toLowerCase().includes('virtual') ||
               result.content.toLowerCase().includes('remote'),
-    eventDate: undefined,
+    eventDate,
     cfpDeadline,
     format: 'conference',
     industries,

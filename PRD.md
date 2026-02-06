@@ -6,6 +6,16 @@ A web application that aggregates speaking opportunities from multiple sources, 
 
 ---
 
+## Recent Updates
+
+- Live search results now have full detail pages and can be saved to lists (saved items are persisted to the database)
+- Location filtering supports free-response multi-location input (e.g., "Los Angeles, CA, San Francisco, CA")
+- Improved metadata visibility for event dates, deadlines, industries, and compensation
+- Expanded U.S.-focused discovery in live search and weekly scraping
+- Added curated U.S. mega-event list ingestion for broader coverage
+
+---
+
 ## Target Users
 
 - **Professional speakers**: Regular conference presenters seeking new opportunities
@@ -78,6 +88,12 @@ The application will aggregate opportunities from multiple sources:
 | **Sessionize** | API/Scrape | Major CFP platform for tech conferences |
 | **PaperCall** | API/Scrape | Popular CFP submission platform |
 | **Confs.tech** | API | Tech conference aggregator |
+| **Linkup Search (U.S.-focused)** | API | Broad discovery with U.S. prioritization |
+| **GlobalConference.ca** | Scrape | Curated U.S. conference listings |
+| **Momencio** | Scrape | Largest U.S. trade shows list |
+| **UPrinting** | Scrape | Largest U.S. trade shows list |
+| **ConferenceMonkey** | Scrape | Top conferences (U.S. filtered) |
+| **InternationalConferenceAlerts** | Scrape | U.S. conferences directory |
 | **CFP Land** | Scrape | Curated list of CFPs |
 | **CallingAllPapers** | API | Conference CFP aggregator |
 | **Speakerinnen** | Scrape | Speaking opportunities database |

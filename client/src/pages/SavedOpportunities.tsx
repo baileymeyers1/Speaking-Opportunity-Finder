@@ -117,7 +117,7 @@ export function SavedOpportunities() {
           {savedItems.map((item) => (
             <div key={item.id} className="relative">
               {item.opportunity && (
-                <OpportunityCard opportunity={item.opportunity} />
+                <OpportunityCard opportunity={item.opportunity} showSave={false} />
               )}
               <div className="absolute top-2 right-2 flex gap-1">
                 <select

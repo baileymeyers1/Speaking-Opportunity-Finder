@@ -78,6 +78,27 @@ function extractCompensation(content: string) {
   return { compensationType, compensationAmount, compensationDetails };
 }
 
+function extractEventDate(content: string): string | null {
+  const patterns = [
+    /(?:event date|event dates|conference dates|takes place|held on|when)[:\s]*(\w+ \d{1,2},?\s*\d{4})/i,
+    /(?:event dates|conference dates)[:\s]*(\w+ \d{1,2})\s*[-–]\s*(\w+ \d{1,2},?\s*\d{4})/i,
+    /(\w+ \d{1,2},?\s*\d{4})/,
+  ];
+
+  for (const pattern of patterns) {
+    const match = content.match(pattern);
+    if (match) {
+      const dateStr = match[2] || match[1];
+      const parsed = new Date(dateStr);
+      if (!isNaN(parsed.getTime())) {
+        return parsed.toISOString();
+      }
+    }
+  }
+
+  return null;
+}
+
 function extractMetadata(content: string, title: string, searchIndustries: string[]) {
   const lower = (content + ' ' + title).toLowerCase();
 
@@ -151,8 +172,9 @@ function extractMetadata(content: string, title: string, searchIndustries: strin
   }
 
   const compensation = extractCompensation(content);
+  const eventDate = extractEventDate(content);
 
-  return { format, isRemote, location, cfpDeadline, industries, ...compensation };
+  return { format, isRemote, location, cfpDeadline, industries, eventDate, ...compensation };
 }
 
 /**
@@ -218,7 +240,7 @@ async function performLinkupSearch(
         q: query,
         depth: 'standard',
         outputType: 'searchResults',
-        maxResults: 10,
+        maxResults: 50,
       }),
     });
 
@@ -242,7 +264,7 @@ async function performLinkupSearch(
         description: item.content || null,
         location: meta.location,
         isRemote: meta.isRemote,
-        eventDate: null,
+        eventDate: meta.eventDate,
         cfpDeadline: meta.cfpDeadline,
         format: meta.format,
         industries: meta.industries,
