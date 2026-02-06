@@ -155,6 +155,7 @@ function extractEventDate(content: string): Date | undefined {
   const patterns = [
     /(?:event date|event dates|conference dates|takes place|held on|when)[:\s]*(\w+ \d{1,2},?\s*\d{4})/i,
     /(?:event dates|conference dates)[:\s]*(\w+ \d{1,2})\s*[-–]\s*(\w+ \d{1,2},?\s*\d{4})/i,
+    /(\w+ \d{1,2})\s*[-–]\s*(\w+ \d{1,2},?\s*\d{4})/i,
     /(\w+ \d{1,2},?\s*\d{4})/,
   ];
 

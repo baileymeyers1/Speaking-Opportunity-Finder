@@ -44,6 +44,7 @@ function transformOpportunity(opp: {
   compensationAmount: number | null;
   compensationDetails: string | null;
   applyUrl: string;
+  qualityScore: number | null;
   source: string;
   sourceUrl: string | null;
   createdAt: Date;
@@ -192,6 +193,7 @@ export interface OpportunityCreateInput {
   compensationAmount?: number;
   compensationDetails?: string;
   applyUrl: string;
+  qualityScore?: number;
   source: string;
   sourceUrl?: string;
 }

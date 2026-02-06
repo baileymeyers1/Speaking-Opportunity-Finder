@@ -65,6 +65,7 @@ export function OpportunityDetail() {
           compensationType: opportunity.compensationType,
           compensationAmount: opportunity.compensationAmount,
           compensationDetails: opportunity.compensationDetails,
+          qualityScore: opportunity.qualityScore,
           applyUrl: opportunity.applyUrl,
           liveSearchUrl: opportunity.liveSearchUrl,
         });
@@ -274,6 +275,11 @@ export function OpportunityDetail() {
               </a>
               )
             </>
+          )}
+          {opportunity.qualityScore !== undefined && opportunity.qualityScore !== null && (
+            <span className="ml-2 text-gray-400">
+              • Quality {opportunity.qualityScore}/100
+            </span>
           )}
         </p>
       </div>

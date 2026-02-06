@@ -196,6 +196,7 @@ export async function saveLiveResult(
       compensationType,
       compensationAmount,
       compensationDetails,
+      qualityScore,
       applyUrl,
       liveSearchUrl,
     } = req.body;
@@ -224,6 +225,7 @@ export async function saveLiveResult(
       compensationType: compensationType || undefined,
       compensationAmount: compensationAmount || undefined,
       compensationDetails: compensationDetails || undefined,
+      qualityScore: qualityScore || undefined,
       applyUrl,
       source: 'Live Search',
       sourceUrl: liveSearchUrl || applyUrl,

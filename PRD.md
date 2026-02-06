@@ -13,6 +13,7 @@ A web application that aggregates speaking opportunities from multiple sources, 
 - Improved metadata visibility for event dates, deadlines, industries, and compensation
 - Expanded U.S.-focused discovery in live search and weekly scraping
 - Added curated U.S. mega-event list ingestion for broader coverage
+- Added additional data sources (developers.events, conferencealerts.com, Airtable, Eventbrite, PAC, PR News Online)
 
 ---
 
@@ -46,6 +47,7 @@ Each listing displays:
 - Location (or "Remote")
 - Topic areas/tracks
 - Compensation details
+- Quality score (heuristic confidence)
 - Link to apply
 - Source attribution
 
@@ -94,6 +96,13 @@ The application will aggregate opportunities from multiple sources:
 | **UPrinting** | Scrape | Largest U.S. trade shows list |
 | **ConferenceMonkey** | Scrape | Top conferences (U.S. filtered) |
 | **InternationalConferenceAlerts** | Scrape | U.S. conferences directory |
+| **Developers.events** | JSON | Developer conference listings + CFPs |
+| **ConferenceAlerts** | Scrape | Country listing (USA) |
+| **Airtable (shared list)** | API | Airtable view ingestion (if API key available) |
+| **Eventbrite** | API | Event search for CFP/speaker calls (if token available) |
+| **LinkedIn Events** | API | Requires partner API access |
+| **PAC** | Scrape | pac.org events |
+| **PR News Online** | Scrape | prnewsonline.com events |
 | **CFP Land** | Scrape | Curated list of CFPs |
 | **CallingAllPapers** | API | Conference CFP aggregator |
 | **Speakerinnen** | Scrape | Speaking opportunities database |

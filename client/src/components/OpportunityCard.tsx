@@ -41,7 +41,13 @@ export function OpportunityCard({ opportunity, showSave = true }: OpportunityCar
     return { label: formatDate(dateString)!, color: 'bg-gray-100 text-gray-600' };
   };
 
+  const getEventInfo = (dateString: string | null) => {
+    if (!dateString) return { label: 'Event date not listed', color: 'bg-gray-100 text-gray-600' };
+    return { label: formatDate(dateString)!, color: 'bg-blue-100 text-blue-800' };
+  };
+
   const deadlineInfo = getDeadlineInfo(current.cfpDeadline);
+  const eventInfo = getEventInfo(current.eventDate);
   const isLive = current.isLiveResult;
 
   const titleElement = (
@@ -55,16 +61,6 @@ export function OpportunityCard({ opportunity, showSave = true }: OpportunityCar
     </Link>
   );
 
-  const formatShortDate = (dateString: string | null) => {
-    if (!dateString) return 'Not listed';
-    const parsed = new Date(dateString);
-    if (Number.isNaN(parsed.getTime())) return 'Not listed';
-    return parsed.toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-    });
-  };
 
   const handleSave = async (category: string) => {
     if (!category) return;
@@ -91,6 +87,7 @@ export function OpportunityCard({ opportunity, showSave = true }: OpportunityCar
           compensationType: current.compensationType,
           compensationAmount: current.compensationAmount,
           compensationDetails: current.compensationDetails,
+          qualityScore: current.qualityScore,
           applyUrl: current.applyUrl,
           liveSearchUrl: current.liveSearchUrl,
         });
@@ -139,9 +136,13 @@ export function OpportunityCard({ opportunity, showSave = true }: OpportunityCar
         </p>
       )}
 
-      <div className="flex flex-wrap gap-2 text-xs text-gray-500 mb-3">
-        <span>Event: {formatShortDate(current.eventDate)}</span>
-        <span>Deadline: {deadlineInfo.label}</span>
+      <div className="flex flex-wrap gap-2 mb-3">
+        <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${eventInfo.color}`}>
+          {eventInfo.label}
+        </span>
+        <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${deadlineInfo.color}`}>
+          {deadlineInfo.label}
+        </span>
       </div>
 
       <div className="flex flex-wrap gap-2 mb-3">
@@ -191,8 +192,10 @@ export function OpportunityCard({ opportunity, showSave = true }: OpportunityCar
       </div>
 
       <div className="flex justify-between items-center text-sm text-gray-500">
-        <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${deadlineInfo.color}`}>
-          {deadlineInfo.label}
+        <span className="text-xs text-gray-400">
+          {current.qualityScore !== undefined && current.qualityScore !== null
+            ? `Quality ${current.qualityScore}/100`
+            : 'Quality pending'}
         </span>
         <div className="flex items-center gap-3">
           {showSave && (

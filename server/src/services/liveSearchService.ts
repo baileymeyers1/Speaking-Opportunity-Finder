@@ -16,6 +16,7 @@ export interface EnrichedLiveResult {
   compensationAmount: number | null;
   compensationDetails: string | null;
   applyUrl: string;
+  qualityScore: number;
   source: string;
   sourceUrl: string | null;
   createdAt: string;
@@ -82,6 +83,7 @@ function extractEventDate(content: string): string | null {
   const patterns = [
     /(?:event date|event dates|conference dates|takes place|held on|when)[:\s]*(\w+ \d{1,2},?\s*\d{4})/i,
     /(?:event dates|conference dates)[:\s]*(\w+ \d{1,2})\s*[-–]\s*(\w+ \d{1,2},?\s*\d{4})/i,
+    /(\w+ \d{1,2})\s*[-–]\s*(\w+ \d{1,2},?\s*\d{4})/i,
     /(\w+ \d{1,2},?\s*\d{4})/,
   ];
 
@@ -97,6 +99,24 @@ function extractEventDate(content: string): string | null {
   }
 
   return null;
+}
+
+function computeLiveQualityScore(meta: {
+  cfpDeadline: string | null;
+  eventDate: string | null;
+  location: string | null;
+  industries: string[];
+  compensationType: string | null;
+  description: string | null;
+}) {
+  let score = 20;
+  if (meta.cfpDeadline) score += 20;
+  if (meta.eventDate) score += 15;
+  if (meta.location) score += 10;
+  if (meta.industries && meta.industries.length > 0) score += 10;
+  if (meta.compensationType) score += 10;
+  if (meta.description && meta.description.length > 120) score += 10;
+  return Math.min(100, score);
 }
 
 function extractMetadata(content: string, title: string, searchIndustries: string[]) {
@@ -240,7 +260,7 @@ async function performLinkupSearch(
         q: query,
         depth: 'standard',
         outputType: 'searchResults',
-        maxResults: 50,
+        maxResults: 100,
       }),
     });
 
@@ -272,6 +292,14 @@ async function performLinkupSearch(
         compensationAmount: meta.compensationAmount,
         compensationDetails: meta.compensationDetails,
         applyUrl: item.url,
+        qualityScore: computeLiveQualityScore({
+          cfpDeadline: meta.cfpDeadline,
+          eventDate: meta.eventDate,
+          location: meta.location,
+          industries: meta.industries,
+          compensationType: meta.compensationType,
+          description: item.content || null,
+        }),
         source: 'Live Search',
         sourceUrl: item.url,
         createdAt: now,
@@ -284,7 +312,7 @@ async function performLinkupSearch(
     console.error('Linkup search error:', error);
   }
 
-  return results;
+  return results.sort((a, b) => b.qualityScore - a.qualityScore);
 }
 
 function extractOrganization(title: string): string {
@@ -353,6 +381,7 @@ function generateSimulatedResults(
       compensationAmount: null,
       compensationDetails: null,
       applyUrl: url,
+      qualityScore: 25,
       source: 'Web Search',
       sourceUrl: url,
       createdAt: now,

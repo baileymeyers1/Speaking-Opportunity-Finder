@@ -29,5 +29,11 @@ export const config = {
 
   scrapers: {
     webSearch: process.env.WEB_SEARCH_API_KEY,
+    eventbriteToken: process.env.EVENTBRITE_TOKEN,
+    linkedinToken: process.env.LINKEDIN_TOKEN,
+    airtableApiKey: process.env.AIRTABLE_API_KEY,
+    airtableBaseId: process.env.AIRTABLE_BASE_ID,
+    airtableTableId: process.env.AIRTABLE_TABLE_ID,
+    airtableViewId: process.env.AIRTABLE_VIEW_ID,
   },
 };

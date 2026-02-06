@@ -22,6 +22,7 @@ export interface Opportunity {
   compensationAmount: number | null;
   compensationDetails: string | null;
   applyUrl: string;
+  qualityScore?: number | null;
   source: string;
   sourceUrl: string | null;
   createdAt: string;

@@ -7,6 +7,13 @@ import { scrapeSessionize } from './sessionize.js';
 import { scrapePaperCall } from './papercall.js';
 import { scrapeWikiCFP } from './wikicfp.js';
 import { scrapeUsMegaEvents } from './usMegaEvents.js';
+import { scrapeConferenceAlertsUSA } from './conferenceAlerts.js';
+import { scrapeDevelopersEvents } from './developersEvents.js';
+import { scrapeAirtableEvents } from './airtableEvents.js';
+import { scrapeEventbrite } from './eventbrite.js';
+import { scrapeLinkedInEvents } from './linkedinEvents.js';
+import { scrapePacEvents } from './pacEvents.js';
+import { scrapePrNewsOnline } from './prNewsOnline.js';
 import { config } from '../config/index.js';
 
 const prisma = new PrismaClient();
@@ -25,8 +32,32 @@ export interface ScraperResult {
   compensationAmount?: number;
   compensationDetails?: string;
   applyUrl: string;
+  qualityScore?: number;
   source: string;
   sourceUrl?: string | null;
+}
+
+function computeQualityScore(result: ScraperResult): number {
+  let score = 20;
+
+  if (result.cfpDeadline) score += 20;
+  if (result.eventDate) score += 15;
+  if (result.location) score += 10;
+  if (result.industries && result.industries.length > 0) score += 10;
+  if (result.compensationType || result.compensationAmount) score += 10;
+  if (result.description && result.description.length > 120) score += 10;
+
+  const sourceBoost = [
+    'sessionize.com',
+    'papercall.io',
+    'confs.tech',
+    'javaconferences.org',
+    'callingallpapers.com',
+    'wikicfp.com',
+  ];
+  if (sourceBoost.includes(result.source)) score += 5;
+
+  return Math.min(100, score);
 }
 
 function normalizeUrl(url: string): string {
@@ -96,12 +127,37 @@ export async function runWeeklyScrapers(): Promise<ScraperResult[]> {
   const linkupResults = await scrapeLinkupCFPs(config.scrapers?.webSearch);
   const megaEventResults = await scrapeUsMegaEvents();
 
+  const [
+    conferenceAlertsResults,
+    developersEventsResults,
+    airtableResults,
+    eventbriteResults,
+    linkedinResults,
+    pacResults,
+    prNewsResults,
+  ] = await Promise.all([
+    scrapeConferenceAlertsUSA(),
+    scrapeDevelopersEvents(),
+    scrapeAirtableEvents(),
+    scrapeEventbrite(),
+    scrapeLinkedInEvents(),
+    scrapePacEvents(),
+    scrapePrNewsOnline(),
+  ]);
+
   const results = deduplicateResults([
     ...sessionizeResults,
     ...paperCallResults,
     ...wikiCFPResults,
     ...linkupResults,
     ...megaEventResults,
+    ...conferenceAlertsResults,
+    ...developersEventsResults,
+    ...airtableResults,
+    ...eventbriteResults,
+    ...linkedinResults,
+    ...pacResults,
+    ...prNewsResults,
   ]);
 
   console.log(`Weekly scrapers found ${results.length} opportunities`);
@@ -141,6 +197,7 @@ async function persistResults(results: ScraperResult[]): Promise<{ added: number
         compensationAmount: result.compensationAmount || null,
         compensationDetails: result.compensationDetails || null,
         applyUrl: result.applyUrl,
+        qualityScore: result.qualityScore ?? computeQualityScore(result),
         source: result.source,
         sourceUrl: result.sourceUrl || null,
       };
