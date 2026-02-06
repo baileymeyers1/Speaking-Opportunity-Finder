@@ -61,6 +61,7 @@ export function Home() {
       if (filters.compensationMin) params.set('compensationMin', String(filters.compensationMin));
       if (filters.compensationMax) params.set('compensationMax', String(filters.compensationMax));
       if (filters.sortBy) params.set('sortBy', filters.sortBy);
+      if (filters.qualityMin !== undefined) params.set('qualityMin', String(filters.qualityMin));
 
       filters.locations?.forEach((loc) => params.append('location', loc));
       filters.format?.forEach((f) => params.append('format', f));

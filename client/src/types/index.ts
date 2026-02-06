@@ -54,6 +54,7 @@ export interface OpportunityFilters {
   cfpDeadlineBefore?: string;
   cfpDeadlineAfter?: string;
   sortBy?: 'quality' | 'deadline' | 'eventDate';
+  qualityMin?: number;
 }
 
 // Filter options returned from API

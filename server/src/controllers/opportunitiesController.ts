@@ -21,6 +21,7 @@ export async function getOpportunities(
       cfpDeadlineBefore,
       cfpDeadlineAfter,
       sortBy,
+      qualityMin,
       page,
       pageSize,
     } = req.query;
@@ -79,6 +80,13 @@ export async function getOpportunities(
 
     if (sortBy && ['quality', 'deadline', 'eventDate'].includes(String(sortBy))) {
       filters.sortBy = String(sortBy) as 'quality' | 'deadline' | 'eventDate';
+    }
+
+    if (qualityMin !== undefined) {
+      const value = parseInt(String(qualityMin), 10);
+      if (!isNaN(value)) {
+        filters.qualityMin = value;
+      }
     }
 
     const pagination = {

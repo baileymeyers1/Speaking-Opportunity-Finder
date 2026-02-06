@@ -15,6 +15,7 @@ export interface OpportunityFilters {
   cfpDeadlineBefore?: Date;
   cfpDeadlineAfter?: Date;
   sortBy?: 'quality' | 'deadline' | 'eventDate';
+  qualityMin?: number;
 }
 
 export interface PaginationParams {
@@ -138,6 +139,10 @@ export async function getOpportunities(
     if (filters.compensationMax !== undefined) {
       where.compensationAmount.lte = filters.compensationMax;
     }
+  }
+
+  if (filters.qualityMin !== undefined) {
+    where.qualityScore = { gte: filters.qualityMin };
   }
 
   // CFP deadline filters

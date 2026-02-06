@@ -126,6 +126,7 @@ export function FilterPanel({
     selectedLocations.length,
     filters.compensationMin,
     filters.compensationMax,
+    filters.qualityMin,
   ].filter(Boolean).length;
 
   const formatCompensationValue = (value: number, isMax: boolean) => {
@@ -134,6 +135,8 @@ export function FilterPanel({
     }
     return `$${value.toLocaleString()}`;
   };
+
+  const formatQualityValue = (value: number) => `${value}+`;
 
   return (
     <div className="bg-white rounded-lg shadow p-4 mb-6">
@@ -322,6 +325,36 @@ export function FilterPanel({
             </div>
             <p className="text-xs text-gray-500 mt-1">
               Slide max to $2,000+ to include all higher amounts
+            </p>
+          </div>
+
+          {/* Quality Score Filter */}
+          <div>
+            <h3 className="text-sm font-medium text-gray-700 mb-2">
+              Minimum Quality Score
+            </h3>
+            <div className="flex items-center gap-4">
+              <input
+                type="range"
+                min={0}
+                max={100}
+                step={5}
+                value={filters.qualityMin ?? 0}
+                onChange={(e) => {
+                  const value = parseInt(e.target.value, 10);
+                  onFiltersChange({
+                    ...filters,
+                    qualityMin: value > 0 ? value : undefined,
+                  });
+                }}
+                className="w-48"
+              />
+              <span className="text-sm text-gray-600 w-16">
+                {formatQualityValue(filters.qualityMin ?? 0)}
+              </span>
+            </div>
+            <p className="text-xs text-gray-500 mt-1">
+              Filters out lower-confidence results (0 shows all)
             </p>
           </div>
 
