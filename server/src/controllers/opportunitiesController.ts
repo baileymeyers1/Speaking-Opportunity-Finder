@@ -132,10 +132,11 @@ export async function getFilterOptions(
   next: NextFunction
 ): Promise<void> {
   try {
-    const [locations, industries, compensationRange] = await Promise.all([
+    const [locations, industries, compensationRange, compensationStats] = await Promise.all([
       opportunityService.getUniqueLocations(),
       opportunityService.getUniqueIndustries(),
       opportunityService.getCompensationRange(),
+      opportunityService.getCompensationStats(),
     ]);
 
     res.json({
@@ -144,6 +145,7 @@ export async function getFilterOptions(
         locations,
         industries,
         compensationRange,
+        compensationStats,
         formats: [
           'conference',
           'meetup',

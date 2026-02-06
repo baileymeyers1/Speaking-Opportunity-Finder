@@ -6,6 +6,7 @@ import type { Opportunity, OpportunityFilters, PaginatedResponse } from '../type
 import { upsertLiveResults } from '../utils/liveResultsCache';
 
 const CACHE_KEY = 'cachedOpportunities';
+const FILTERS_KEY = 'opportunityFiltersState';
 const CACHE_MAX_AGE = 24 * 60 * 60 * 1000; // 24 hours
 
 function loadCache(): { items: Opportunity[]; totalPages: number; timestamp: number } | null {
@@ -34,6 +35,7 @@ export function Home() {
   const [totalPages, setTotalPages] = useState(1);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const cacheLoaded = useRef(false);
+  const filtersHydrated = useRef(false);
 
   // Load cached results on first mount (before API call)
   useEffect(() => {
@@ -48,7 +50,30 @@ export function Home() {
     }
   }, []);
 
+  // Restore filters + page from session (for back navigation)
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem(FILTERS_KEY);
+      if (!raw) {
+        filtersHydrated.current = true;
+        return;
+      }
+      const parsed = JSON.parse(raw) as { filters: OpportunityFilters; page: number };
+      if (parsed?.filters) {
+        setFilters(parsed.filters);
+      }
+      if (parsed?.page) {
+        setPage(parsed.page);
+      }
+    } catch {
+      // ignore parse issues
+    } finally {
+      filtersHydrated.current = true;
+    }
+  }, []);
+
   const fetchOpportunities = useCallback(async () => {
+    if (!filtersHydrated.current) return;
     if (!cacheLoaded.current) {
       setIsLoading(true);
     }
@@ -98,6 +123,17 @@ export function Home() {
   useEffect(() => {
     fetchOpportunities();
   }, [fetchOpportunities]);
+
+  useEffect(() => {
+    if (!filtersHydrated.current) return;
+    sessionStorage.setItem(
+      FILTERS_KEY,
+      JSON.stringify({
+        filters,
+        page,
+      })
+    );
+  }, [filters, page]);
 
   const handleFiltersChange = (newFilters: OpportunityFilters) => {
     setFilters(newFilters);

@@ -60,6 +60,54 @@ function computeQualityScore(result: ScraperResult): number {
   return Math.min(100, score);
 }
 
+async function backfillQualityScores(): Promise<number> {
+  const batchSize = 200;
+  let updated = 0;
+
+  while (true) {
+    const batch = await prisma.opportunity.findMany({
+      where: { qualityScore: null },
+      take: batchSize,
+    });
+
+    if (batch.length === 0) break;
+
+    for (const opp of batch) {
+      const computed = computeQualityScore({
+        title: opp.title,
+        organization: opp.organization,
+        description: opp.description || undefined,
+        location: opp.location,
+        isRemote: opp.isRemote,
+        eventDate: opp.eventDate || undefined,
+        cfpDeadline: opp.cfpDeadline || undefined,
+        format: opp.format,
+        industries: (() => {
+          try {
+            return JSON.parse(opp.industries) as string[];
+          } catch {
+            return [];
+          }
+        })(),
+        compensationType: opp.compensationType || undefined,
+        compensationAmount: opp.compensationAmount || undefined,
+        compensationDetails: opp.compensationDetails || undefined,
+        applyUrl: opp.applyUrl,
+        source: opp.source,
+        sourceUrl: opp.sourceUrl || undefined,
+      });
+
+      await prisma.opportunity.update({
+        where: { id: opp.id },
+        data: { qualityScore: computed },
+      });
+      updated++;
+    }
+  }
+
+  return updated;
+}
+
 function normalizeUrl(url: string): string {
   try {
     const u = new URL(url);
@@ -69,6 +117,27 @@ function normalizeUrl(url: string): string {
   } catch {
     return url.toLowerCase().replace(/\/$/, '');
   }
+}
+
+function inferCompensation(description?: string) {
+  if (!description) return {};
+  const lower = description.toLowerCase();
+  let compensationType: string | undefined;
+
+  if (/\bhonorarium\b/.test(lower)) compensationType = 'honorarium';
+  else if (/\bpaid\b/.test(lower)) compensationType = 'paid';
+  else if (/\btravel\b/.test(lower)) compensationType = 'travel';
+  else if (/\bstipend\b/.test(lower)) compensationType = 'paid';
+  else if (/\bexposure\b/.test(lower)) compensationType = 'exposure';
+
+  const amountMatch = description.match(/\$[\s]*([0-9]{2,6}(?:,[0-9]{3})?)/);
+  const compensationAmount = amountMatch
+    ? parseInt(amountMatch[1].replace(/,/g, ''), 10)
+    : undefined;
+
+  const compensationDetails = compensationType ? description.substring(0, 300) : undefined;
+
+  return { compensationType, compensationAmount, compensationDetails };
 }
 
 function deduplicateResults(results: ScraperResult[]): ScraperResult[] {
@@ -183,6 +252,7 @@ async function persistResults(results: ScraperResult[]): Promise<{ added: number
         where: { applyUrl: result.applyUrl },
       });
 
+      const inferredComp = inferCompensation(result.description);
       const data = {
         title: result.title,
         organization: result.organization,
@@ -193,9 +263,9 @@ async function persistResults(results: ScraperResult[]): Promise<{ added: number
         cfpDeadline: result.cfpDeadline || null,
         format: result.format,
         industries: JSON.stringify(result.industries),
-        compensationType: result.compensationType || null,
-        compensationAmount: result.compensationAmount || null,
-        compensationDetails: result.compensationDetails || null,
+        compensationType: result.compensationType || inferredComp.compensationType || null,
+        compensationAmount: result.compensationAmount || inferredComp.compensationAmount || null,
+        compensationDetails: result.compensationDetails || inferredComp.compensationDetails || null,
         applyUrl: result.applyUrl,
         qualityScore: result.qualityScore ?? computeQualityScore(result),
         source: result.source,
@@ -267,9 +337,10 @@ export async function syncOpportunities(
 
   const { added, updated } = await persistResults(results);
   const deletedCount = await cleanupExpired();
+  const backfilled = await backfillQualityScores();
 
   console.log(
-    `Sync complete (${mode}): ${added} added, ${updated} updated, ${deletedCount} expired removed`
+    `Sync complete (${mode}): ${added} added, ${updated} updated, ${deletedCount} expired removed, ${backfilled} quality backfilled`
   );
 
   const total = await prisma.opportunity.count();

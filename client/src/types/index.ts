@@ -62,6 +62,7 @@ export interface FilterOptions {
   locations: string[];
   industries: string[];
   compensationRange: { min: number; max: number };
+  compensationStats?: { hasCompensation: boolean };
   formats: OpportunityFormat[];
   compensationTypes: CompensationType[];
 }

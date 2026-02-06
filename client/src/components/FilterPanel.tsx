@@ -61,6 +61,7 @@ export function FilterPanel({
 
   const formats = filterOptions?.formats || defaultFormats;
   const compensationTypes = filterOptions?.compensationTypes || defaultCompensationTypes;
+  const hasCompensation = filterOptions?.compensationStats?.hasCompensation ?? true;
   const industries = filterOptions?.industries || [];
 
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -264,69 +265,73 @@ export function FilterPanel({
           </div>
 
           {/* Compensation Type Filter */}
-          <div>
-            <h3 className="text-sm font-medium text-gray-700 mb-2">
-              Compensation Type
-            </h3>
-            <div className="flex flex-wrap gap-x-4 gap-y-2">
-              {compensationTypes.map((type) => (
-                <label key={type} className="inline-flex items-center cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={filters.compensationType?.includes(type) || false}
-                    onChange={() => handleCompensationTypeChange(type)}
-                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 h-4 w-4"
-                  />
-                  <span className="ml-2 text-sm text-gray-600 capitalize">
-                    {type}
-                  </span>
-                </label>
-              ))}
+          {hasCompensation && (
+            <div>
+              <h3 className="text-sm font-medium text-gray-700 mb-2">
+                Compensation Type
+              </h3>
+              <div className="flex flex-wrap gap-x-4 gap-y-2">
+                {compensationTypes.map((type) => (
+                  <label key={type} className="inline-flex items-center cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={filters.compensationType?.includes(type) || false}
+                      onChange={() => handleCompensationTypeChange(type)}
+                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 h-4 w-4"
+                    />
+                    <span className="ml-2 text-sm text-gray-600 capitalize">
+                      {type}
+                    </span>
+                  </label>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Compensation Amount Range */}
-          <div>
-            <h3 className="text-sm font-medium text-gray-700 mb-2">
-              Compensation Amount (USD)
-            </h3>
-            <div className="flex items-center gap-4">
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-gray-500">Min:</span>
-                <input
-                  type="range"
-                  min={0}
-                  max={COMPENSATION_MAX}
-                  step={100}
-                  value={filters.compensationMin || 0}
-                  onChange={handleCompensationMinChange}
-                  className="w-32"
-                />
-                <span className="text-sm text-gray-600 w-20">
-                  {formatCompensationValue(filters.compensationMin || 0, false)}
-                </span>
+          {hasCompensation && (
+            <div>
+              <h3 className="text-sm font-medium text-gray-700 mb-2">
+                Compensation Amount (USD)
+              </h3>
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-gray-500">Min:</span>
+                  <input
+                    type="range"
+                    min={0}
+                    max={COMPENSATION_MAX}
+                    step={100}
+                    value={filters.compensationMin || 0}
+                    onChange={handleCompensationMinChange}
+                    className="w-32"
+                  />
+                  <span className="text-sm text-gray-600 w-20">
+                    {formatCompensationValue(filters.compensationMin || 0, false)}
+                  </span>
+                </div>
+                <span className="text-gray-400">to</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-gray-500">Max:</span>
+                  <input
+                    type="range"
+                    min={0}
+                    max={COMPENSATION_MAX}
+                    step={100}
+                    value={filters.compensationMax || COMPENSATION_MAX}
+                    onChange={handleCompensationMaxChange}
+                    className="w-32"
+                  />
+                  <span className="text-sm text-gray-600 w-20">
+                    {formatCompensationValue(filters.compensationMax || COMPENSATION_MAX, true)}
+                  </span>
+                </div>
               </div>
-              <span className="text-gray-400">to</span>
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-gray-500">Max:</span>
-                <input
-                  type="range"
-                  min={0}
-                  max={COMPENSATION_MAX}
-                  step={100}
-                  value={filters.compensationMax || COMPENSATION_MAX}
-                  onChange={handleCompensationMaxChange}
-                  className="w-32"
-                />
-                <span className="text-sm text-gray-600 w-20">
-                  {formatCompensationValue(filters.compensationMax || COMPENSATION_MAX, true)}
-                </span>
-              </div>
+              <p className="text-xs text-gray-500 mt-1">
+                Slide max to $2,000+ to include all higher amounts
+              </p>
             </div>
-            <p className="text-xs text-gray-500 mt-1">
-              Slide max to $2,000+ to include all higher amounts
-            </p>
-          </div>
+          )}
 
           {/* Quality Score Filter */}
           <div>

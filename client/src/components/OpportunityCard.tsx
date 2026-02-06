@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import type { Opportunity } from '../types';
 import { useAuth } from '../hooks/useAuth';
 import { apiClient } from '../api/client';
@@ -13,6 +13,7 @@ interface OpportunityCardProps {
 export function OpportunityCard({ opportunity, showSave = true }: OpportunityCardProps) {
   const { isAuthenticated } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const [current, setCurrent] = useState(opportunity);
   const [isSaving, setIsSaving] = useState(false);
   const [savedCategory, setSavedCategory] = useState<string>('');
@@ -53,6 +54,7 @@ export function OpportunityCard({ opportunity, showSave = true }: OpportunityCar
   const titleElement = (
     <Link
       to={`/opportunities/${current.id}`}
+      state={{ from: `${location.pathname}${location.search}` }}
       className={`text-lg font-semibold text-gray-900 ${
         isLive ? 'hover:text-green-600' : 'hover:text-blue-600'
       }`}

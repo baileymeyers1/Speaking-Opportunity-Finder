@@ -278,3 +278,16 @@ export async function getCompensationRange(): Promise<{ min: number; max: number
     max: result._max.compensationAmount || 5000,
   };
 }
+
+export async function getCompensationStats(): Promise<{ hasCompensation: boolean }> {
+  const count = await prisma.opportunity.count({
+    where: {
+      OR: [
+        { compensationType: { not: null } },
+        { compensationAmount: { not: null } },
+      ],
+    },
+  });
+
+  return { hasCompensation: count > 0 };
+}

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useParams, Link, useNavigate, useLocation } from 'react-router-dom';
 import { apiClient } from '../api/client';
 import { useAuth } from '../hooks/useAuth';
 import type { Opportunity, SavedOpportunity, SavedCategory } from '../types';
@@ -8,6 +8,7 @@ import { getLiveResultById, removeLiveResult } from '../utils/liveResultsCache';
 export function OpportunityDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const { isAuthenticated } = useAuth();
   const [opportunity, setOpportunity] = useState<Opportunity | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -130,7 +131,10 @@ export function OpportunityDetail() {
 
   return (
     <div className="max-w-3xl mx-auto">
-      <Link to="/" className="text-blue-600 hover:underline mb-4 inline-block">
+      <Link
+        to={(location.state as { from?: string } | null)?.from || '/'}
+        className="text-blue-600 hover:underline mb-4 inline-block"
+      >
         &larr; Back to opportunities
       </Link>
 
