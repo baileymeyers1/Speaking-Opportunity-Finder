@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import * as opportunityService from '../services/opportunityService.js';
 import * as liveSearchService from '../services/liveSearchService.js';
+import { AppError } from '../middleware/errorHandler.js';
 
 export async function getOpportunities(
   req: Request,
@@ -171,6 +172,56 @@ export async function liveSearch(
       success: true,
       data: results,
     });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function saveLiveResult(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    const {
+      title,
+      organization,
+      description,
+      location,
+      isRemote,
+      cfpDeadline,
+      format,
+      industries,
+      applyUrl,
+      liveSearchUrl,
+    } = req.body;
+
+    if (!title || !applyUrl) {
+      throw new AppError(400, 'Title and applyUrl are required');
+    }
+
+    // Check if this URL already exists in the database
+    const existing = await opportunityService.findByApplyUrl(applyUrl);
+    if (existing) {
+      res.json({ success: true, data: existing });
+      return;
+    }
+
+    const opportunity = await opportunityService.createOpportunity({
+      title,
+      organization: organization || 'Unknown Organization',
+      description: description || undefined,
+      location: location || undefined,
+      isRemote: isRemote || false,
+      cfpDeadline: cfpDeadline ? new Date(cfpDeadline) : undefined,
+      format: format || 'conference',
+      industries: industries || [],
+      applyUrl,
+      source: 'Live Search',
+      sourceUrl: liveSearchUrl || applyUrl,
+    });
+
+    res.status(201).json({ success: true, data: opportunity });
   } catch (error) {
     next(error);
   }

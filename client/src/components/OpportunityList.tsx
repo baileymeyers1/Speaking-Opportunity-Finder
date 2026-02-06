@@ -4,11 +4,13 @@ import type { Opportunity } from '../types';
 interface OpportunityListProps {
   opportunities: Opportunity[];
   isLoading: boolean;
+  onSaveLive?: (opportunity: Opportunity) => void;
 }
 
 export function OpportunityList({
   opportunities,
   isLoading,
+  onSaveLive,
 }: OpportunityListProps) {
   if (isLoading) {
     return (
@@ -42,7 +44,11 @@ export function OpportunityList({
   return (
     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
       {opportunities.map((opportunity) => (
-        <OpportunityCard key={opportunity.id} opportunity={opportunity} />
+        <OpportunityCard
+          key={opportunity.id}
+          opportunity={opportunity}
+          onSaveLive={opportunity.isLiveResult ? onSaveLive : undefined}
+        />
       ))}
     </div>
   );

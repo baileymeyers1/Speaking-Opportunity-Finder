@@ -62,7 +62,13 @@ export async function getOpportunities(
   const { page = 1, pageSize = 20 } = pagination;
   const skip = (page - 1) * pageSize;
 
-  const where: Prisma.OpportunityWhereInput = {};
+  const where: Prisma.OpportunityWhereInput = {
+    // Default: only show opportunities with future deadlines (or no deadline set)
+    OR: [
+      { cfpDeadline: { gte: new Date() } },
+      { cfpDeadline: null },
+    ],
+  };
   const andConditions: Prisma.OpportunityWhereInput[] = [];
 
   // Text search (OR across fields, but AND with other filters)
@@ -191,6 +197,14 @@ export async function createOpportunity(data: OpportunityCreateInput) {
       industries: JSON.stringify(data.industries || []),
     },
   });
+  return transformOpportunity(opportunity);
+}
+
+export async function findByApplyUrl(applyUrl: string) {
+  const opportunity = await prisma.opportunity.findFirst({
+    where: { applyUrl },
+  });
+  if (!opportunity) return null;
   return transformOpportunity(opportunity);
 }
 

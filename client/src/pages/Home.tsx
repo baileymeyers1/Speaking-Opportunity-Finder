@@ -1,20 +1,56 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { FilterPanel } from '../components/FilterPanel';
 import { OpportunityList } from '../components/OpportunityList';
 import { apiClient } from '../api/client';
-import type { Opportunity, OpportunityFilters, PaginatedResponse, LiveSearchResult } from '../types';
+import type { Opportunity, OpportunityFilters, PaginatedResponse } from '../types';
+
+const CACHE_KEY = 'cachedOpportunities';
+const CACHE_MAX_AGE = 24 * 60 * 60 * 1000; // 24 hours
+
+function loadCache(): { items: Opportunity[]; totalPages: number; timestamp: number } | null {
+  try {
+    const raw = localStorage.getItem(CACHE_KEY);
+    if (!raw) return null;
+    const cached = JSON.parse(raw);
+    if (Date.now() - cached.timestamp > CACHE_MAX_AGE) {
+      localStorage.removeItem(CACHE_KEY);
+      return null;
+    }
+    return cached;
+  } catch {
+    return null;
+  }
+}
 
 export function Home() {
   const [opportunities, setOpportunities] = useState<Opportunity[]>([]);
-  const [liveResults, setLiveResults] = useState<LiveSearchResult[]>([]);
+  const [liveResults, setLiveResults] = useState<Opportunity[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isStale, setIsStale] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
   const [filters, setFilters] = useState<OpportunityFilters>({});
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const cacheLoaded = useRef(false);
+
+  // Load cached results on first mount (before API call)
+  useEffect(() => {
+    const cached = loadCache();
+    if (cached) {
+      setOpportunities(cached.items);
+      setTotalPages(cached.totalPages);
+      setLastUpdated(new Date(cached.timestamp));
+      setIsLoading(false);
+      setIsStale(true);
+      cacheLoaded.current = true;
+    }
+  }, []);
 
   const fetchOpportunities = useCallback(async () => {
-    setIsLoading(true);
+    if (!cacheLoaded.current) {
+      setIsLoading(true);
+    }
     try {
       const params = new URLSearchParams();
       params.set('page', String(page));
@@ -24,7 +60,6 @@ export function Home() {
       if (filters.compensationMin) params.set('compensationMin', String(filters.compensationMin));
       if (filters.compensationMax) params.set('compensationMax', String(filters.compensationMax));
 
-      // Handle multiple locations
       filters.locations?.forEach((loc) => params.append('location', loc));
       filters.format?.forEach((f) => params.append('format', f));
       filters.industries?.forEach((i) => params.append('industries', i));
@@ -37,11 +72,23 @@ export function Home() {
       if (response.data) {
         setOpportunities(response.data.items);
         setTotalPages(response.data.totalPages);
+        setLastUpdated(new Date());
+        setIsStale(false);
+
+        // Cache the default (unfiltered, page 1) response
+        if (page === 1 && Object.keys(filters).length === 0) {
+          localStorage.setItem(CACHE_KEY, JSON.stringify({
+            items: response.data.items,
+            totalPages: response.data.totalPages,
+            timestamp: Date.now(),
+          }));
+        }
       }
     } catch (error) {
       console.error('Failed to fetch opportunities:', error);
     } finally {
       setIsLoading(false);
+      cacheLoaded.current = false;
     }
   }, [filters, page]);
 
@@ -52,7 +99,7 @@ export function Home() {
   const handleFiltersChange = (newFilters: OpportunityFilters) => {
     setFilters(newFilters);
     setPage(1);
-    setLiveResults([]); // Clear live results when filters change
+    setLiveResults([]);
   };
 
   const handleLiveSearch = async () => {
@@ -67,7 +114,7 @@ export function Home() {
       if (filters.search) params.set('query', filters.search);
       filters.industries?.forEach((i) => params.append('industries', i));
 
-      const response = await apiClient.get<LiveSearchResult[]>(
+      const response = await apiClient.get<Opportunity[]>(
         `/opportunities/live-search?${params.toString()}`
       );
 
@@ -80,6 +127,40 @@ export function Home() {
       setIsSearching(false);
     }
   };
+
+  const handleSaveLiveResult = async (opportunity: Opportunity) => {
+    try {
+      const response = await apiClient.post<Opportunity>('/opportunities/save-live', {
+        title: opportunity.title,
+        organization: opportunity.organization,
+        description: opportunity.description,
+        location: opportunity.location,
+        isRemote: opportunity.isRemote,
+        cfpDeadline: opportunity.cfpDeadline,
+        format: opportunity.format,
+        industries: opportunity.industries,
+        applyUrl: opportunity.applyUrl,
+        liveSearchUrl: opportunity.liveSearchUrl,
+      });
+
+      if (response.data) {
+        // Replace the live result with the stored version
+        setLiveResults((prev) =>
+          prev.map((r) => (r.id === opportunity.id ? { ...response.data!, isLiveResult: false } : r))
+        );
+      }
+    } catch (error) {
+      console.error('Failed to save live result:', error);
+    }
+  };
+
+  // Merge live + stored, deduplicating by applyUrl (prefer stored version)
+  const mergedOpportunities = useMemo(() => {
+    const storedUrls = new Set(opportunities.map((o) => o.applyUrl));
+    const dedupedLive = liveResults.filter((lr) => !storedUrls.has(lr.applyUrl));
+    // Live results first, then stored
+    return [...dedupedLive, ...opportunities];
+  }, [opportunities, liveResults]);
 
   return (
     <div>
@@ -94,68 +175,41 @@ export function Home() {
         isSearching={isSearching}
       />
 
-      {/* Live Search Results */}
       {liveResults.length > 0 && (
-        <div className="mb-8">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-gray-800">
-              Live Search Results ({liveResults.length})
-            </h2>
-            <button
-              onClick={() => setLiveResults([])}
-              className="text-sm text-gray-500 hover:text-gray-700"
-            >
-              Clear live results
-            </button>
-          </div>
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {liveResults.map((result, index) => (
-              <div
-                key={index}
-                className="bg-gradient-to-br from-green-50 to-white rounded-lg shadow p-6 border border-green-200"
-              >
-                <div className="flex justify-between items-start mb-2">
-                  <a
-                    href={result.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-lg font-semibold text-gray-900 hover:text-green-600"
-                  >
-                    {result.title}
-                  </a>
-                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                    Live
-                  </span>
-                </div>
-                <p className="text-sm text-gray-600 mb-2">{result.organization}</p>
-                <p className="text-gray-700 text-sm mb-4 line-clamp-3">
-                  {result.description}
-                </p>
-                <div className="flex justify-between items-center">
-                  <span className="text-xs text-gray-500">Source: {result.source}</span>
-                  <a
-                    href={result.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-green-600 hover:text-green-800 font-medium text-sm"
-                  >
-                    View &rarr;
-                  </a>
-                </div>
-              </div>
-            ))}
-          </div>
+        <div className="flex items-center justify-between mb-4">
+          <p className="text-sm text-gray-600">
+            Showing {mergedOpportunities.length} results
+            {liveResults.length > 0 && (
+              <span className="ml-1">
+                ({liveResults.filter((lr) => !opportunities.some((o) => o.applyUrl === lr.applyUrl)).length} from live search)
+              </span>
+            )}
+          </p>
+          <button
+            onClick={() => setLiveResults([])}
+            className="text-sm text-gray-500 hover:text-gray-700"
+          >
+            Clear live results
+          </button>
         </div>
       )}
 
-      {/* Stored Opportunities */}
       <div>
-        {liveResults.length > 0 && (
-          <h2 className="text-lg font-semibold text-gray-800 mb-4">
-            Stored Opportunities ({opportunities.length})
-          </h2>
+        {isStale && (
+          <p className="text-xs text-gray-400 mb-2">
+            Showing cached results while loading fresh data...
+          </p>
         )}
-        <OpportunityList opportunities={opportunities} isLoading={isLoading} />
+        {lastUpdated && !isStale && !liveResults.length && (
+          <p className="text-xs text-gray-400 mb-2">
+            Updated {lastUpdated.toLocaleTimeString()}
+          </p>
+        )}
+        <OpportunityList
+          opportunities={liveResults.length > 0 ? mergedOpportunities : opportunities}
+          isLoading={isLoading}
+          onSaveLive={handleSaveLiveResult}
+        />
       </div>
 
       {totalPages > 1 && (

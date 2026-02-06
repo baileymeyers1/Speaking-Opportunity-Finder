@@ -1,11 +1,27 @@
 import { config } from '../config/index.js';
+import { randomUUID } from 'crypto';
 
-export interface LiveSearchResult {
+export interface EnrichedLiveResult {
+  id: string;
   title: string;
   organization: string;
-  description: string;
-  url: string;
+  description: string | null;
+  location: string | null;
+  isRemote: boolean;
+  eventDate: string | null;
+  cfpDeadline: string | null;
+  format: string;
+  industries: string[];
+  compensationType: string | null;
+  compensationAmount: number | null;
+  compensationDetails: string | null;
+  applyUrl: string;
   source: string;
+  sourceUrl: string | null;
+  createdAt: string;
+  updatedAt: string;
+  isLiveResult: boolean;
+  liveSearchUrl: string;
 }
 
 // Search query templates for different industries
@@ -27,39 +43,112 @@ const INDUSTRY_QUERIES: Record<string, string[]> = {
   agriculture: ['agtech conference CFP', 'agriculture summit speakers'],
 };
 
+const FORMAT_KEYWORDS: Record<string, string> = {
+  podcast: 'podcast',
+  webinar: 'webinar',
+  workshop: 'workshop',
+  meetup: 'meetup',
+  panel: 'panel',
+  summit: 'conference',
+  symposium: 'conference',
+};
+
+/**
+ * Extract metadata from result content for richer tagging.
+ */
+function extractMetadata(content: string, title: string, searchIndustries: string[]) {
+  const lower = (content + ' ' + title).toLowerCase();
+
+  // Format detection
+  let format = 'conference';
+  for (const [keyword, fmt] of Object.entries(FORMAT_KEYWORDS)) {
+    if (lower.includes(keyword)) {
+      format = fmt;
+      break;
+    }
+  }
+
+  // Remote detection
+  const isRemote = /\b(online|virtual|remote)\b/.test(lower);
+
+  // Location extraction - look for common patterns
+  let location: string | null = null;
+  const locationMatch = content.match(/(?:in|held in|location:\s*)([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*(?:,\s*[A-Z]{2,})?)/);
+  if (locationMatch) {
+    location = locationMatch[1].trim();
+  }
+
+  // Date extraction - try common patterns
+  let cfpDeadline: string | null = null;
+  const datePatterns = [
+    /(?:deadline|submit by|closes?|due)[\s:]*(\w+ \d{1,2},?\s*\d{4})/i,
+    /(?:deadline|submit by|closes?|due)[\s:]*(\d{4}-\d{2}-\d{2})/i,
+    /(?:deadline|submit by|closes?|due)[\s:]*(\d{1,2}\/\d{1,2}\/\d{4})/i,
+  ];
+  for (const pattern of datePatterns) {
+    const match = content.match(pattern);
+    if (match) {
+      const parsed = new Date(match[1]);
+      if (!isNaN(parsed.getTime()) && parsed > new Date()) {
+        cfpDeadline = parsed.toISOString();
+      }
+      break;
+    }
+  }
+
+  // Industries - combine search context with content-inferred ones
+  const industries = [...searchIndustries];
+  const industryKeywords: Record<string, string> = {
+    'artificial intelligence': 'AI',
+    'machine learning': 'AI',
+    'data science': 'data science',
+    'cloud': 'cloud',
+    'devops': 'devops',
+    'security': 'cybersecurity',
+    'healthcare': 'healthcare',
+    'fintech': 'finance',
+    'blockchain': 'blockchain',
+    'sustainability': 'sustainability',
+  };
+  for (const [keyword, tag] of Object.entries(industryKeywords)) {
+    if (lower.includes(keyword) && !industries.includes(tag)) {
+      industries.push(tag);
+    }
+  }
+
+  return { format, isRemote, location, cfpDeadline, industries };
+}
+
 /**
  * Perform a live web search for speaking opportunities using Linkup API.
- * https://docs.linkup.so/
+ * Returns enriched results that match the Opportunity shape.
  */
 export async function performLiveSearch(
   query: string,
   industries: string[]
-): Promise<LiveSearchResult[]> {
+): Promise<EnrichedLiveResult[]> {
   const apiKey = config.scrapers?.webSearch;
+  const currentYear = new Date().getFullYear();
 
-  // Build search query based on user input and selected industries
   let searchQuery = '';
-
   if (query) {
-    searchQuery = `${query} call for speakers OR CFP 2025`;
+    searchQuery = `${query} call for speakers OR CFP ${currentYear}`;
   } else if (industries.length > 0) {
     const industryTerms = industries.map((ind) => {
       const templates = INDUSTRY_QUERIES[ind.toLowerCase()];
       return templates ? templates[0] : `${ind} conference`;
     });
-    searchQuery = `(${industryTerms.join(' OR ')}) call for speakers 2025`;
+    searchQuery = `(${industryTerms.join(' OR ')}) call for speakers ${currentYear}`;
   }
 
   if (!searchQuery) {
     return [];
   }
 
-  // If API key is configured, use Linkup search
   if (apiKey) {
-    return await performLinkupSearch(searchQuery, apiKey);
+    return await performLinkupSearch(searchQuery, apiKey, industries);
   }
 
-  // Otherwise, return simulated results to demonstrate the feature
   return generateSimulatedResults(query, industries);
 }
 
@@ -77,9 +166,10 @@ interface LinkupResponse {
 
 async function performLinkupSearch(
   query: string,
-  apiKey: string
-): Promise<LiveSearchResult[]> {
-  const results: LiveSearchResult[] = [];
+  apiKey: string,
+  searchIndustries: string[]
+): Promise<EnrichedLiveResult[]> {
+  const results: EnrichedLiveResult[] = [];
 
   try {
     const response = await fetch('https://api.linkup.so/v1/search', {
@@ -104,14 +194,32 @@ async function performLinkupSearch(
 
     const data = (await response.json()) as LinkupResponse;
     const searchResults = data.results || data.sources || [];
+    const now = new Date().toISOString();
 
     for (const item of searchResults) {
+      const meta = extractMetadata(item.content || '', item.name || '', searchIndustries);
+
       results.push({
+        id: `live-${randomUUID()}`,
         title: item.name || 'Untitled',
         organization: extractOrganization(item.name || ''),
-        description: item.content || '',
-        url: item.url,
-        source: 'Linkup Search',
+        description: item.content || null,
+        location: meta.location,
+        isRemote: meta.isRemote,
+        eventDate: null,
+        cfpDeadline: meta.cfpDeadline,
+        format: meta.format,
+        industries: meta.industries,
+        compensationType: null,
+        compensationAmount: null,
+        compensationDetails: null,
+        applyUrl: item.url,
+        source: 'Live Search',
+        sourceUrl: item.url,
+        createdAt: now,
+        updatedAt: now,
+        isLiveResult: true,
+        liveSearchUrl: item.url,
       });
     }
   } catch (error) {
@@ -122,8 +230,6 @@ async function performLinkupSearch(
 }
 
 function extractOrganization(title: string): string {
-  // Try to extract organization name from title
-  // Common patterns: "Event Name - Organization", "Event Name | Organization", "Event Name by Organization"
   const separators = [' - ', ' | ', ' by ', ' @ ', ' at '];
   for (const sep of separators) {
     if (title.includes(sep)) {
@@ -137,48 +243,64 @@ function extractOrganization(title: string): string {
 function generateSimulatedResults(
   query: string,
   industries: string[]
-): LiveSearchResult[] {
-  // Generate realistic-looking results based on the search criteria
-  const results: LiveSearchResult[] = [];
+): EnrichedLiveResult[] {
+  const results: EnrichedLiveResult[] = [];
   const searchTerm = query || industries[0] || 'technology';
+  const now = new Date().toISOString();
+  const inferredIndustries = industries.length > 0 ? industries : ['technology'];
 
   const templates = [
     {
-      title: `Global ${capitalize(searchTerm)} Summit 2025 - Call for Speakers`,
+      title: `Global ${capitalize(searchTerm)} Summit ${new Date().getFullYear()} - Call for Speakers`,
       organization: `${capitalize(searchTerm)} Leaders Network`,
-      description: `Submit your proposal to speak at the premier ${searchTerm} event of 2025. We are looking for innovative talks, workshops, and panel discussions.`,
-      source: 'Web Search',
+      description: `Submit your proposal to speak at the premier ${searchTerm} event. We are looking for innovative talks, workshops, and panel discussions.`,
     },
     {
       title: `${capitalize(searchTerm)} Innovation Conference - CFP Open`,
       organization: 'Innovation Events Inc.',
       description: `Share your expertise at our annual ${searchTerm} conference. Speaking slots available for keynotes, breakout sessions, and lightning talks.`,
-      source: 'Web Search',
     },
     {
       title: `International ${capitalize(searchTerm)} Forum - Speakers Wanted`,
       organization: `World ${capitalize(searchTerm)} Association`,
       description: `Join industry leaders at our international forum. CFP deadline approaching - submit your abstract today.`,
-      source: 'Web Search',
     },
     {
       title: `${capitalize(searchTerm)} Trends Podcast - Guest Speakers`,
       organization: `${capitalize(searchTerm)} Weekly`,
       description: `Looking for ${searchTerm} professionals to share insights on our popular podcast. Remote recording available.`,
-      source: 'Web Search',
     },
     {
-      title: `Future of ${capitalize(searchTerm)} Conference 2025`,
+      title: `Future of ${capitalize(searchTerm)} Conference ${new Date().getFullYear()}`,
       organization: 'TechFuture Events',
       description: `Be part of the conversation about the future of ${searchTerm}. Now accepting speaker applications for our flagship event.`,
-      source: 'Web Search',
     },
   ];
 
-  for (let i = 0; i < Math.min(5, templates.length); i++) {
+  for (let i = 0; i < templates.length; i++) {
+    const t = templates[i];
+    const url = `https://example.com/${searchTerm.toLowerCase().replace(/\s+/g, '-')}-conf-${i + 1}`;
     results.push({
-      ...templates[i],
-      url: `https://example.com/${searchTerm.toLowerCase().replace(/\s+/g, '-')}-conf-${i + 1}`,
+      id: `live-${randomUUID()}`,
+      title: t.title,
+      organization: t.organization,
+      description: t.description,
+      location: null,
+      isRemote: i === 3, // podcast is remote
+      eventDate: null,
+      cfpDeadline: null,
+      format: i === 3 ? 'podcast' : 'conference',
+      industries: inferredIndustries,
+      compensationType: null,
+      compensationAmount: null,
+      compensationDetails: null,
+      applyUrl: url,
+      source: 'Web Search',
+      sourceUrl: url,
+      createdAt: now,
+      updatedAt: now,
+      isLiveResult: true,
+      liveSearchUrl: url,
     });
   }
 

@@ -11,7 +11,7 @@
     "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
     "dev:client": "npm run dev --workspace=client",
     "dev:server": "npm run dev --workspace=server",
-    "build": "npm run build --workspaces",
+    "build": "npm run build --workspaces --if-present",
     "build:client": "npm run build --workspace=client",
     "build:server": "npm run build --workspace=server",
     "lint": "npm run lint --workspaces --if-present",

@@ -36,6 +36,8 @@ export interface Opportunity {
   sourceUrl: string | null;
   createdAt: Date;
   updatedAt: Date;
+  isLiveResult?: boolean;
+  liveSearchUrl?: string;
 }
 
 export type OpportunityFormat =

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { apiClient } from '../api/client';
+import { MultiSelectDropdown } from './MultiSelectDropdown';
 import type {
   OpportunityFilters,
   OpportunityFormat,
@@ -41,8 +42,6 @@ export function FilterPanel({
 }: FilterPanelProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [filterOptions, setFilterOptions] = useState<FilterOptions | null>(null);
-  const [locationSearch, setLocationSearch] = useState('');
-  const [industrySearch, setIndustrySearch] = useState('');
 
   useEffect(() => {
     const fetchFilterOptions = async () => {
@@ -97,29 +96,6 @@ export function FilterPanel({
     });
   };
 
-  const handleLocationChange = (location: string) => {
-    const currentLocations = filters.locations || [];
-    const isSelected = currentLocations.includes(location);
-    const newLocations = isSelected
-      ? currentLocations.filter((l) => l !== location)
-      : [...currentLocations, location];
-    onFiltersChange({
-      ...filters,
-      locations: newLocations.length > 0 ? newLocations : undefined,
-    });
-  };
-
-  const handleIndustryChange = (industry: string) => {
-    const currentIndustries = filters.industries || [];
-    const newIndustries = currentIndustries.includes(industry)
-      ? currentIndustries.filter((i) => i !== industry)
-      : [...currentIndustries, industry];
-    onFiltersChange({
-      ...filters,
-      industries: newIndustries.length > 0 ? newIndustries : undefined,
-    });
-  };
-
   const handleCompensationMinChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = parseInt(e.target.value, 10);
     onFiltersChange({
@@ -138,8 +114,6 @@ export function FilterPanel({
 
   const handleClearFilters = () => {
     onFiltersChange({});
-    setLocationSearch('');
-    setIndustrySearch('');
   };
 
   const selectedLocations = filters.locations || [];
@@ -153,14 +127,6 @@ export function FilterPanel({
     filters.compensationMin,
     filters.compensationMax,
   ].filter(Boolean).length;
-
-  const filteredLocations = locations.filter((loc) =>
-    loc.toLowerCase().includes(locationSearch.toLowerCase())
-  );
-
-  const filteredIndustries = industries.filter((ind) =>
-    ind.toLowerCase().includes(industrySearch.toLowerCase())
-  );
 
   const formatCompensationValue = (value: number, isMax: boolean) => {
     if (isMax && value >= COMPENSATION_MAX) {
@@ -218,66 +184,42 @@ export function FilterPanel({
 
       {isExpanded && (
         <div className="space-y-6 pt-4 border-t">
-          {/* Location Filter - Multi-select */}
-          <div>
-            <h3 className="text-sm font-medium text-gray-700 mb-2">
-              Location {selectedLocations.length > 0 && `(${selectedLocations.length} selected)`}
-            </h3>
-            <input
-              type="text"
-              placeholder="Search locations..."
-              value={locationSearch}
-              onChange={(e) => setLocationSearch(e.target.value)}
-              className="w-full max-w-xs rounded-md border border-gray-300 px-3 py-1.5 mb-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-            />
-            <div className="flex flex-wrap gap-x-4 gap-y-2 max-h-32 overflow-y-auto">
-              {filteredLocations.map((location) => (
-                <label key={location} className="inline-flex items-center cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={selectedLocations.includes(location)}
-                    onChange={() => handleLocationChange(location)}
-                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 h-4 w-4"
-                  />
-                  <span className="ml-2 text-sm text-gray-600">{location}</span>
-                </label>
-              ))}
-            </div>
-            <label className="inline-flex items-center mt-3 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={filters.isRemote || false}
-                onChange={handleRemoteChange}
-                className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 h-4 w-4"
+          {/* Location Filter - Dropdown */}
+          <div className="flex flex-wrap gap-6 items-start">
+            <div>
+              <h3 className="text-sm font-medium text-gray-700 mb-2">Location</h3>
+              <MultiSelectDropdown
+                label="Locations"
+                options={locations}
+                selected={selectedLocations}
+                onChange={(sel) =>
+                  onFiltersChange({ ...filters, locations: sel.length > 0 ? sel : undefined })
+                }
+                placeholder="Search locations..."
               />
-              <span className="ml-2 text-sm text-gray-700 font-medium">Remote only</span>
-            </label>
-          </div>
+              <label className="inline-flex items-center mt-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={filters.isRemote || false}
+                  onChange={handleRemoteChange}
+                  className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 h-4 w-4"
+                />
+                <span className="ml-2 text-sm text-gray-700 font-medium">Remote only</span>
+              </label>
+            </div>
 
-          {/* Industry Filter */}
-          <div>
-            <h3 className="text-sm font-medium text-gray-700 mb-2">
-              Industry {filters.industries?.length ? `(${filters.industries.length} selected)` : ''}
-            </h3>
-            <input
-              type="text"
-              placeholder="Search industries..."
-              value={industrySearch}
-              onChange={(e) => setIndustrySearch(e.target.value)}
-              className="w-full max-w-xs rounded-md border border-gray-300 px-3 py-1.5 mb-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-            />
-            <div className="flex flex-wrap gap-x-4 gap-y-2 max-h-40 overflow-y-auto">
-              {filteredIndustries.map((industry) => (
-                <label key={industry} className="inline-flex items-center cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={filters.industries?.includes(industry) || false}
-                    onChange={() => handleIndustryChange(industry)}
-                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 h-4 w-4"
-                  />
-                  <span className="ml-2 text-sm text-gray-600 capitalize">{industry}</span>
-                </label>
-              ))}
+            {/* Industry Filter - Dropdown */}
+            <div>
+              <h3 className="text-sm font-medium text-gray-700 mb-2">Industry</h3>
+              <MultiSelectDropdown
+                label="Industries"
+                options={industries}
+                selected={filters.industries || []}
+                onChange={(sel) =>
+                  onFiltersChange({ ...filters, industries: sel.length > 0 ? sel : undefined })
+                }
+                placeholder="Search industries..."
+              />
             </div>
           </div>
 

@@ -6,6 +6,7 @@ const router = Router();
 router.get('/', opportunitiesController.getOpportunities);
 router.get('/filters', opportunitiesController.getFilterOptions);
 router.get('/live-search', opportunitiesController.liveSearch);
+router.post('/save-live', opportunitiesController.saveLiveResult);
 router.get('/:id', opportunitiesController.getOpportunityById);
 
 export default router;

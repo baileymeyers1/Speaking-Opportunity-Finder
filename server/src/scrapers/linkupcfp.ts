@@ -10,29 +10,45 @@ interface LinkupResponse {
   results?: LinkupSearchResult[];
 }
 
+const CURRENT_YEAR = new Date().getFullYear();
+const NEXT_YEAR = CURRENT_YEAR + 1;
+
 // Industry-specific search queries for CFP discovery
 const INDUSTRY_CFP_QUERIES = [
-  { query: 'healthcare medical conference call for speakers 2025 2026', industries: ['healthcare', 'medical'] },
-  { query: 'fintech finance banking conference CFP speakers 2025 2026', industries: ['finance', 'fintech'] },
-  { query: 'cybersecurity infosec security conference call for papers 2025 2026', industries: ['cybersecurity', 'security'] },
-  { query: 'sustainability climate environment conference speakers wanted 2025 2026', industries: ['environment', 'sustainability'] },
-  { query: 'energy renewable oil gas conference CFP 2025 2026', industries: ['energy'] },
-  { query: 'marketing digital marketing conference call for speakers 2025 2026', industries: ['marketing'] },
-  { query: 'HR human resources talent conference CFP 2025 2026', industries: ['hr', 'human resources'] },
-  { query: 'education edtech learning conference call for speakers 2025 2026', industries: ['education', 'edtech'] },
-  { query: 'retail ecommerce consumer conference CFP speakers 2025 2026', industries: ['retail', 'ecommerce'] },
-  { query: 'manufacturing industry 4.0 conference call for papers 2025 2026', industries: ['manufacturing'] },
-  { query: 'legal law tech conference CFP speakers 2025 2026', industries: ['legal'] },
-  { query: 'real estate proptech conference call for speakers 2025 2026', industries: ['real estate', 'proptech'] },
-  { query: 'agriculture agtech farming conference CFP 2025 2026', industries: ['agriculture', 'agtech'] },
-  { query: 'entertainment media streaming conference call for speakers 2025 2026', industries: ['entertainment', 'media'] },
-  { query: 'AI artificial intelligence machine learning conference CFP 2025 2026', industries: ['technology', 'AI', 'machine learning'] },
-  { query: 'data science analytics conference call for speakers 2025 2026', industries: ['technology', 'data science'] },
-  { query: 'cloud computing devops conference CFP 2025 2026', industries: ['technology', 'cloud', 'devops'] },
+  { query: `healthcare medical conference call for speakers ${CURRENT_YEAR} ${NEXT_YEAR}`, industries: ['healthcare', 'medical'] },
+  { query: `fintech finance banking conference CFP speakers ${CURRENT_YEAR} ${NEXT_YEAR}`, industries: ['finance', 'fintech'] },
+  { query: `cybersecurity infosec security conference call for papers ${CURRENT_YEAR} ${NEXT_YEAR}`, industries: ['cybersecurity', 'security'] },
+  { query: `sustainability climate environment conference speakers wanted ${CURRENT_YEAR} ${NEXT_YEAR}`, industries: ['environment', 'sustainability'] },
+  { query: `energy renewable oil gas conference CFP ${CURRENT_YEAR} ${NEXT_YEAR}`, industries: ['energy'] },
+  { query: `marketing digital marketing conference call for speakers ${CURRENT_YEAR} ${NEXT_YEAR}`, industries: ['marketing'] },
+  { query: `HR human resources talent conference CFP ${CURRENT_YEAR} ${NEXT_YEAR}`, industries: ['hr', 'human resources'] },
+  { query: `education edtech learning conference call for speakers ${CURRENT_YEAR} ${NEXT_YEAR}`, industries: ['education', 'edtech'] },
+  { query: `retail ecommerce consumer conference CFP speakers ${CURRENT_YEAR} ${NEXT_YEAR}`, industries: ['retail', 'ecommerce'] },
+  { query: `manufacturing industry 4.0 conference call for papers ${CURRENT_YEAR} ${NEXT_YEAR}`, industries: ['manufacturing'] },
+  { query: `legal law tech conference CFP speakers ${CURRENT_YEAR} ${NEXT_YEAR}`, industries: ['legal'] },
+  { query: `real estate proptech conference call for speakers ${CURRENT_YEAR} ${NEXT_YEAR}`, industries: ['real estate', 'proptech'] },
+  { query: `agriculture agtech farming conference CFP ${CURRENT_YEAR} ${NEXT_YEAR}`, industries: ['agriculture', 'agtech'] },
+  { query: `entertainment media streaming conference call for speakers ${CURRENT_YEAR} ${NEXT_YEAR}`, industries: ['entertainment', 'media'] },
+  { query: `AI artificial intelligence machine learning conference CFP ${CURRENT_YEAR} ${NEXT_YEAR}`, industries: ['technology', 'AI', 'machine learning'] },
+  { query: `data science analytics conference call for speakers ${CURRENT_YEAR} ${NEXT_YEAR}`, industries: ['technology', 'data science'] },
+  { query: `cloud computing devops conference CFP ${CURRENT_YEAR} ${NEXT_YEAR}`, industries: ['technology', 'cloud', 'devops'] },
+  // Expanded industries
+  { query: `nonprofit social impact conference call for speakers ${CURRENT_YEAR} ${NEXT_YEAR}`, industries: ['nonprofit', 'social impact'] },
+  { query: `government public policy conference CFP speakers ${CURRENT_YEAR} ${NEXT_YEAR}`, industries: ['government', 'public policy'] },
+  { query: `biotech pharmaceutical conference call for speakers ${CURRENT_YEAR} ${NEXT_YEAR}`, industries: ['biotech', 'pharmaceutical'] },
+  { query: `automotive mobility conference CFP speakers ${CURRENT_YEAR} ${NEXT_YEAR}`, industries: ['automotive', 'mobility'] },
+  { query: `aerospace defense conference call for speakers ${CURRENT_YEAR} ${NEXT_YEAR}`, industries: ['aerospace', 'defense'] },
+  { query: `food beverage hospitality conference CFP ${CURRENT_YEAR} ${NEXT_YEAR}`, industries: ['food & beverage', 'hospitality'] },
+  { query: `sports technology conference call for speakers ${CURRENT_YEAR} ${NEXT_YEAR}`, industries: ['sports', 'sports tech'] },
+  { query: `fashion apparel conference CFP speakers ${CURRENT_YEAR} ${NEXT_YEAR}`, industries: ['fashion', 'apparel'] },
+  { query: `architecture construction conference call for speakers ${CURRENT_YEAR} ${NEXT_YEAR}`, industries: ['architecture', 'construction'] },
+  { query: `telecom 5G conference CFP speakers ${CURRENT_YEAR} ${NEXT_YEAR}`, industries: ['telecom', '5G'] },
+  { query: `supply chain logistics conference call for speakers ${CURRENT_YEAR} ${NEXT_YEAR}`, industries: ['supply chain', 'logistics'] },
+  { query: `insurance insurtech conference CFP speakers ${CURRENT_YEAR} ${NEXT_YEAR}`, industries: ['insurance', 'insurtech'] },
+  { query: `venture capital startup conference call for speakers ${CURRENT_YEAR} ${NEXT_YEAR}`, industries: ['venture capital', 'startups'] },
 ];
 
 function extractOrganization(title: string): string {
-  // Try to extract organization name from title
   const separators = [' - ', ' | ', ' by ', ' @ ', ' at '];
   for (const sep of separators) {
     if (title.includes(sep)) {
@@ -47,7 +63,6 @@ function isLikelyCFP(content: string, url: string): boolean {
   const lowerContent = content.toLowerCase();
   const lowerUrl = url.toLowerCase();
 
-  // Check for CFP-related keywords
   const cfpIndicators = [
     'call for papers',
     'call for speakers',
@@ -57,11 +72,34 @@ function isLikelyCFP(content: string, url: string): boolean {
     'speaker submission',
     'proposal submission',
     'speaking opportunity',
+    'call for proposals',
+    'submit your abstract',
+    'speaker application',
   ];
 
   return cfpIndicators.some(
     (indicator) => lowerContent.includes(indicator) || lowerUrl.includes(indicator.replace(/\s+/g, ''))
   );
+}
+
+function extractDeadline(content: string): Date | undefined {
+  const patterns = [
+    /(?:deadline|submit by|closes?|due|cfp ends?)[:\s]*(\w+ \d{1,2},?\s*\d{4})/i,
+    /(?:deadline|submit by|closes?|due|cfp ends?)[:\s]*(\d{4}-\d{2}-\d{2})/i,
+    /(?:deadline|submit by|closes?|due|cfp ends?)[:\s]*(\d{1,2}\/\d{1,2}\/\d{4})/i,
+  ];
+
+  for (const pattern of patterns) {
+    const match = content.match(pattern);
+    if (match) {
+      const parsed = new Date(match[1]);
+      if (!isNaN(parsed.getTime()) && parsed > new Date()) {
+        return parsed;
+      }
+    }
+  }
+
+  return undefined;
 }
 
 async function searchWithLinkup(
@@ -100,7 +138,6 @@ function mapToScraperResult(
   result: LinkupSearchResult,
   industries: string[]
 ): ScraperResult | null {
-  // Skip if URL doesn't look like a CFP page
   if (!isLikelyCFP(result.content, result.url)) {
     return null;
   }
@@ -112,17 +149,18 @@ function mapToScraperResult(
   }
 
   const organization = extractOrganization(result.name);
+  const cfpDeadline = extractDeadline(result.content);
 
   return {
     title: result.name,
     organization,
-    description: result.content.substring(0, 500), // Truncate long descriptions
-    location: null, // Would need NLP to extract
+    description: result.content.substring(0, 500),
+    location: null,
     isRemote: result.content.toLowerCase().includes('online') ||
               result.content.toLowerCase().includes('virtual') ||
               result.content.toLowerCase().includes('remote'),
-    eventDate: undefined, // Would need NLP to extract dates
-    cfpDeadline: undefined, // Would need NLP to extract dates
+    eventDate: undefined,
+    cfpDeadline,
     format: 'conference',
     industries,
     compensationType: undefined,
@@ -144,12 +182,10 @@ export async function scrapeLinkupCFPs(apiKey?: string): Promise<ScraperResult[]
   const results: ScraperResult[] = [];
   const seenUrls = new Set<string>();
 
-  // Limit concurrent requests
   for (const { query, industries } of INDUSTRY_CFP_QUERIES) {
     const searchResults = await searchWithLinkup(query, apiKey);
 
     for (const result of searchResults) {
-      // Skip duplicates
       if (seenUrls.has(result.url)) {
         continue;
       }

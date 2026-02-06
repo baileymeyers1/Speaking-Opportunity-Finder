@@ -26,6 +26,8 @@ export interface Opportunity {
   sourceUrl: string | null;
   createdAt: string;
   updatedAt: string;
+  isLiveResult?: boolean;
+  liveSearchUrl?: string;
 }
 
 export type OpportunityFormat =
@@ -50,15 +52,6 @@ export interface OpportunityFilters {
   compensationMax?: number;
   cfpDeadlineBefore?: string;
   cfpDeadlineAfter?: string;
-}
-
-// Live search result from web
-export interface LiveSearchResult {
-  title: string;
-  organization: string;
-  description: string;
-  url: string;
-  source: string;
 }
 
 // Filter options returned from API
