@@ -156,12 +156,18 @@ export async function getOpportunities(
     }
   }
 
-  const orderBy =
+  const orderBy: Prisma.OpportunityOrderByWithRelationInput[] =
     filters.sortBy === 'quality'
-      ? [{ qualityScore: 'desc' }, { cfpDeadline: 'asc' }]
+      ? [
+          { qualityScore: Prisma.SortOrder.desc },
+          { cfpDeadline: Prisma.SortOrder.asc },
+        ]
       : filters.sortBy === 'eventDate'
-        ? [{ eventDate: 'asc' }, { cfpDeadline: 'asc' }]
-        : [{ cfpDeadline: 'asc' }];
+        ? [
+            { eventDate: Prisma.SortOrder.asc },
+            { cfpDeadline: Prisma.SortOrder.asc },
+          ]
+        : [{ cfpDeadline: Prisma.SortOrder.asc }];
 
   const [items, total] = await Promise.all([
     prisma.opportunity.findMany({

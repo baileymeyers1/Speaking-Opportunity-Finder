@@ -91,7 +91,9 @@ export async function scrapeEventbrite(): Promise<ScraperResult[]> {
 
         const description = event.description?.text || '';
         const cfpDeadline = description ? extractDeadline(description) : undefined;
-        const compensation = description ? extractCompensation(description) : {};
+        const compensation = description
+          ? extractCompensation(description)
+          : { compensationType: undefined, compensationAmount: undefined };
 
         const locationParts = [
           event.venue?.address?.city,
