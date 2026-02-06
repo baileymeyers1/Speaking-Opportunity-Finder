@@ -14,6 +14,7 @@ export interface OpportunityFilters {
   compensationMax?: number;
   cfpDeadlineBefore?: Date;
   cfpDeadlineAfter?: Date;
+  sortBy?: 'quality' | 'deadline' | 'eventDate';
 }
 
 export interface PaginationParams {
@@ -150,12 +151,19 @@ export async function getOpportunities(
     }
   }
 
+  const orderBy =
+    filters.sortBy === 'quality'
+      ? [{ qualityScore: 'desc' }, { cfpDeadline: 'asc' }]
+      : filters.sortBy === 'eventDate'
+        ? [{ eventDate: 'asc' }, { cfpDeadline: 'asc' }]
+        : [{ cfpDeadline: 'asc' }];
+
   const [items, total] = await Promise.all([
     prisma.opportunity.findMany({
       where,
       skip,
       take: pageSize,
-      orderBy: { cfpDeadline: 'asc' },
+      orderBy,
     }),
     prisma.opportunity.count({ where }),
   ]);

@@ -84,7 +84,8 @@ export async function scrapeConferenceAlertsUSA(): Promise<ScraperResult[]> {
 
       if (!currentMonthYear) continue;
 
-      const dayMatch = line.match(/^(\d{1,2})(?:st|nd|rd|th)?\s+\|\s+(.+?)\s+([A-Za-z\s]+),\s+United States of America/i);
+      const dayMatch = line.match(/^(\d{1,2})(?:st|nd|rd|th)?\s+\|\s+(.+?)\s+([A-Za-z\s]+),\s+United States of America/i) ||
+        line.match(/^(\d{1,2})(?:st|nd|rd|th)?\s+(.+?)\s+([A-Za-z\s]+),\s+United States of America/i);
       if (dayMatch) {
         const day = dayMatch[1];
         const title = dayMatch[2].trim();

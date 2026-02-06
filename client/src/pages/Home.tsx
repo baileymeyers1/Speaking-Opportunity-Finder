@@ -60,6 +60,7 @@ export function Home() {
       if (filters.isRemote) params.set('isRemote', 'true');
       if (filters.compensationMin) params.set('compensationMin', String(filters.compensationMin));
       if (filters.compensationMax) params.set('compensationMax', String(filters.compensationMax));
+      if (filters.sortBy) params.set('sortBy', filters.sortBy);
 
       filters.locations?.forEach((loc) => params.append('location', loc));
       filters.format?.forEach((f) => params.append('format', f));

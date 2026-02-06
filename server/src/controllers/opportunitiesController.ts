@@ -20,6 +20,7 @@ export async function getOpportunities(
       compensationMax,
       cfpDeadlineBefore,
       cfpDeadlineAfter,
+      sortBy,
       page,
       pageSize,
     } = req.query;
@@ -74,6 +75,10 @@ export async function getOpportunities(
 
     if (cfpDeadlineAfter) {
       filters.cfpDeadlineAfter = new Date(String(cfpDeadlineAfter));
+    }
+
+    if (sortBy && ['quality', 'deadline', 'eventDate'].includes(String(sortBy))) {
+      filters.sortBy = String(sortBy) as 'quality' | 'deadline' | 'eventDate';
     }
 
     const pagination = {

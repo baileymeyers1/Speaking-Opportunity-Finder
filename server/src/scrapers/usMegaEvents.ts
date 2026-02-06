@@ -57,6 +57,39 @@ function parseDateFromText(text: string): Date | undefined {
   return undefined;
 }
 
+function extractDeadline(html: string): Date | undefined {
+  const patterns = [
+    /(?:deadline|submit by|closes?|due|cfp ends?|proposal deadline)[:\s]*(\w+ \d{1,2},?\s*\d{4})/i,
+    /(?:deadline|submit by|closes?|due|cfp ends?|proposal deadline)[:\s]*(\d{4}-\d{2}-\d{2})/i,
+    /(?:deadline|submit by|closes?|due|cfp ends?|proposal deadline)[:\s]*(\d{1,2}\/\d{1,2}\/\d{4})/i,
+  ];
+  for (const pattern of patterns) {
+    const match = html.match(pattern);
+    if (match) {
+      const parsed = new Date(match[1]);
+      if (!isNaN(parsed.getTime())) return parsed;
+    }
+  }
+  return undefined;
+}
+
+function extractEventDate(html: string): Date | undefined {
+  const patterns = [
+    /(?:event date|event dates|conference dates|takes place|held on|when)[:\s]*(\w+ \d{1,2},?\s*\d{4})/i,
+    /(?:event dates|conference dates)[:\s]*(\w+ \d{1,2})\s*[-–]\s*(\w+ \d{1,2},?\s*\d{4})/i,
+    /(\w+ \d{1,2},?\s*\d{4})/,
+  ];
+  for (const pattern of patterns) {
+    const match = html.match(pattern);
+    if (match) {
+      const dateStr = match[2] || match[1];
+      const parsed = new Date(dateStr);
+      if (!isNaN(parsed.getTime())) return parsed;
+    }
+  }
+  return undefined;
+}
+
 async function fetchHtml(url: string): Promise<string> {
   const response = await fetch(url, {
     headers: {
@@ -308,14 +341,32 @@ export async function scrapeUsMegaEvents(): Promise<ScraperResult[]> {
     if (entry.status !== 'fulfilled') continue;
     for (const item of entry.value) {
       if (!item.applyUrl) continue;
+      let detailDeadline: Date | undefined;
+      let detailEventDate = item.eventDate;
+
+      try {
+        const detailResponse = await fetch(item.applyUrl, {
+          headers: { Accept: 'text/html', 'User-Agent': 'SpeakingOpportunityFinder/1.0' },
+        });
+        if (detailResponse.ok) {
+          const detailHtml = await detailResponse.text();
+          detailDeadline = extractDeadline(detailHtml);
+          if (!detailEventDate) {
+            detailEventDate = extractEventDate(detailHtml);
+          }
+        }
+      } catch {
+        // ignore detail fetch failures
+      }
+
       results.push({
         title: item.title,
         organization: item.title,
         description: `High-profile event discovered from curated U.S. conference lists.`,
         location: item.location || null,
         isRemote: false,
-        eventDate: item.eventDate,
-        cfpDeadline: undefined,
+        eventDate: detailEventDate,
+        cfpDeadline: detailDeadline,
         format: 'conference',
         industries: item.industries || ['conference'],
         compensationType: undefined,
