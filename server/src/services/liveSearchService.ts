@@ -56,6 +56,28 @@ const FORMAT_KEYWORDS: Record<string, string> = {
 /**
  * Extract metadata from result content for richer tagging.
  */
+function extractCompensation(content: string) {
+  const lower = content.toLowerCase();
+  let compensationType: string | null = null;
+
+  if (/\bhonorarium\b/.test(lower)) compensationType = 'honorarium';
+  else if (/\bpaid\b/.test(lower)) compensationType = 'paid';
+  else if (/\btravel\b/.test(lower)) compensationType = 'travel';
+  else if (/\bstipend\b/.test(lower)) compensationType = 'paid';
+  else if (/\bexposure\b/.test(lower)) compensationType = 'exposure';
+
+  const amountMatch = content.match(/\$[\s]*([0-9]{2,6}(?:,[0-9]{3})?)/);
+  const compensationAmount = amountMatch
+    ? parseInt(amountMatch[1].replace(/,/g, ''), 10)
+    : null;
+
+  const compensationDetails = compensationType
+    ? content.substring(0, 300)
+    : null;
+
+  return { compensationType, compensationAmount, compensationDetails };
+}
+
 function extractMetadata(content: string, title: string, searchIndustries: string[]) {
   const lower = (content + ' ' + title).toLowerCase();
 
@@ -73,9 +95,17 @@ function extractMetadata(content: string, title: string, searchIndustries: strin
 
   // Location extraction - look for common patterns
   let location: string | null = null;
-  const locationMatch = content.match(/(?:in|held in|location:\s*)([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*(?:,\s*[A-Z]{2,})?)/);
-  if (locationMatch) {
-    location = locationMatch[1].trim();
+  const locationPatterns = [
+    /(?:in|held in|location:\s*)([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*(?:,\s*[A-Z]{2})?)/,
+    /([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*,\s*[A-Z]{2})/, // City, ST
+    /\b(United States|USA|US)\b/,
+  ];
+  for (const pattern of locationPatterns) {
+    const match = content.match(pattern);
+    if (match) {
+      location = match[1].trim();
+      break;
+    }
   }
 
   // Date extraction - try common patterns
@@ -109,6 +139,10 @@ function extractMetadata(content: string, title: string, searchIndustries: strin
     'fintech': 'finance',
     'blockchain': 'blockchain',
     'sustainability': 'sustainability',
+    'human resources': 'hr',
+    'education': 'education',
+    'marketing': 'marketing',
+    'construction': 'construction',
   };
   for (const [keyword, tag] of Object.entries(industryKeywords)) {
     if (lower.includes(keyword) && !industries.includes(tag)) {
@@ -116,7 +150,9 @@ function extractMetadata(content: string, title: string, searchIndustries: strin
     }
   }
 
-  return { format, isRemote, location, cfpDeadline, industries };
+  const compensation = extractCompensation(content);
+
+  return { format, isRemote, location, cfpDeadline, industries, ...compensation };
 }
 
 /**
@@ -210,9 +246,9 @@ async function performLinkupSearch(
         cfpDeadline: meta.cfpDeadline,
         format: meta.format,
         industries: meta.industries,
-        compensationType: null,
-        compensationAmount: null,
-        compensationDetails: null,
+        compensationType: meta.compensationType,
+        compensationAmount: meta.compensationAmount,
+        compensationDetails: meta.compensationDetails,
         applyUrl: item.url,
         source: 'Live Search',
         sourceUrl: item.url,

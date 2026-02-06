@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { apiClient } from '../api/client';
 import { MultiSelectDropdown } from './MultiSelectDropdown';
+import { MultiLocationInput } from './MultiLocationInput';
 import type {
   OpportunityFilters,
   OpportunityFormat,
@@ -60,7 +61,6 @@ export function FilterPanel({
 
   const formats = filterOptions?.formats || defaultFormats;
   const compensationTypes = filterOptions?.compensationTypes || defaultCompensationTypes;
-  const locations = filterOptions?.locations || [];
   const industries = filterOptions?.industries || [];
 
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -184,18 +184,17 @@ export function FilterPanel({
 
       {isExpanded && (
         <div className="space-y-6 pt-4 border-t">
-          {/* Location Filter - Dropdown */}
+          {/* Location Filter - Free Response */}
           <div className="flex flex-wrap gap-6 items-start">
             <div>
               <h3 className="text-sm font-medium text-gray-700 mb-2">Location</h3>
-              <MultiSelectDropdown
+              <MultiLocationInput
                 label="Locations"
-                options={locations}
                 selected={selectedLocations}
                 onChange={(sel) =>
                   onFiltersChange({ ...filters, locations: sel.length > 0 ? sel : undefined })
                 }
-                placeholder="Search locations..."
+                placeholder="Add locations (e.g., Los Angeles, CA)"
               />
               <label className="inline-flex items-center mt-3 cursor-pointer">
                 <input

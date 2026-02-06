@@ -13,39 +13,47 @@ interface LinkupResponse {
 const CURRENT_YEAR = new Date().getFullYear();
 const NEXT_YEAR = CURRENT_YEAR + 1;
 
+const US_FOCUS_SUFFIX = `USA United States ${CURRENT_YEAR} ${NEXT_YEAR}`;
+
+function withUsFocus(query: string) {
+  return `${query} ${US_FOCUS_SUFFIX}`;
+}
+
 // Industry-specific search queries for CFP discovery
 const INDUSTRY_CFP_QUERIES = [
-  { query: `healthcare medical conference call for speakers ${CURRENT_YEAR} ${NEXT_YEAR}`, industries: ['healthcare', 'medical'] },
-  { query: `fintech finance banking conference CFP speakers ${CURRENT_YEAR} ${NEXT_YEAR}`, industries: ['finance', 'fintech'] },
-  { query: `cybersecurity infosec security conference call for papers ${CURRENT_YEAR} ${NEXT_YEAR}`, industries: ['cybersecurity', 'security'] },
-  { query: `sustainability climate environment conference speakers wanted ${CURRENT_YEAR} ${NEXT_YEAR}`, industries: ['environment', 'sustainability'] },
-  { query: `energy renewable oil gas conference CFP ${CURRENT_YEAR} ${NEXT_YEAR}`, industries: ['energy'] },
-  { query: `marketing digital marketing conference call for speakers ${CURRENT_YEAR} ${NEXT_YEAR}`, industries: ['marketing'] },
-  { query: `HR human resources talent conference CFP ${CURRENT_YEAR} ${NEXT_YEAR}`, industries: ['hr', 'human resources'] },
-  { query: `education edtech learning conference call for speakers ${CURRENT_YEAR} ${NEXT_YEAR}`, industries: ['education', 'edtech'] },
-  { query: `retail ecommerce consumer conference CFP speakers ${CURRENT_YEAR} ${NEXT_YEAR}`, industries: ['retail', 'ecommerce'] },
-  { query: `manufacturing industry 4.0 conference call for papers ${CURRENT_YEAR} ${NEXT_YEAR}`, industries: ['manufacturing'] },
-  { query: `legal law tech conference CFP speakers ${CURRENT_YEAR} ${NEXT_YEAR}`, industries: ['legal'] },
-  { query: `real estate proptech conference call for speakers ${CURRENT_YEAR} ${NEXT_YEAR}`, industries: ['real estate', 'proptech'] },
-  { query: `agriculture agtech farming conference CFP ${CURRENT_YEAR} ${NEXT_YEAR}`, industries: ['agriculture', 'agtech'] },
-  { query: `entertainment media streaming conference call for speakers ${CURRENT_YEAR} ${NEXT_YEAR}`, industries: ['entertainment', 'media'] },
-  { query: `AI artificial intelligence machine learning conference CFP ${CURRENT_YEAR} ${NEXT_YEAR}`, industries: ['technology', 'AI', 'machine learning'] },
-  { query: `data science analytics conference call for speakers ${CURRENT_YEAR} ${NEXT_YEAR}`, industries: ['technology', 'data science'] },
-  { query: `cloud computing devops conference CFP ${CURRENT_YEAR} ${NEXT_YEAR}`, industries: ['technology', 'cloud', 'devops'] },
+  { query: withUsFocus('healthcare medical conference call for speakers'), industries: ['healthcare', 'medical'] },
+  { query: withUsFocus('fintech finance banking conference CFP speakers'), industries: ['finance', 'fintech'] },
+  { query: withUsFocus('cybersecurity infosec security conference call for papers'), industries: ['cybersecurity', 'security'] },
+  { query: withUsFocus('sustainability climate environment conference speakers wanted'), industries: ['environment', 'sustainability'] },
+  { query: withUsFocus('energy renewable oil gas conference CFP'), industries: ['energy'] },
+  { query: withUsFocus('marketing digital marketing conference call for speakers'), industries: ['marketing'] },
+  { query: withUsFocus('HR human resources talent conference CFP'), industries: ['hr', 'human resources'] },
+  { query: withUsFocus('education edtech learning conference call for speakers'), industries: ['education', 'edtech'] },
+  { query: withUsFocus('retail ecommerce consumer conference CFP speakers'), industries: ['retail', 'ecommerce'] },
+  { query: withUsFocus('manufacturing industry 4.0 conference call for papers'), industries: ['manufacturing'] },
+  { query: withUsFocus('legal law tech conference CFP speakers'), industries: ['legal'] },
+  { query: withUsFocus('real estate proptech conference call for speakers'), industries: ['real estate', 'proptech'] },
+  { query: withUsFocus('agriculture agtech farming conference CFP'), industries: ['agriculture', 'agtech'] },
+  { query: withUsFocus('entertainment media streaming conference call for speakers'), industries: ['entertainment', 'media'] },
+  { query: withUsFocus('AI artificial intelligence machine learning conference CFP'), industries: ['technology', 'AI', 'machine learning'] },
+  { query: withUsFocus('data science analytics conference call for speakers'), industries: ['technology', 'data science'] },
+  { query: withUsFocus('cloud computing devops conference CFP'), industries: ['technology', 'cloud', 'devops'] },
   // Expanded industries
-  { query: `nonprofit social impact conference call for speakers ${CURRENT_YEAR} ${NEXT_YEAR}`, industries: ['nonprofit', 'social impact'] },
-  { query: `government public policy conference CFP speakers ${CURRENT_YEAR} ${NEXT_YEAR}`, industries: ['government', 'public policy'] },
-  { query: `biotech pharmaceutical conference call for speakers ${CURRENT_YEAR} ${NEXT_YEAR}`, industries: ['biotech', 'pharmaceutical'] },
-  { query: `automotive mobility conference CFP speakers ${CURRENT_YEAR} ${NEXT_YEAR}`, industries: ['automotive', 'mobility'] },
-  { query: `aerospace defense conference call for speakers ${CURRENT_YEAR} ${NEXT_YEAR}`, industries: ['aerospace', 'defense'] },
-  { query: `food beverage hospitality conference CFP ${CURRENT_YEAR} ${NEXT_YEAR}`, industries: ['food & beverage', 'hospitality'] },
-  { query: `sports technology conference call for speakers ${CURRENT_YEAR} ${NEXT_YEAR}`, industries: ['sports', 'sports tech'] },
-  { query: `fashion apparel conference CFP speakers ${CURRENT_YEAR} ${NEXT_YEAR}`, industries: ['fashion', 'apparel'] },
-  { query: `architecture construction conference call for speakers ${CURRENT_YEAR} ${NEXT_YEAR}`, industries: ['architecture', 'construction'] },
-  { query: `telecom 5G conference CFP speakers ${CURRENT_YEAR} ${NEXT_YEAR}`, industries: ['telecom', '5G'] },
-  { query: `supply chain logistics conference call for speakers ${CURRENT_YEAR} ${NEXT_YEAR}`, industries: ['supply chain', 'logistics'] },
-  { query: `insurance insurtech conference CFP speakers ${CURRENT_YEAR} ${NEXT_YEAR}`, industries: ['insurance', 'insurtech'] },
-  { query: `venture capital startup conference call for speakers ${CURRENT_YEAR} ${NEXT_YEAR}`, industries: ['venture capital', 'startups'] },
+  { query: withUsFocus('nonprofit social impact conference call for speakers'), industries: ['nonprofit', 'social impact'] },
+  { query: withUsFocus('government public policy conference CFP speakers'), industries: ['government', 'public policy'] },
+  { query: withUsFocus('biotech pharmaceutical conference call for speakers'), industries: ['biotech', 'pharmaceutical'] },
+  { query: withUsFocus('automotive mobility conference CFP speakers'), industries: ['automotive', 'mobility'] },
+  { query: withUsFocus('aerospace defense conference call for speakers'), industries: ['aerospace', 'defense'] },
+  { query: withUsFocus('food beverage hospitality conference CFP'), industries: ['food & beverage', 'hospitality'] },
+  { query: withUsFocus('sports technology conference call for speakers'), industries: ['sports', 'sports tech'] },
+  { query: withUsFocus('fashion apparel conference CFP speakers'), industries: ['fashion', 'apparel'] },
+  { query: withUsFocus('architecture construction conference call for speakers'), industries: ['architecture', 'construction'] },
+  { query: withUsFocus('telecom 5G conference CFP speakers'), industries: ['telecom', '5G'] },
+  { query: withUsFocus('supply chain logistics conference call for speakers'), industries: ['supply chain', 'logistics'] },
+  { query: withUsFocus('insurance insurtech conference CFP speakers'), industries: ['insurance', 'insurtech'] },
+  { query: withUsFocus('venture capital startup conference call for speakers'), industries: ['venture capital', 'startups'] },
+  { query: withUsFocus('conference call for speakers CFP'), industries: ['cross-industry'] },
+  { query: withUsFocus('speaker application open CFP conference'), industries: ['cross-industry'] },
 ];
 
 function extractOrganization(title: string): string {
@@ -102,6 +110,39 @@ function extractDeadline(content: string): Date | undefined {
   return undefined;
 }
 
+function extractLocation(content: string): string | null {
+  const patterns = [
+    /(?:in|held in|location:\s*)([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*(?:,\s*[A-Z]{2})?)/,
+    /([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*,\s*[A-Z]{2})/,
+    /\b(United States|USA|US)\b/,
+  ];
+  for (const pattern of patterns) {
+    const match = content.match(pattern);
+    if (match) {
+      return match[1].trim();
+    }
+  }
+  return null;
+}
+
+function extractCompensation(content: string) {
+  const lower = content.toLowerCase();
+  let compensationType: string | undefined;
+
+  if (/\bhonorarium\b/.test(lower)) compensationType = 'honorarium';
+  else if (/\bpaid\b/.test(lower)) compensationType = 'paid';
+  else if (/\btravel\b/.test(lower)) compensationType = 'travel';
+  else if (/\bstipend\b/.test(lower)) compensationType = 'paid';
+  else if (/\bexposure\b/.test(lower)) compensationType = 'exposure';
+
+  const amountMatch = content.match(/\$[\s]*([0-9]{2,6}(?:,[0-9]{3})?)/);
+  const compensationAmount = amountMatch
+    ? parseInt(amountMatch[1].replace(/,/g, ''), 10)
+    : undefined;
+
+  return { compensationType, compensationAmount };
+}
+
 async function searchWithLinkup(
   query: string,
   apiKey: string
@@ -150,12 +191,14 @@ function mapToScraperResult(
 
   const organization = extractOrganization(result.name);
   const cfpDeadline = extractDeadline(result.content);
+  const location = extractLocation(result.content);
+  const compensation = extractCompensation(result.content);
 
   return {
     title: result.name,
     organization,
     description: result.content.substring(0, 500),
-    location: null,
+    location,
     isRemote: result.content.toLowerCase().includes('online') ||
               result.content.toLowerCase().includes('virtual') ||
               result.content.toLowerCase().includes('remote'),
@@ -163,8 +206,9 @@ function mapToScraperResult(
     cfpDeadline,
     format: 'conference',
     industries,
-    compensationType: undefined,
-    compensationDetails: undefined,
+    compensationType: compensation.compensationType,
+    compensationAmount: compensation.compensationAmount,
+    compensationDetails: compensation.compensationType ? result.content.substring(0, 300) : undefined,
     applyUrl: result.url,
     source: 'Linkup Search',
     sourceUrl: result.url,

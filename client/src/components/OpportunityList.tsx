@@ -4,13 +4,11 @@ import type { Opportunity } from '../types';
 interface OpportunityListProps {
   opportunities: Opportunity[];
   isLoading: boolean;
-  onSaveLive?: (opportunity: Opportunity) => void;
 }
 
 export function OpportunityList({
   opportunities,
   isLoading,
-  onSaveLive,
 }: OpportunityListProps) {
   if (isLoading) {
     return (
@@ -47,7 +45,6 @@ export function OpportunityList({
         <OpportunityCard
           key={opportunity.id}
           opportunity={opportunity}
-          onSaveLive={opportunity.isLiveResult ? onSaveLive : undefined}
         />
       ))}
     </div>

@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { apiClient } from '../api/client';
 import { useAuth } from '../hooks/useAuth';
 import type { Opportunity, SavedOpportunity, SavedCategory } from '../types';
+import { getLiveResultById, removeLiveResult } from '../utils/liveResultsCache';
 
 export function OpportunityDetail() {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const { isAuthenticated } = useAuth();
   const [opportunity, setOpportunity] = useState<Opportunity | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -21,12 +23,16 @@ export function OpportunityDetail() {
 
       setIsLoading(true);
       try {
-        const response = await apiClient.get<Opportunity>(
-          `/opportunities/${id}`
-        );
-        if (response.data) {
-          setOpportunity(response.data);
+        if (id.startsWith('live-')) {
+          const cached = getLiveResultById(id);
+          if (cached) {
+            setOpportunity(cached);
+            return;
+          }
         }
+
+        const response = await apiClient.get<Opportunity>(`/opportunities/${id}`);
+        if (response.data) setOpportunity(response.data);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load');
       } finally {
@@ -38,15 +44,45 @@ export function OpportunityDetail() {
   }, [id]);
 
   const handleSave = async (category: SavedCategory) => {
-    if (!id || !isAuthenticated) return;
+    if (!id || !isAuthenticated || !opportunity) return;
 
     setIsSaving(true);
     try {
+      let opportunityId = id;
+      let target = opportunity;
+
+      if (opportunity.isLiveResult) {
+        const saved = await apiClient.post<Opportunity>('/opportunities/save-live', {
+          title: opportunity.title,
+          organization: opportunity.organization,
+          description: opportunity.description,
+          location: opportunity.location,
+          isRemote: opportunity.isRemote,
+          cfpDeadline: opportunity.cfpDeadline,
+          format: opportunity.format,
+          industries: opportunity.industries,
+          applyUrl: opportunity.applyUrl,
+          liveSearchUrl: opportunity.liveSearchUrl,
+        });
+
+        if (saved.data) {
+          target = { ...saved.data, isLiveResult: false };
+          setOpportunity(target);
+          opportunityId = saved.data.id;
+          removeLiveResult(id);
+        }
+      }
+
       await apiClient.post<SavedOpportunity>('/saved', {
-        opportunityId: id,
+        opportunityId,
         category,
       });
+
       setSavedCategory(category);
+
+      if (target.id !== id) {
+        navigate(`/opportunities/${target.id}`, { replace: true });
+      }
     } catch (err) {
       console.error('Failed to save:', err);
     } finally {
@@ -98,9 +134,16 @@ export function OpportunityDetail() {
           <h1 className="text-2xl font-bold text-gray-900">
             {opportunity.title}
           </h1>
-          <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800 capitalize">
-            {opportunity.format}
-          </span>
+          <div className="flex items-center gap-2">
+            {opportunity.isLiveResult && (
+              <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-800">
+                Live
+              </span>
+            )}
+            <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800 capitalize">
+              {opportunity.format}
+            </span>
+          </div>
         </div>
 
         <p className="text-lg text-gray-600 mb-6">{opportunity.organization}</p>
@@ -116,9 +159,13 @@ export function OpportunityDetail() {
               {opportunity.location}
             </span>
           )}
-          {opportunity.compensationType && (
+          {opportunity.compensationType ? (
             <span className="inline-flex items-center px-3 py-1 rounded text-sm font-medium bg-yellow-100 text-yellow-800 capitalize">
               {opportunity.compensationType}
+            </span>
+          ) : (
+            <span className="inline-flex items-center px-3 py-1 rounded text-sm font-medium bg-gray-50 text-gray-600 border border-gray-200">
+              Compensation not listed
             </span>
           )}
         </div>
@@ -133,22 +180,20 @@ export function OpportunityDetail() {
         )}
 
         <div className="grid grid-cols-2 gap-4 mb-6">
-          {opportunity.eventDate && (
-            <div>
-              <h3 className="text-sm font-medium text-gray-500">Event Date</h3>
-              <p className="text-gray-900">{formatDate(opportunity.eventDate)}</p>
-            </div>
-          )}
-          {opportunity.cfpDeadline && (
-            <div>
-              <h3 className="text-sm font-medium text-gray-500">
-                CFP Deadline
-              </h3>
-              <p className="text-gray-900">
-                {formatDate(opportunity.cfpDeadline)}
-              </p>
-            </div>
-          )}
+          <div>
+            <h3 className="text-sm font-medium text-gray-500">Event Date</h3>
+            <p className="text-gray-900">
+              {opportunity.eventDate ? formatDate(opportunity.eventDate) : 'Not listed'}
+            </p>
+          </div>
+          <div>
+            <h3 className="text-sm font-medium text-gray-500">
+              CFP Deadline
+            </h3>
+            <p className="text-gray-900">
+              {opportunity.cfpDeadline ? formatDate(opportunity.cfpDeadline) : 'Not listed'}
+            </p>
+          </div>
           {opportunity.compensationDetails && (
             <div className="col-span-2">
               <h3 className="text-sm font-medium text-gray-500">
@@ -159,23 +204,25 @@ export function OpportunityDetail() {
           )}
         </div>
 
-        {opportunity.industries.length > 0 && (
-          <div className="mb-6">
-            <h3 className="text-sm font-medium text-gray-500 mb-2">
-              Industries
-            </h3>
-            <div className="flex flex-wrap gap-2">
-              {opportunity.industries.map((industry) => (
+        <div className="mb-6">
+          <h3 className="text-sm font-medium text-gray-500 mb-2">
+            Industries
+          </h3>
+          <div className="flex flex-wrap gap-2">
+            {opportunity.industries.length > 0 ? (
+              opportunity.industries.map((industry) => (
                 <span
                   key={industry}
                   className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-purple-100 text-purple-800"
                 >
                   {industry}
                 </span>
-              ))}
-            </div>
+              ))
+            ) : (
+              <span className="text-sm text-gray-500">Not listed</span>
+            )}
           </div>
-        )}
+        </div>
 
         <div className="flex gap-4 pt-6 border-t">
           <a

@@ -3,6 +3,7 @@ import { FilterPanel } from '../components/FilterPanel';
 import { OpportunityList } from '../components/OpportunityList';
 import { apiClient } from '../api/client';
 import type { Opportunity, OpportunityFilters, PaginatedResponse } from '../types';
+import { upsertLiveResults } from '../utils/liveResultsCache';
 
 const CACHE_KEY = 'cachedOpportunities';
 const CACHE_MAX_AGE = 24 * 60 * 60 * 1000; // 24 hours
@@ -120,37 +121,12 @@ export function Home() {
 
       if (response.data) {
         setLiveResults(response.data);
+        upsertLiveResults(response.data);
       }
     } catch (error) {
       console.error('Failed to perform live search:', error);
     } finally {
       setIsSearching(false);
-    }
-  };
-
-  const handleSaveLiveResult = async (opportunity: Opportunity) => {
-    try {
-      const response = await apiClient.post<Opportunity>('/opportunities/save-live', {
-        title: opportunity.title,
-        organization: opportunity.organization,
-        description: opportunity.description,
-        location: opportunity.location,
-        isRemote: opportunity.isRemote,
-        cfpDeadline: opportunity.cfpDeadline,
-        format: opportunity.format,
-        industries: opportunity.industries,
-        applyUrl: opportunity.applyUrl,
-        liveSearchUrl: opportunity.liveSearchUrl,
-      });
-
-      if (response.data) {
-        // Replace the live result with the stored version
-        setLiveResults((prev) =>
-          prev.map((r) => (r.id === opportunity.id ? { ...response.data!, isLiveResult: false } : r))
-        );
-      }
-    } catch (error) {
-      console.error('Failed to save live result:', error);
     }
   };
 
@@ -208,7 +184,6 @@ export function Home() {
         <OpportunityList
           opportunities={liveResults.length > 0 ? mergedOpportunities : opportunities}
           isLoading={isLoading}
-          onSaveLive={handleSaveLiveResult}
         />
       </div>
 

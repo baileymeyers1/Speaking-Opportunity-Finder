@@ -106,13 +106,19 @@ export async function getOpportunities(
     where.isRemote = filters.isRemote;
   }
 
-  // Location filter (supports multiple pipe-separated locations)
+  // Location filter (supports multiple pipe-separated locations, fuzzy contains)
   if (filters.location) {
     const locations = filters.location.split('|').map((l) => l.trim()).filter(Boolean);
     if (locations.length === 1) {
-      where.location = locations[0];
+      andConditions.push({
+        location: { contains: locations[0], mode: 'insensitive' },
+      });
     } else if (locations.length > 1) {
-      where.location = { in: locations };
+      andConditions.push({
+        OR: locations.map((loc) => ({
+          location: { contains: loc, mode: 'insensitive' },
+        })),
+      });
     }
   }
 
