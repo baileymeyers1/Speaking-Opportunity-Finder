@@ -177,32 +177,49 @@ async function searchWithLinkup(
   query: string,
   apiKey: string
 ): Promise<LinkupSearchResult[]> {
+  const results: LinkupSearchResult[] = [];
+  const seen = new Set<string>();
+  const maxPerPage = 25;
+  const maxPages = 4;
+
   try {
-    const response = await fetch('https://api.linkup.so/v1/search', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        q: query,
-        depth: 'standard',
-        outputType: 'searchResults',
-        maxResults: 25,
-      }),
-    });
+    for (let page = 1; page <= maxPages; page++) {
+      const response = await fetch('https://api.linkup.so/v1/search', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          q: query,
+          depth: 'standard',
+          outputType: 'searchResults',
+          maxResults: maxPerPage,
+          page,
+        }),
+      });
 
-    if (!response.ok) {
-      console.error('Linkup search error:', response.status);
-      return [];
+      if (!response.ok) {
+        console.error('Linkup search error:', response.status);
+        break;
+      }
+
+      const data = (await response.json()) as LinkupResponse;
+      const pageResults = data.results || [];
+      for (const item of pageResults) {
+        if (seen.has(item.url)) continue;
+        seen.add(item.url);
+        results.push(item);
+      }
+
+      if (pageResults.length < maxPerPage) break;
     }
-
-    const data = (await response.json()) as LinkupResponse;
-    return data.results || [];
   } catch (error) {
     console.error('Linkup search failed:', error);
     return [];
   }
+
+  return results;
 }
 
 function mapToScraperResult(

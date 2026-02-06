@@ -53,6 +53,7 @@ export interface OpportunityFilters {
   compensationMax?: number;
   cfpDeadlineBefore?: string;
   cfpDeadlineAfter?: string;
+  sortBy?: 'quality' | 'deadline' | 'eventDate';
 }
 
 // Filter options returned from API

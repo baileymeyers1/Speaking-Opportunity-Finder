@@ -182,6 +182,24 @@ export function FilterPanel({
         )}
       </div>
 
+      <div className="flex items-center gap-4 mb-4">
+        <label className="text-sm font-medium text-gray-700">Sort by</label>
+        <select
+          value={filters.sortBy || 'deadline'}
+          onChange={(e) =>
+            onFiltersChange({
+              ...filters,
+              sortBy: e.target.value as 'quality' | 'deadline' | 'eventDate',
+            })
+          }
+          className="text-sm px-3 py-2 rounded-md border border-gray-300 bg-white focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+        >
+          <option value="deadline">Deadline (soonest)</option>
+          <option value="eventDate">Event date (soonest)</option>
+          <option value="quality">Quality (highest)</option>
+        </select>
+      </div>
+
       {isExpanded && (
         <div className="space-y-6 pt-4 border-t">
           {/* Location Filter - Free Response */}

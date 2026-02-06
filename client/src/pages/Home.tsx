@@ -138,6 +138,28 @@ export function Home() {
     return [...dedupedLive, ...opportunities];
   }, [opportunities, liveResults]);
 
+  const sortedOpportunities = useMemo(() => {
+    const list = liveResults.length > 0 ? mergedOpportunities : opportunities;
+    const sortBy = filters.sortBy || 'deadline';
+    const sorted = [...list];
+
+    const dateValue = (value: string | null) => {
+      if (!value) return Number.MAX_SAFE_INTEGER;
+      const parsed = new Date(value);
+      return Number.isNaN(parsed.getTime()) ? Number.MAX_SAFE_INTEGER : parsed.getTime();
+    };
+
+    if (sortBy === 'quality') {
+      sorted.sort((a, b) => (b.qualityScore || 0) - (a.qualityScore || 0));
+    } else if (sortBy === 'eventDate') {
+      sorted.sort((a, b) => dateValue(a.eventDate) - dateValue(b.eventDate));
+    } else {
+      sorted.sort((a, b) => dateValue(a.cfpDeadline) - dateValue(b.cfpDeadline));
+    }
+
+    return sorted;
+  }, [liveResults.length, mergedOpportunities, opportunities, filters.sortBy]);
+
   return (
     <div>
       <h1 className="text-2xl font-bold text-gray-900 mb-6">
@@ -182,7 +204,7 @@ export function Home() {
           </p>
         )}
         <OpportunityList
-          opportunities={liveResults.length > 0 ? mergedOpportunities : opportunities}
+          opportunities={sortedOpportunities}
           isLoading={isLoading}
         />
       </div>

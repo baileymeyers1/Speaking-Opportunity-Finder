@@ -41,6 +41,23 @@ function parseDate(text: string): Date | undefined {
   return parsed;
 }
 
+function extractDeadline(html: string): Date | undefined {
+  const patterns = [
+    /(?:proposal deadline|submission deadline|deadline)[:\s]*(\w+ \d{1,2},?\s*\d{4})/i,
+    /(?:proposal deadline|submission deadline|deadline)[:\s]*(\d{4}-\d{2}-\d{2})/i,
+  ];
+
+  for (const pattern of patterns) {
+    const match = html.match(pattern);
+    if (match) {
+      const parsed = new Date(match[1]);
+      if (!isNaN(parsed.getTime())) return parsed;
+    }
+  }
+
+  return undefined;
+}
+
 export async function scrapePacEvents(): Promise<ScraperResult[]> {
   const results: ScraperResult[] = [];
   const url = 'https://pac.org/events';
@@ -63,6 +80,21 @@ export async function scrapePacEvents(): Promise<ScraperResult[]> {
       const title = lines[i + 1];
       if (!title || title.length < 4) continue;
       const applyUrl = anchors.get(title) || url;
+      let cfpDeadline: Date | undefined;
+
+      if (applyUrl !== url) {
+        try {
+          const detailResponse = await fetch(applyUrl, {
+            headers: { Accept: 'text/html', 'User-Agent': 'SpeakingOpportunityFinder/1.0' },
+          });
+          if (detailResponse.ok) {
+            const detailHtml = await detailResponse.text();
+            cfpDeadline = extractDeadline(detailHtml);
+          }
+        } catch {
+          // ignore detail fetch failures
+        }
+      }
 
       results.push({
         title: `${title} - Call for Speakers`,
@@ -71,7 +103,7 @@ export async function scrapePacEvents(): Promise<ScraperResult[]> {
         location: null,
         isRemote: false,
         eventDate: date,
-        cfpDeadline: undefined,
+        cfpDeadline,
         format: 'conference',
         industries: ['public affairs'],
         compensationType: undefined,

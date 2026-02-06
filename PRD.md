@@ -14,6 +14,7 @@ A web application that aggregates speaking opportunities from multiple sources, 
 - Expanded U.S.-focused discovery in live search and weekly scraping
 - Added curated U.S. mega-event list ingestion for broader coverage
 - Added additional data sources (developers.events, conferencealerts.com, Airtable, Eventbrite, PAC, PR News Online)
+- Added quality scoring to improve ranking and filtering
 
 ---
 

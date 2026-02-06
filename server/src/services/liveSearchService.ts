@@ -248,65 +248,79 @@ async function performLinkupSearch(
   searchIndustries: string[]
 ): Promise<EnrichedLiveResult[]> {
   const results: EnrichedLiveResult[] = [];
+  const seenUrls = new Set<string>();
+  const now = new Date().toISOString();
+
+  const maxPerPage = 50;
+  const maxPages = 5;
 
   try {
-    const response = await fetch('https://api.linkup.so/v1/search', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        q: query,
-        depth: 'standard',
-        outputType: 'searchResults',
-        maxResults: 100,
-      }),
-    });
+    for (let page = 1; page <= maxPages; page++) {
+      const response = await fetch('https://api.linkup.so/v1/search', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          q: query,
+          depth: 'standard',
+          outputType: 'searchResults',
+          maxResults: maxPerPage,
+          page,
+        }),
+      });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('Linkup API error:', response.status, errorText);
-      return [];
-    }
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Linkup API error:', response.status, errorText);
+        break;
+      }
 
-    const data = (await response.json()) as LinkupResponse;
-    const searchResults = data.results || data.sources || [];
-    const now = new Date().toISOString();
+      const data = (await response.json()) as LinkupResponse;
+      const searchResults = data.results || data.sources || [];
 
-    for (const item of searchResults) {
-      const meta = extractMetadata(item.content || '', item.name || '', searchIndustries);
+      for (const item of searchResults) {
+        if (seenUrls.has(item.url)) continue;
+        seenUrls.add(item.url);
 
-      results.push({
-        id: `live-${randomUUID()}`,
-        title: item.name || 'Untitled',
-        organization: extractOrganization(item.name || ''),
-        description: item.content || null,
-        location: meta.location,
-        isRemote: meta.isRemote,
-        eventDate: meta.eventDate,
-        cfpDeadline: meta.cfpDeadline,
-        format: meta.format,
-        industries: meta.industries,
-        compensationType: meta.compensationType,
-        compensationAmount: meta.compensationAmount,
-        compensationDetails: meta.compensationDetails,
-        applyUrl: item.url,
-        qualityScore: computeLiveQualityScore({
-          cfpDeadline: meta.cfpDeadline,
-          eventDate: meta.eventDate,
+        const meta = extractMetadata(item.content || '', item.name || '', searchIndustries);
+
+        results.push({
+          id: `live-${randomUUID()}`,
+          title: item.name || 'Untitled',
+          organization: extractOrganization(item.name || ''),
+          description: item.content || null,
           location: meta.location,
+          isRemote: meta.isRemote,
+          eventDate: meta.eventDate,
+          cfpDeadline: meta.cfpDeadline,
+          format: meta.format,
           industries: meta.industries,
           compensationType: meta.compensationType,
-          description: item.content || null,
-        }),
-        source: 'Live Search',
-        sourceUrl: item.url,
-        createdAt: now,
-        updatedAt: now,
-        isLiveResult: true,
-        liveSearchUrl: item.url,
-      });
+          compensationAmount: meta.compensationAmount,
+          compensationDetails: meta.compensationDetails,
+          applyUrl: item.url,
+          qualityScore: computeLiveQualityScore({
+            cfpDeadline: meta.cfpDeadline,
+            eventDate: meta.eventDate,
+            location: meta.location,
+            industries: meta.industries,
+            compensationType: meta.compensationType,
+            description: item.content || null,
+          }),
+          source: 'Live Search',
+          sourceUrl: item.url,
+          createdAt: now,
+          updatedAt: now,
+          isLiveResult: true,
+          liveSearchUrl: item.url,
+        });
+      }
+
+      if (searchResults.length < maxPerPage) {
+        break;
+      }
     }
   } catch (error) {
     console.error('Linkup search error:', error);

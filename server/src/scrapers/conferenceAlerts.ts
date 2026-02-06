@@ -40,6 +40,23 @@ function parseDateFromParts(monthYear: string, dayStr: string): Date | undefined
   return parsed;
 }
 
+function extractDeadline(html: string): Date | undefined {
+  const patterns = [
+    /(?:abstract submission deadline|submission deadline|deadline)[:\s]*(\w+ \d{1,2},?\s*\d{4})/i,
+    /(?:abstract submission deadline|submission deadline|deadline)[:\s]*(\d{4}-\d{2}-\d{2})/i,
+  ];
+
+  for (const pattern of patterns) {
+    const match = html.match(pattern);
+    if (match) {
+      const parsed = new Date(match[1]);
+      if (!isNaN(parsed.getTime())) return parsed;
+    }
+  }
+
+  return undefined;
+}
+
 export async function scrapeConferenceAlertsUSA(): Promise<ScraperResult[]> {
   const results: ScraperResult[] = [];
   const url = 'https://conferencealerts.com/country-listing.php?country=United+States+of+America&ipp=All&page=1';
@@ -74,6 +91,21 @@ export async function scrapeConferenceAlertsUSA(): Promise<ScraperResult[]> {
         const location = `${dayMatch[3].trim()}, United States`;
         const eventDate = parseDateFromParts(currentMonthYear, day);
         const applyUrl = anchors.get(title) || url;
+        let cfpDeadline: Date | undefined;
+
+        if (applyUrl !== url) {
+          try {
+            const detailResponse = await fetch(applyUrl, {
+              headers: { Accept: 'text/html', 'User-Agent': 'SpeakingOpportunityFinder/1.0' },
+            });
+            if (detailResponse.ok) {
+              const detailHtml = await detailResponse.text();
+              cfpDeadline = extractDeadline(detailHtml);
+            }
+          } catch {
+            // ignore detail fetch failures
+          }
+        }
 
         results.push({
           title: `${title} - Call for Speakers`,
@@ -82,7 +114,7 @@ export async function scrapeConferenceAlertsUSA(): Promise<ScraperResult[]> {
           location,
           isRemote: false,
           eventDate,
-          cfpDeadline: undefined,
+          cfpDeadline,
           format: 'conference',
           industries: ['conference'],
           compensationType: undefined,
