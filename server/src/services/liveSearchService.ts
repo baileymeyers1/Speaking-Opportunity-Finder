@@ -494,6 +494,9 @@ export async function autoSaveLiveResults(
         qualityScore: result.qualityScore,
         source: result.source,
         sourceUrl: result.sourceUrl || null,
+        enrichmentStatus: (result as any).enrichmentStatus || null,
+        enrichedAt: (result as any).enrichedAt || null,
+        enrichmentError: (result as any).enrichmentError || null,
       };
 
       if (existing) {

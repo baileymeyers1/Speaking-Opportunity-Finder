@@ -37,6 +37,9 @@ model Opportunity {
   sourceUrl           String?
   createdAt           DateTime           @default(now())
   updatedAt           DateTime           @updatedAt
+  enrichmentStatus    String?            // 'enriched' | 'failed' | 'skipped' | null
+  enrichedAt          DateTime?
+  enrichmentError     String?
   savedBy             SavedOpportunity[]
 
   @@index([cfpDeadline])
@@ -46,6 +49,7 @@ model Opportunity {
   @@index([source])
   @@index([createdAt])
   @@index([isRemote])
+  @@index([enrichmentStatus])
 }
 
 model SavedOpportunity {

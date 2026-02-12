@@ -38,11 +38,15 @@ function getAnthropicClient(): Anthropic | null {
  */
 export async function enrichOpportunity(
   result: ScraperResult
-): Promise<ScraperResult & { enrichmentStatus?: string }> {
+): Promise<ScraperResult & { enrichmentStatus?: string; enrichedAt?: Date; enrichmentError?: string }> {
   const client = getAnthropicClient();
 
   if (!client) {
-    return { ...result, enrichmentStatus: 'skipped' };
+    return {
+      ...result,
+      enrichmentStatus: 'skipped',
+      enrichedAt: new Date()
+    };
   }
 
   // Skip enrichment if we already have most data
@@ -54,7 +58,11 @@ export async function enrichOpportunity(
     result.compensationType;
 
   if (hasCompleteData) {
-    return { ...result, enrichmentStatus: 'skipped' };
+    return {
+      ...result,
+      enrichmentStatus: 'skipped',
+      enrichedAt: new Date()
+    };
   }
 
   try {
@@ -74,6 +82,16 @@ export async function enrichOpportunity(
     const responseText = message.content[0].type === 'text' ? message.content[0].text : '';
     const enriched = parseEnrichmentResponse(responseText);
 
+    // If parsing failed, return failed status
+    if (enriched.enrichmentStatus === 'failed') {
+      return {
+        ...result,
+        enrichmentStatus: 'failed',
+        enrichedAt: new Date(),
+        enrichmentError: enriched.enrichmentError
+      };
+    }
+
     return {
       ...result,
       cfpDeadline: enriched.cfpDeadline || result.cfpDeadline,
@@ -87,12 +105,16 @@ export async function enrichOpportunity(
       compensationDetails: enriched.compensationDetails || result.compensationDetails,
       isRemote: enriched.isRemote !== undefined ? enriched.isRemote : result.isRemote,
       enrichmentStatus: 'enriched',
+      enrichedAt: new Date()
     };
   } catch (error) {
     console.error('Enrichment failed:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     return {
       ...result,
       enrichmentStatus: 'failed',
+      enrichedAt: new Date(),
+      enrichmentError: errorMessage
     };
   }
 }

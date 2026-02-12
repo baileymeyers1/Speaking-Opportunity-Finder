@@ -271,6 +271,9 @@ async function persistResults(results: ScraperResult[]): Promise<{ added: number
         qualityScore: result.qualityScore ?? computeQualityScore(result),
         source: result.source,
         sourceUrl: result.sourceUrl || null,
+        enrichmentStatus: (result as any).enrichmentStatus || null,
+        enrichedAt: (result as any).enrichedAt || null,
+        enrichmentError: (result as any).enrichmentError || null,
       };
 
       if (existing) {

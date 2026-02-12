@@ -55,12 +55,31 @@ interface SystemHealth {
   errorRate: number;
 }
 
+interface EnrichmentStats {
+  totalOpportunities: number;
+  enrichedCount: number;
+  enrichmentPercentage: number;
+  skippedCount: number;
+  failedCount: number;
+  unenrichedCount: number;
+  recentEnrichments: number;
+  bySource: Array<{
+    source: string;
+    total: number;
+    enriched: number;
+    skipped: number;
+    failed: number;
+    enrichmentRate: number;
+  }>;
+}
+
 interface AnalyticsData {
   scraperHealth: ScraperHealth[];
   sourceQuality: SourceQuality[];
   databaseStats: DatabaseStats;
   liveSearchAnalytics: LiveSearchAnalytics;
   systemHealth: SystemHealth;
+  enrichmentStats: EnrichmentStats;
   timestamp: string;
 }
 
@@ -222,6 +241,119 @@ export function AdminDashboard() {
               ))}
             </div>
           </div>
+        </div>
+      </div>
+
+      {/* Enrichment Analytics */}
+      <div className="bg-white rounded-lg shadow mb-6 p-6">
+        <h2 className="text-xl font-bold mb-4 flex items-center">
+          <span className="mr-2">🤖</span>
+          Enrichment Analytics
+        </h2>
+
+        {/* Summary Cards Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+          {/* Enriched Records */}
+          <div className="bg-blue-50 p-4 rounded">
+            <p className="text-sm text-gray-600 mb-1">Records Enriched</p>
+            <p className="text-2xl font-semibold text-blue-600">
+              {analytics.enrichmentStats.enrichedCount.toLocaleString()}
+            </p>
+            <p className="text-xs text-gray-500 mt-1">
+              {analytics.enrichmentStats.enrichmentPercentage.toFixed(1)}% of total
+            </p>
+          </div>
+
+          {/* Recent Enrichments */}
+          <div className="bg-green-50 p-4 rounded">
+            <p className="text-sm text-gray-600 mb-1">Last 24 Hours</p>
+            <p className="text-2xl font-semibold text-green-600">
+              {analytics.enrichmentStats.recentEnrichments.toLocaleString()}
+            </p>
+            <p className="text-xs text-gray-500 mt-1">Recently enriched</p>
+          </div>
+
+          {/* Skipped */}
+          <div className="bg-yellow-50 p-4 rounded">
+            <p className="text-sm text-gray-600 mb-1">Skipped</p>
+            <p className="text-2xl font-semibold text-yellow-600">
+              {analytics.enrichmentStats.skippedCount.toLocaleString()}
+            </p>
+            <p className="text-xs text-gray-500 mt-1">
+              {((analytics.enrichmentStats.skippedCount / analytics.enrichmentStats.totalOpportunities) * 100).toFixed(1)}% of total
+            </p>
+          </div>
+
+          {/* Failed + Unenriched */}
+          <div className="bg-red-50 p-4 rounded">
+            <p className="text-sm text-gray-600 mb-1">Failed/Missing</p>
+            <p className="text-2xl font-semibold text-red-600">
+              {(analytics.enrichmentStats.failedCount + analytics.enrichmentStats.unenrichedCount).toLocaleString()}
+            </p>
+            <p className="text-xs text-gray-500 mt-1">
+              {analytics.enrichmentStats.failedCount} failed, {analytics.enrichmentStats.unenrichedCount} unenriched
+            </p>
+          </div>
+        </div>
+
+        {/* Enrichment by Source Table */}
+        <div>
+          <h3 className="font-semibold mb-3">Enrichment by Source</h3>
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-sm">
+              <thead>
+                <tr className="border-b bg-gray-50">
+                  <th className="text-left py-2 px-4 font-semibold">Source</th>
+                  <th className="text-right py-2 px-4 font-semibold">Total</th>
+                  <th className="text-right py-2 px-4 font-semibold">Enriched</th>
+                  <th className="text-right py-2 px-4 font-semibold">Skipped</th>
+                  <th className="text-right py-2 px-4 font-semibold">Failed</th>
+                  <th className="text-right py-2 px-4 font-semibold">Success Rate</th>
+                </tr>
+              </thead>
+              <tbody>
+                {analytics.enrichmentStats.bySource.map((source) => (
+                  <tr key={source.source} className="border-b hover:bg-gray-50">
+                    <td className="py-2 px-4 font-medium">{source.source}</td>
+                    <td className="py-2 px-4 text-right text-gray-700">
+                      {source.total.toLocaleString()}
+                    </td>
+                    <td className="py-2 px-4 text-right">
+                      <span className="text-blue-600 font-semibold">
+                        {source.enriched.toLocaleString()}
+                      </span>
+                    </td>
+                    <td className="py-2 px-4 text-right text-yellow-600">
+                      {source.skipped.toLocaleString()}
+                    </td>
+                    <td className="py-2 px-4 text-right text-red-600">
+                      {source.failed.toLocaleString()}
+                    </td>
+                    <td className="py-2 px-4 text-right">
+                      <span className={`font-semibold ${
+                        source.enrichmentRate >= 80 ? 'text-green-600' :
+                        source.enrichmentRate >= 50 ? 'text-yellow-600' :
+                        'text-red-600'
+                      }`}>
+                        {source.enrichmentRate.toFixed(1)}%
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Enrichment Status Legend */}
+        <div className="mt-4 p-3 bg-gray-50 rounded text-xs text-gray-600">
+          <p className="font-semibold mb-2">Status Definitions:</p>
+          <ul className="space-y-1">
+            <li><span className="font-semibold text-blue-600">Enriched:</span> Successfully enriched with Claude API</li>
+            <li><span className="font-semibold text-yellow-600">Skipped:</span> Already had complete data from scraper</li>
+            <li><span className="font-semibold text-red-600">Failed:</span> Enrichment attempted but failed</li>
+            <li><span className="font-semibold text-gray-600">Unenriched:</span> Never attempted enrichment</li>
+          </ul>
         </div>
       </div>
 

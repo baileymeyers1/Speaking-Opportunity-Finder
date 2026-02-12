@@ -51,6 +51,24 @@ export interface SystemHealth {
   errorRate: number;
 }
 
+export interface EnrichmentStats {
+  totalOpportunities: number;
+  enrichedCount: number;
+  enrichmentPercentage: number;
+  skippedCount: number;
+  failedCount: number;
+  unenrichedCount: number;
+  recentEnrichments: number;
+  bySource: Array<{
+    source: string;
+    total: number;
+    enriched: number;
+    skipped: number;
+    failed: number;
+    enrichmentRate: number;
+  }>;
+}
+
 /**
  * Get scraper health metrics
  */
@@ -432,16 +450,107 @@ export async function getSystemHealth(): Promise<SystemHealth> {
 }
 
 /**
+ * Get enrichment statistics
+ */
+export async function getEnrichmentStats(): Promise<EnrichmentStats> {
+  const totalOpportunities = await prisma.opportunity.count();
+
+  // Count by enrichment status
+  const [enrichedCount, skippedCount, failedCount, unenrichedCount] = await Promise.all([
+    prisma.opportunity.count({
+      where: { enrichmentStatus: 'enriched' },
+    }),
+    prisma.opportunity.count({
+      where: { enrichmentStatus: 'skipped' },
+    }),
+    prisma.opportunity.count({
+      where: { enrichmentStatus: 'failed' },
+    }),
+    prisma.opportunity.count({
+      where: { enrichmentStatus: null },
+    }),
+  ]);
+
+  // Recent enrichments (last 24 hours)
+  const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  const recentEnrichments = await prisma.opportunity.count({
+    where: {
+      enrichmentStatus: 'enriched',
+      enrichedAt: { gte: oneDayAgo },
+    },
+  });
+
+  // By source
+  const bySourceData = await prisma.opportunity.groupBy({
+    by: ['source'],
+    _count: { _all: true },
+  });
+
+  const bySource = await Promise.all(
+    bySourceData.map(async (sourceGroup) => {
+      const source = sourceGroup.source;
+      const total = sourceGroup._count._all || 0;
+
+      const [enriched, skipped, failed] = await Promise.all([
+        prisma.opportunity.count({
+          where: {
+            source: sourceGroup.source,
+            enrichmentStatus: 'enriched',
+          },
+        }),
+        prisma.opportunity.count({
+          where: {
+            source: sourceGroup.source,
+            enrichmentStatus: 'skipped',
+          },
+        }),
+        prisma.opportunity.count({
+          where: {
+            source: sourceGroup.source,
+            enrichmentStatus: 'failed',
+          },
+        }),
+      ]);
+
+      return {
+        source,
+        total,
+        enriched,
+        skipped,
+        failed,
+        enrichmentRate: total > 0 ? (enriched / total) * 100 : 0,
+      };
+    })
+  );
+
+  // Sort by total count descending
+  bySource.sort((a, b) => b.total - a.total);
+
+  return {
+    totalOpportunities,
+    enrichedCount,
+    enrichmentPercentage:
+      totalOpportunities > 0 ? (enrichedCount / totalOpportunities) * 100 : 0,
+    skippedCount,
+    failedCount,
+    unenrichedCount,
+    recentEnrichments,
+    bySource,
+  };
+}
+
+/**
  * Get all analytics data
  */
 export async function getAllAnalytics() {
-  const [scraperHealth, sourceQuality, databaseStats, liveSearchAnalytics, systemHealth] =
+  const [scraperHealth, sourceQuality, databaseStats, liveSearchAnalytics, systemHealth, enrichmentStats] =
     await Promise.all([
       getScraperHealth(),
       getSourceQuality(),
       getDatabaseStats(),
       getLiveSearchAnalytics(),
       getSystemHealth(),
+      getEnrichmentStats(),
     ]);
 
   return {
@@ -450,6 +559,7 @@ export async function getAllAnalytics() {
     databaseStats,
     liveSearchAnalytics,
     systemHealth,
+    enrichmentStats,
     timestamp: new Date().toISOString(),
   };
 }
