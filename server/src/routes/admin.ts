@@ -19,4 +19,10 @@ router.get('/analytics/database-stats', adminController.getDatabaseStats);
 router.get('/analytics/live-search', adminController.getLiveSearchAnalytics);
 router.get('/analytics/system-health', adminController.getSystemHealth);
 
+// Background enrichment control
+router.get('/enrichment/status', adminController.getEnrichmentStatus);
+router.post('/enrichment/start', adminController.startEnrichment);
+router.post('/enrichment/stop', adminController.stopEnrichment);
+router.post('/enrichment/reset-stats', adminController.resetEnrichmentStats);
+
 export default router;

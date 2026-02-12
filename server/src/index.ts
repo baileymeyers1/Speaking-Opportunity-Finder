@@ -1,6 +1,7 @@
 import app from './app.js';
 import { config } from './config/index.js';
 import { syncOpportunities } from './scrapers/index.js';
+import { startBackgroundEnrichment, stopBackgroundEnrichment } from './services/backgroundEnrichment.js';
 
 // Sync intervals
 const DAILY_SYNC_INTERVAL = 24 * 60 * 60 * 1000; // 24 hours
@@ -63,12 +64,18 @@ const server = app.listen(config.port, () => {
   if (config.nodeEnv === 'production' || process.env.ENABLE_AUTO_SYNC === 'true') {
     startAutoSync();
   }
+
+  // Start background enrichment in production (processes 1 opportunity every 2 minutes)
+  if (config.nodeEnv === 'production') {
+    startBackgroundEnrichment();
+  }
 });
 
 // Graceful shutdown
 function shutdown() {
   if (dailySyncTimer) clearInterval(dailySyncTimer);
   if (weeklySyncTimer) clearInterval(weeklySyncTimer);
+  stopBackgroundEnrichment();
   server.close(() => {
     console.log('Process terminated');
     process.exit(0);
