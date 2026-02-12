@@ -199,13 +199,26 @@ function parseEnrichmentResponse(responseText: string): EnrichmentResult {
 
     const parsed = JSON.parse(jsonMatch[0]);
 
+    // Helper function to validate and parse dates
+    const parseValidDate = (dateString: string | null | undefined): Date | undefined => {
+      if (!dateString || dateString === 'null') return undefined;
+
+      try {
+        const date = new Date(dateString);
+        // Check if date is valid and within reasonable range (1900-2100)
+        if (isNaN(date.getTime()) || date.getFullYear() < 1900 || date.getFullYear() > 2100) {
+          console.warn(`Invalid date detected: ${dateString}, skipping`);
+          return undefined;
+        }
+        return date;
+      } catch {
+        return undefined;
+      }
+    };
+
     return {
-      cfpDeadline: parsed.cfpDeadline && parsed.cfpDeadline !== 'null'
-        ? new Date(parsed.cfpDeadline)
-        : undefined,
-      eventDate: parsed.eventDate && parsed.eventDate !== 'null'
-        ? new Date(parsed.eventDate)
-        : undefined,
+      cfpDeadline: parseValidDate(parsed.cfpDeadline),
+      eventDate: parseValidDate(parsed.eventDate),
       industries: Array.isArray(parsed.industries) ? parsed.industries : undefined,
       location: parsed.location && parsed.location !== 'null' ? parsed.location : undefined,
       compensationType: parsed.compensationType && parsed.compensationType !== 'null'
