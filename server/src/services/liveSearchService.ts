@@ -1,5 +1,10 @@
 import { config } from '../config/index.js';
 import { randomUUID } from 'crypto';
+import { PrismaClient } from '@prisma/client';
+import { enrichOpportunitiesBatch } from './enrichmentService.js';
+import type { ScraperResult } from '../scrapers/index.js';
+
+const prisma = new PrismaClient();
 
 export interface EnrichedLiveResult {
   id: string;
@@ -413,4 +418,105 @@ function capitalize(str: string): string {
     .split(' ')
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
     .join(' ');
+}
+
+/**
+ * Convert live search result to ScraperResult format for enrichment and persistence
+ */
+function liveResultToScraperResult(result: EnrichedLiveResult): ScraperResult {
+  return {
+    title: result.title,
+    organization: result.organization,
+    description: result.description || undefined,
+    location: result.location,
+    isRemote: result.isRemote,
+    eventDate: result.eventDate ? new Date(result.eventDate) : undefined,
+    cfpDeadline: result.cfpDeadline ? new Date(result.cfpDeadline) : undefined,
+    format: result.format,
+    industries: result.industries,
+    compensationType: result.compensationType || undefined,
+    compensationAmount: result.compensationAmount || undefined,
+    compensationDetails: result.compensationDetails || undefined,
+    applyUrl: result.applyUrl,
+    qualityScore: result.qualityScore,
+    source: `Live Search - ${result.industries.join(', ') || 'general'}`,
+    sourceUrl: result.sourceUrl,
+  };
+}
+
+/**
+ * Auto-save live search results to the database after enrichment
+ */
+export async function autoSaveLiveResults(
+  liveResults: EnrichedLiveResult[]
+): Promise<{ saved: number; updated: number; skipped: number }> {
+  let saved = 0;
+  let updated = 0;
+  let skipped = 0;
+
+  if (liveResults.length === 0) {
+    return { saved, updated, skipped };
+  }
+
+  console.log(`Auto-saving ${liveResults.length} live search results...`);
+
+  // Convert to ScraperResult format
+  const scraperResults = liveResults.map(liveResultToScraperResult);
+
+  // Enrich with Claude API if configured
+  let enrichedResults = scraperResults;
+  if (config.claude.apiKey) {
+    console.log('Enriching live results with Claude API...');
+    enrichedResults = await enrichOpportunitiesBatch(scraperResults, 3);
+  }
+
+  // Save to database
+  for (const result of enrichedResults) {
+    try {
+      const existing = await prisma.opportunity.findFirst({
+        where: { applyUrl: result.applyUrl },
+      });
+
+      const data = {
+        title: result.title,
+        organization: result.organization,
+        description: result.description || null,
+        location: result.location || null,
+        isRemote: result.isRemote,
+        eventDate: result.eventDate || null,
+        cfpDeadline: result.cfpDeadline || null,
+        format: result.format,
+        industries: JSON.stringify(result.industries),
+        compensationType: result.compensationType || null,
+        compensationAmount: result.compensationAmount || null,
+        compensationDetails: result.compensationDetails || null,
+        applyUrl: result.applyUrl,
+        qualityScore: result.qualityScore,
+        source: result.source,
+        sourceUrl: result.sourceUrl || null,
+      };
+
+      if (existing) {
+        // Update existing opportunity with better data
+        await prisma.opportunity.update({
+          where: { id: existing.id },
+          data,
+        });
+        updated++;
+      } else {
+        // Create new opportunity
+        await prisma.opportunity.create({ data });
+        saved++;
+      }
+    } catch (error) {
+      console.error(`Failed to save live result: ${result.title}`, error);
+      skipped++;
+    }
+  }
+
+  console.log(
+    `Auto-save complete: ${saved} new, ${updated} updated, ${skipped} skipped`
+  );
+
+  return { saved, updated, skipped };
 }

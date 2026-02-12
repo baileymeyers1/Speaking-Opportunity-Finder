@@ -12,6 +12,7 @@ model User {
   email               String             @unique
   passwordHash        String
   preferredIndustries String             @default("[]") // JSON array stored as string
+  isAdmin             Boolean            @default(false)
   createdAt           DateTime           @default(now())
   savedOpportunities  SavedOpportunity[]
 }
@@ -30,13 +31,21 @@ model Opportunity {
   compensationType    String?            // paid, travel, exposure
   compensationAmount  Int?               // Amount in USD (for range filtering)
   compensationDetails String?
-  applyUrl            String
+  applyUrl            String             @unique
   qualityScore        Int?               // 0-100 heuristic score
   source              String
   sourceUrl           String?
   createdAt           DateTime           @default(now())
   updatedAt           DateTime           @updatedAt
   savedBy             SavedOpportunity[]
+
+  @@index([cfpDeadline])
+  @@index([eventDate])
+  @@index([qualityScore])
+  @@index([format])
+  @@index([source])
+  @@index([createdAt])
+  @@index([isRemote])
 }
 
 model SavedOpportunity {

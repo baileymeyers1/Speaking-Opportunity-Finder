@@ -183,6 +183,17 @@ export async function liveSearch(
       industryList
     );
 
+    // Auto-save live results to database (async, don't wait for completion)
+    if (results.length > 0) {
+      liveSearchService.autoSaveLiveResults(results)
+        .then(stats => {
+          console.log(`Live search auto-save: ${stats.saved} new, ${stats.updated} updated`);
+        })
+        .catch(err => {
+          console.error('Failed to auto-save live results:', err);
+        });
+    }
+
     res.json({
       success: true,
       data: results,

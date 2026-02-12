@@ -43,13 +43,19 @@ class ApiClient {
       headers,
     });
 
-    const data = await response.json();
+    const responseData = await response.json();
 
     if (!response.ok) {
-      throw new Error(data.error || 'An error occurred');
+      throw new Error(responseData.error || 'An error occurred');
     }
 
-    return data;
+    // Unwrap the data from the API response structure { success: true, data: T }
+    // Return in the expected ApiResponse<T> format
+    return {
+      success: responseData.success,
+      data: responseData.data,
+      error: responseData.error,
+    };
   }
 
   async get<T>(endpoint: string): Promise<ApiResponse<T>> {

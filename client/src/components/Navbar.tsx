@@ -1,8 +1,12 @@
 import { Link } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 
+// Admin emails list
+const ADMIN_EMAILS = ['baileymeyers1@gmail.com'];
+
 export function Navbar() {
-  const { isAuthenticated, logout } = useAuth();
+  const { isAuthenticated, user, logout } = useAuth();
+  const isAdmin = user?.email && ADMIN_EMAILS.includes(user.email);
 
   return (
     <nav className="bg-white shadow">
@@ -20,12 +24,22 @@ export function Navbar() {
                 Browse
               </Link>
               {isAuthenticated && (
-                <Link
-                  to="/saved"
-                  className="text-gray-600 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium"
-                >
-                  Saved
-                </Link>
+                <>
+                  <Link
+                    to="/saved"
+                    className="text-gray-600 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium"
+                  >
+                    Saved
+                  </Link>
+                  {isAdmin && (
+                    <Link
+                      to="/admin/dashboard"
+                      className="text-gray-600 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium"
+                    >
+                      Analytics
+                    </Link>
+                  )}
+                </>
               )}
             </div>
           </div>

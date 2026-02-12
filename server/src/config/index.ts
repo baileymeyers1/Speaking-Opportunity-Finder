@@ -36,4 +36,10 @@ export const config = {
     airtableTableId: process.env.AIRTABLE_TABLE_ID,
     airtableViewId: process.env.AIRTABLE_VIEW_ID,
   },
+
+  claude: {
+    apiKey: process.env.ANTHROPIC_API_KEY,
+    model: process.env.CLAUDE_MODEL || 'claude-3-5-haiku-20241022',
+    maxTokens: parseInt(process.env.CLAUDE_MAX_TOKENS || '1024', 10),
+  },
 };

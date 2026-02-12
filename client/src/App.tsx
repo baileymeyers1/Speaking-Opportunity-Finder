@@ -7,6 +7,7 @@ import { OpportunityDetail } from './pages/OpportunityDetail';
 import { SavedOpportunities } from './pages/SavedOpportunities';
 import { Login } from './pages/Login';
 import { Register } from './pages/Register';
+import { AdminDashboard } from './pages/AdminDashboard';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
 
@@ -26,6 +27,7 @@ function App() {
             <Route path="/saved" element={<SavedOpportunities />} />
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
+            <Route path="/admin/dashboard" element={<AdminDashboard />} />
           </Routes>
         </Layout>
       </BrowserRouter>

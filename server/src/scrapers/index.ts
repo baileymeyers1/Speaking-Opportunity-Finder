@@ -15,6 +15,7 @@ import { scrapeLinkedInEvents } from './linkedinEvents.js';
 import { scrapePacEvents } from './pacEvents.js';
 import { scrapePrNewsOnline } from './prNewsOnline.js';
 import { config } from '../config/index.js';
+import { enrichOpportunitiesBatch } from '../services/enrichmentService.js';
 
 const prisma = new PrismaClient();
 
@@ -312,12 +313,14 @@ async function cleanupExpired(): Promise<number> {
  * @param mode - 'daily' runs fast scrapers only, 'weekly' runs deep scrapers, 'full' runs all
  */
 export async function syncOpportunities(
-  mode: 'daily' | 'weekly' | 'full' = 'full'
+  mode: 'daily' | 'weekly' | 'full' = 'full',
+  enableEnrichment: boolean = true
 ): Promise<{
   added: number;
   updated: number;
   total: number;
   mode: string;
+  enriched?: number;
 }> {
   console.log(`Starting ${mode} opportunity sync...`);
 
@@ -335,14 +338,24 @@ export async function syncOpportunities(
       break;
   }
 
+  // Enrich results with Claude API (if enabled and API key configured)
+  let enrichedCount = 0;
+  if (enableEnrichment && config.claude.apiKey) {
+    console.log(`Enriching ${results.length} opportunities with Claude API...`);
+    const enrichedResults = await enrichOpportunitiesBatch(results, 5);
+    enrichedCount = enrichedResults.filter(r => (r as any).enrichmentStatus === 'enriched').length;
+    results = enrichedResults;
+    console.log(`Enriched ${enrichedCount} opportunities`);
+  }
+
   const { added, updated } = await persistResults(results);
   const deletedCount = await cleanupExpired();
   const backfilled = await backfillQualityScores();
 
   console.log(
-    `Sync complete (${mode}): ${added} added, ${updated} updated, ${deletedCount} expired removed, ${backfilled} quality backfilled`
+    `Sync complete (${mode}): ${added} added, ${updated} updated, ${deletedCount} expired removed, ${backfilled} quality backfilled${enrichedCount > 0 ? `, ${enrichedCount} enriched` : ''}`
   );
 
   const total = await prisma.opportunity.count();
-  return { added, updated, total, mode };
+  return { added, updated, total, mode, enriched: enrichedCount };
 }

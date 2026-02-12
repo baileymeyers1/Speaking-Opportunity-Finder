@@ -114,12 +114,12 @@ export async function getOpportunities(
     const locations = filters.location.split('|').map((l) => l.trim()).filter(Boolean);
     if (locations.length === 1) {
       andConditions.push({
-        location: { contains: locations[0], mode: 'insensitive' },
+        location: { contains: locations[0] },
       });
     } else if (locations.length > 1) {
       andConditions.push({
         OR: locations.map((loc) => ({
-          location: { contains: loc, mode: 'insensitive' },
+          location: { contains: loc },
         })),
       });
     }
