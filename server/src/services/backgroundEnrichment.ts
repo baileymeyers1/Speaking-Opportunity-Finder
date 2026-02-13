@@ -131,7 +131,7 @@ export function startBackgroundEnrichment(): void {
     return;
   }
 
-  console.log('Background enrichment: Starting (1 opportunity every 2 minutes)');
+  console.log('Background enrichment: Starting (1 opportunity every 1 minute)');
   state.isRunning = true;
 
   // Process immediately
@@ -140,7 +140,7 @@ export function startBackgroundEnrichment(): void {
   // Then process every 2 minutes
   enrichmentTimer = setInterval(() => {
     processNextUnenriched();
-  }, 2 * 60 * 1000); // 2 minutes
+  }, 60 * 1000); // 1 minute
 }
 
 /**

@@ -62,11 +62,20 @@ export async function scrapePacEvents(): Promise<ScraperResult[]> {
   const results: ScraperResult[] = [];
   const url = 'https://pac.org/events';
 
+  console.log('Fetching events from pac.org...');
+
   try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000);
     const response = await fetch(url, {
-      headers: { Accept: 'text/html', 'User-Agent': 'SpeakingOpportunityFinder/1.0' },
+      headers: { Accept: 'text/html, */*', 'User-Agent': 'Mozilla/5.0 (compatible; SpeakingOpportunityFinder/1.0)' },
+      signal: controller.signal,
     });
-    if (!response.ok) return results;
+    clearTimeout(timeout);
+    if (!response.ok) {
+      console.log(`pac.org returned ${response.status}, skipping...`);
+      return results;
+    }
     const html = await response.text();
     const anchors = buildAnchorMap(html, url);
     const text = stripHtml(html);
@@ -113,8 +122,10 @@ export async function scrapePacEvents(): Promise<ScraperResult[]> {
         sourceUrl: url,
       });
     }
-  } catch {
-    return results;
+
+    console.log(`Found ${results.length} events from pac.org`);
+  } catch (error) {
+    console.error('Error scraping pac.org:', error instanceof Error ? error.message : error);
   }
 
   return results;

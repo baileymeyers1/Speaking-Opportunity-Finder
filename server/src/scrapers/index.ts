@@ -15,7 +15,6 @@ import { scrapeLinkedInEvents } from './linkedinEvents.js';
 import { scrapePacEvents } from './pacEvents.js';
 import { scrapePrNewsOnline } from './prNewsOnline.js';
 import { config } from '../config/index.js';
-import { enrichOpportunitiesBatch } from '../services/enrichmentService.js';
 
 const prisma = new PrismaClient();
 
@@ -303,11 +302,25 @@ async function cleanupExpired(): Promise<number> {
         lt: expiredDate,
       },
       source: {
-        notIn: ['manual', 'Live Search'],
+        not: 'Live Search',
       },
     },
   });
 
+  return deleted.count;
+}
+
+async function cleanupPlaceholderData(): Promise<number> {
+  const deleted = await prisma.opportunity.deleteMany({
+    where: {
+      applyUrl: {
+        contains: 'example.com',
+      },
+    },
+  });
+  if (deleted.count > 0) {
+    console.log(`Cleaned up ${deleted.count} placeholder records with example.com URLs`);
+  }
   return deleted.count;
 }
 
@@ -316,16 +329,17 @@ async function cleanupExpired(): Promise<number> {
  * @param mode - 'daily' runs fast scrapers only, 'weekly' runs deep scrapers, 'full' runs all
  */
 export async function syncOpportunities(
-  mode: 'daily' | 'weekly' | 'full' = 'full',
-  enableEnrichment: boolean = true
+  mode: 'daily' | 'weekly' | 'full' = 'full'
 ): Promise<{
   added: number;
   updated: number;
   total: number;
   mode: string;
-  enriched?: number;
 }> {
   console.log(`Starting ${mode} opportunity sync...`);
+
+  // Clean up placeholder data with example.com URLs
+  await cleanupPlaceholderData();
 
   let results: ScraperResult[];
   switch (mode) {
@@ -341,24 +355,17 @@ export async function syncOpportunities(
       break;
   }
 
-  // Enrich results with Claude API (if enabled and API key configured)
-  let enrichedCount = 0;
-  if (enableEnrichment && config.claude.apiKey) {
-    console.log(`Enriching ${results.length} opportunities with Claude API...`);
-    const enrichedResults = await enrichOpportunitiesBatch(results, 5);
-    enrichedCount = enrichedResults.filter(r => (r as any).enrichmentStatus === 'enriched').length;
-    results = enrichedResults;
-    console.log(`Enriched ${enrichedCount} opportunities`);
-  }
+  // Enrichment is handled by the background enrichment service
+  // to avoid expensive batch API calls during sync
 
   const { added, updated } = await persistResults(results);
   const deletedCount = await cleanupExpired();
   const backfilled = await backfillQualityScores();
 
   console.log(
-    `Sync complete (${mode}): ${added} added, ${updated} updated, ${deletedCount} expired removed, ${backfilled} quality backfilled${enrichedCount > 0 ? `, ${enrichedCount} enriched` : ''}`
+    `Sync complete (${mode}): ${added} added, ${updated} updated, ${deletedCount} expired removed, ${backfilled} quality backfilled`
   );
 
   const total = await prisma.opportunity.count();
-  return { added, updated, total, mode, enriched: enrichedCount };
+  return { added, updated, total, mode };
 }

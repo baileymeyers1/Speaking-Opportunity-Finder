@@ -36,8 +36,10 @@ function toDate(value?: string): Date | undefined {
 export async function scrapeDevelopersEvents(): Promise<ScraperResult[]> {
   const results: ScraperResult[] = [];
 
+  console.log('Fetching events from developers.events...');
   const events = await fetchJson<DeveloperEvent[]>('https://developers.events/all-events.json');
   const cfps = await fetchJson<DeveloperEvent[]>('https://developers.events/all-cfps.json');
+  console.log(`developers.events: ${events?.length || 0} events, ${cfps?.length || 0} CFPs fetched`);
 
   if (!events && !cfps) return results;
 
@@ -50,6 +52,14 @@ export async function scrapeDevelopersEvents(): Promise<ScraperResult[]> {
 
     const applyUrl = event.cfpUrl || event.url;
     if (!applyUrl || seen.has(applyUrl)) continue;
+
+    // Skip events with past CFP deadlines or past event dates
+    const now = new Date();
+    const cfpEnd = toDate(event.cfpEndDate);
+    const eventStart = toDate(event.startDate);
+    if (cfpEnd && cfpEnd < now) continue;
+    if (!cfpEnd && eventStart && eventStart < now) continue;
+
     seen.add(applyUrl);
 
     const location =
@@ -75,5 +85,6 @@ export async function scrapeDevelopersEvents(): Promise<ScraperResult[]> {
     });
   }
 
+  console.log(`Found ${results.length} current events from developers.events`);
   return results;
 }

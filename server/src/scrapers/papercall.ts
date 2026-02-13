@@ -76,13 +76,13 @@ export async function scrapePaperCall(): Promise<ScraperResult[]> {
   try {
     const response = await fetch(PAPERCALL_API_URL, {
       headers: {
-        Accept: 'application/json',
-        'User-Agent': 'SpeakingOpportunityFinder/1.0',
+        Accept: 'application/json, text/html, */*',
+        'User-Agent': 'Mozilla/5.0 (compatible; SpeakingOpportunityFinder/1.0)',
       },
     });
 
     if (!response.ok) {
-      console.log(`PaperCall API returned ${response.status}, skipping...`);
+      console.log(`PaperCall API returned ${response.status} (${response.statusText}), skipping...`);
       return [];
     }
 

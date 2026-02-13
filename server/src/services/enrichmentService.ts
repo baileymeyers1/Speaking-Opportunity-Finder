@@ -65,6 +65,15 @@ export async function enrichOpportunity(
     };
   }
 
+  // Skip enrichment if description is too short to extract anything useful
+  if ((result.description || '').length < 30) {
+    return {
+      ...result,
+      enrichmentStatus: 'skipped',
+      enrichedAt: new Date()
+    };
+  }
+
   try {
     const prompt = buildEnrichmentPrompt(result);
 
@@ -146,47 +155,20 @@ export async function enrichOpportunitiesBatch(
 
 function buildEnrichmentPrompt(result: ScraperResult): string {
   const missing: string[] = [];
-  if (!result.cfpDeadline) missing.push('CFP deadline');
-  if (!result.eventDate) missing.push('event date');
-  if (!result.industries || result.industries.length === 0) missing.push('industries/topics');
+  if (!result.cfpDeadline) missing.push('cfpDeadline');
+  if (!result.eventDate) missing.push('eventDate');
+  if (!result.industries || result.industries.length === 0) missing.push('industries');
   if (!result.location) missing.push('location');
-  if (!result.compensationType) missing.push('compensation type');
+  if (!result.compensationType) missing.push('compensationType');
 
-  return `You are an AI assistant helping to extract structured information from speaking opportunity descriptions.
+  return `Extract missing fields from this speaking opportunity. Return ONLY a JSON object, no other text.
 
-**Opportunity Title:** ${result.title}
-**Organization:** ${result.organization}
-**Description:** ${result.description || 'No description provided'}
-**Current Location:** ${result.location || 'Not specified'}
-**Current Industries:** ${result.industries?.join(', ') || 'None'}
-**Current Compensation:** ${result.compensationType || 'Not specified'}
+Title: ${result.title}
+Org: ${result.organization}
+Desc: ${(result.description || '').substring(0, 500)}
+Missing: ${missing.join(', ')}
 
-**Missing Information:** ${missing.join(', ')}
-
-Please analyze the description and extract the following information in a structured JSON format:
-
-{
-  "cfpDeadline": "YYYY-MM-DD or null if not found",
-  "eventDate": "YYYY-MM-DD or null if not found",
-  "industries": ["industry1", "industry2"],
-  "location": "City, State/Country or 'Remote' or 'Virtual'",
-  "compensationType": "paid" | "travel" | "honorarium" | "exposure" | null,
-  "compensationAmount": number in USD or null,
-  "compensationDetails": "brief description",
-  "isRemote": true | false,
-  "timezone": "timezone if remote, e.g. 'America/New_York' or null"
-}
-
-**Instructions:**
-1. Extract dates in YYYY-MM-DD format only if explicitly mentioned
-2. Identify 2-5 relevant industries/topics (e.g., "technology", "AI", "JavaScript", "healthcare")
-3. Normalize location to format "City, State/Country" or "Remote" or "Virtual"
-4. Detect compensation type from keywords: "paid", "honorarium", "stipend", "travel covered", "exposure"
-5. Extract dollar amounts if mentioned (e.g., "$500", "$1,000")
-6. Determine if event is remote/virtual from keywords
-7. Only return the JSON object, no other text
-
-JSON:`;
+{"cfpDeadline":"YYYY-MM-DD or null","eventDate":"YYYY-MM-DD or null","industries":["topic1","topic2"],"location":"City, Country or Remote or null","compensationType":"paid|travel|honorarium|exposure or null","compensationAmount":null,"isRemote":false}`;
 }
 
 function parseEnrichmentResponse(responseText: string): EnrichmentResult {

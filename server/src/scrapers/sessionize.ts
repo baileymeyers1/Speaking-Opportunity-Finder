@@ -1,11 +1,11 @@
 import type { ScraperResult } from './index.js';
 
 /**
- * Scrapes Sessionize's public API for open CFPs.
- * Sessionize provides a JSON endpoint for events accepting submissions.
+ * Sessionize scraper.
+ * Note: Sessionize does not expose a public API for browsing open CFPs.
+ * Their platform is designed for event organizers, not speaker discovery.
+ * This scraper is kept as a stub in case they add a public CFP listing in the future.
  */
-
-const SESSIONIZE_API_URL = 'https://sessionize.com/api/v2/cfps';
 
 interface SessionizeEvent {
   id: number;
@@ -72,51 +72,6 @@ function mapToScraperResult(event: SessionizeEvent): ScraperResult | null {
 }
 
 export async function scrapeSessionize(): Promise<ScraperResult[]> {
-  const results: ScraperResult[] = [];
-
-  console.log('Fetching CFPs from Sessionize...');
-
-  try {
-    const response = await fetch(SESSIONIZE_API_URL, {
-      headers: {
-        Accept: 'application/json',
-        'User-Agent': 'SpeakingOpportunityFinder/1.0',
-      },
-    });
-
-    if (!response.ok) {
-      // Sessionize may not have a public JSON API - fall back gracefully
-      console.log(`Sessionize API returned ${response.status}, skipping...`);
-      return [];
-    }
-
-    const contentType = response.headers.get('content-type') || '';
-    if (!contentType.includes('json')) {
-      console.log('Sessionize did not return JSON, skipping...');
-      return [];
-    }
-
-    const events = (await response.json()) as SessionizeEvent[];
-
-    if (!Array.isArray(events)) {
-      console.log('Sessionize response was not an array, skipping...');
-      return [];
-    }
-
-    for (const event of events) {
-      const result = mapToScraperResult(event);
-      if (result) {
-        const exists = results.some((r) => r.applyUrl === result.applyUrl);
-        if (!exists) {
-          results.push(result);
-        }
-      }
-    }
-
-    console.log(`Found ${results.length} CFPs from Sessionize`);
-  } catch (error) {
-    console.error('Error fetching Sessionize:', error);
-  }
-
-  return results;
+  console.log('Sessionize: No public CFP API available, skipping.');
+  return [];
 }

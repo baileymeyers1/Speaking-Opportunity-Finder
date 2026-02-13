@@ -43,13 +43,23 @@ function parseDate(text: string): Date | undefined {
 
 export async function scrapePrNewsOnline(): Promise<ScraperResult[]> {
   const results: ScraperResult[] = [];
-  const url = 'https://www.prnewsonline.com/2026-prnews-events-awards/';
+  const year = new Date().getFullYear();
+  const url = `https://www.prnewsonline.com/${year}-prnews-events-awards/`;
+
+  console.log(`Fetching events from prnewsonline.com (${year})...`);
 
   try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000);
     const response = await fetch(url, {
-      headers: { Accept: 'text/html', 'User-Agent': 'SpeakingOpportunityFinder/1.0' },
+      headers: { Accept: 'text/html, */*', 'User-Agent': 'Mozilla/5.0 (compatible; SpeakingOpportunityFinder/1.0)' },
+      signal: controller.signal,
     });
-    if (!response.ok) return results;
+    clearTimeout(timeout);
+    if (!response.ok) {
+      console.log(`prnewsonline.com returned ${response.status}, skipping...`);
+      return results;
+    }
     const html = await response.text();
     const anchors = buildAnchorMap(html, url);
     const text = stripHtml(html);
@@ -80,8 +90,9 @@ export async function scrapePrNewsOnline(): Promise<ScraperResult[]> {
         sourceUrl: url,
       });
     }
-  } catch {
-    return results;
+    console.log(`Found ${results.length} events from prnewsonline.com`);
+  } catch (error) {
+    console.error('Error scraping prnewsonline.com:', error instanceof Error ? error.message : error);
   }
 
   return results;

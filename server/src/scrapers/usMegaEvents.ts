@@ -326,6 +326,9 @@ async function parseConferenceMonkeyUSA(): Promise<ParsedEntry[]> {
 }
 
 export async function scrapeUsMegaEvents(): Promise<ScraperResult[]> {
+  console.log('Fetching US mega events from 5 curated sources...');
+
+  const sourceNames = ['Momencio', 'UPrinting', 'GlobalConference', 'InternationalConferenceAlerts', 'ConferenceMonkey'];
   const sources = [
     parseMomencioList(),
     parseUprintingList(),
@@ -337,6 +340,15 @@ export async function scrapeUsMegaEvents(): Promise<ScraperResult[]> {
   const results: ScraperResult[] = [];
   const parsed = await Promise.allSettled(sources);
 
+  for (let idx = 0; idx < parsed.length; idx++) {
+    const entry = parsed[idx];
+    if (entry.status === 'rejected') {
+      console.log(`US Mega Events: ${sourceNames[idx]} failed: ${entry.reason}`);
+      continue;
+    }
+    console.log(`US Mega Events: ${sourceNames[idx]} returned ${entry.value.length} entries`);
+  }
+
   for (const entry of parsed) {
     if (entry.status !== 'fulfilled') continue;
     for (const item of entry.value) {
@@ -345,9 +357,13 @@ export async function scrapeUsMegaEvents(): Promise<ScraperResult[]> {
       let detailEventDate = item.eventDate;
 
       try {
+        const detailController = new AbortController();
+        const detailTimeout = setTimeout(() => detailController.abort(), 10000);
         const detailResponse = await fetch(item.applyUrl, {
-          headers: { Accept: 'text/html', 'User-Agent': 'SpeakingOpportunityFinder/1.0' },
+          headers: { Accept: 'text/html, */*', 'User-Agent': 'Mozilla/5.0 (compatible; SpeakingOpportunityFinder/1.0)' },
+          signal: detailController.signal,
         });
+        clearTimeout(detailTimeout);
         if (detailResponse.ok) {
           const detailHtml = await detailResponse.text();
           detailDeadline = extractDeadline(detailHtml);
@@ -378,5 +394,6 @@ export async function scrapeUsMegaEvents(): Promise<ScraperResult[]> {
     }
   }
 
+  console.log(`Found ${results.length} total US mega events`);
   return results;
 }

@@ -61,14 +61,23 @@ export async function scrapeConferenceAlertsUSA(): Promise<ScraperResult[]> {
   const results: ScraperResult[] = [];
   const url = 'https://conferencealerts.com/country-listing.php?country=United+States+of+America&ipp=All&page=1';
 
+  console.log('Fetching conferences from conferencealerts.com...');
+
   try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000);
     const response = await fetch(url, {
       headers: {
-        'User-Agent': 'SpeakingOpportunityFinder/1.0',
-        Accept: 'text/html',
+        'User-Agent': 'Mozilla/5.0 (compatible; SpeakingOpportunityFinder/1.0)',
+        Accept: 'text/html, */*',
       },
+      signal: controller.signal,
     });
-    if (!response.ok) return results;
+    clearTimeout(timeout);
+    if (!response.ok) {
+      console.log(`conferencealerts.com returned ${response.status}, skipping...`);
+      return results;
+    }
 
     const html = await response.text();
     const anchors = buildAnchorMap(html, url);
@@ -126,8 +135,9 @@ export async function scrapeConferenceAlertsUSA(): Promise<ScraperResult[]> {
         });
       }
     }
-  } catch {
-    return results;
+    console.log(`Found ${results.length} conferences from conferencealerts.com`);
+  } catch (error) {
+    console.error('Error scraping conferencealerts.com:', error instanceof Error ? error.message : error);
   }
 
   return results;

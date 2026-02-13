@@ -40,3 +40,7 @@ export function removeLiveResult(id: string) {
   const all = loadAll().filter((r) => r.id !== id);
   saveAll(all);
 }
+
+export function getAllLiveResults(): Opportunity[] {
+  return loadAll();
+}

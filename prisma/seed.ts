@@ -2174,16 +2174,24 @@ const opportunities = [
 ];
 
 async function main() {
-  console.log('Clearing existing opportunities...');
-  await prisma.opportunity.deleteMany({});
+  console.log('Seeding database (idempotent upsert mode)...');
 
-  console.log('Seeding database...');
+  let created = 0;
+  let skipped = 0;
 
   for (const opp of opportunities) {
-    await prisma.opportunity.create({ data: opp });
+    const existing = await prisma.opportunity.findFirst({
+      where: { applyUrl: opp.applyUrl },
+    });
+    if (!existing) {
+      await prisma.opportunity.create({ data: opp });
+      created++;
+    } else {
+      skipped++;
+    }
   }
 
-  console.log(`Created ${opportunities.length} opportunities`);
+  console.log(`Seed complete: ${created} created, ${skipped} already existed`);
 }
 
 main()

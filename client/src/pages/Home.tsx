@@ -3,7 +3,7 @@ import { FilterPanel } from '../components/FilterPanel';
 import { OpportunityList } from '../components/OpportunityList';
 import { apiClient } from '../api/client';
 import type { Opportunity, OpportunityFilters, PaginatedResponse } from '../types';
-import { upsertLiveResults } from '../utils/liveResultsCache';
+import { upsertLiveResults, getAllLiveResults } from '../utils/liveResultsCache';
 
 const CACHE_KEY = 'cachedOpportunities';
 const FILTERS_KEY = 'opportunityFiltersState';
@@ -50,7 +50,7 @@ export function Home() {
     }
   }, []);
 
-  // Restore filters + page from session (for back navigation)
+  // Restore filters + page + live results from session (for back navigation / tab switch)
   useEffect(() => {
     try {
       const raw = sessionStorage.getItem(FILTERS_KEY);
@@ -58,12 +58,18 @@ export function Home() {
         filtersHydrated.current = true;
         return;
       }
-      const parsed = JSON.parse(raw) as { filters: OpportunityFilters; page: number };
+      const parsed = JSON.parse(raw) as { filters: OpportunityFilters; page: number; hasLiveResults?: boolean };
       if (parsed?.filters) {
         setFilters(parsed.filters);
       }
       if (parsed?.page) {
         setPage(parsed.page);
+      }
+      if (parsed?.hasLiveResults) {
+        const cachedLive = getAllLiveResults();
+        if (cachedLive.length > 0) {
+          setLiveResults(cachedLive);
+        }
       }
     } catch {
       // ignore parse issues
@@ -124,6 +130,13 @@ export function Home() {
     fetchOpportunities();
   }, [fetchOpportunities]);
 
+  // Clamp page to valid range when totalPages changes
+  useEffect(() => {
+    if (totalPages > 0 && page > totalPages) {
+      setPage(totalPages);
+    }
+  }, [totalPages, page]);
+
   useEffect(() => {
     if (!filtersHydrated.current) return;
     sessionStorage.setItem(
@@ -131,9 +144,10 @@ export function Home() {
       JSON.stringify({
         filters,
         page,
+        hasLiveResults: liveResults.length > 0,
       })
     );
-  }, [filters, page]);
+  }, [filters, page, liveResults.length]);
 
   const handleFiltersChange = (newFilters: OpportunityFilters) => {
     setFilters(newFilters);
@@ -247,7 +261,7 @@ export function Home() {
         />
       </div>
 
-      {totalPages > 1 && (
+      {totalPages > 1 && liveResults.length === 0 && (
         <div className="flex justify-center gap-2 mt-8">
           <button
             onClick={() => setPage((p) => Math.max(1, p - 1))}
