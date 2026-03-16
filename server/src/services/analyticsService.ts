@@ -71,176 +71,150 @@ export interface EnrichmentStats {
 
 /**
  * Get scraper health metrics
+ * Uses 4 groupBy queries instead of 90 individual queries (15 scrapers x 6 queries each)
  */
 export async function getScraperHealth(): Promise<ScraperHealth[]> {
-  const scraperNames = [
-    'confs.tech',
-    'javaconferences.org',
-    'callingallpapers.com',
-    'sessionize.com',
-    'papercall.io',
-    'wikicfp.com',
-    'Linkup Search',
-    'eventbrite.com',
-    'US Mega Events',
-    'conferencealerts.com',
-    'developers.events',
-    'Airtable',
-    'pac.org',
-    'prnewsonline.com',
-    'Live Search',
-  ];
-
   const now = new Date();
   const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
   const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
   const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
 
-  const healthMetrics = await Promise.all(
-    scraperNames.map(async (name) => {
-      const [
-        totalOpportunities,
-        last24h,
-        last7d,
-        last30d,
-        avgQuality,
-        lastRunRecord,
-      ] = await Promise.all([
-        prisma.opportunity.count({
-          where: { source: name },
-        }),
-        prisma.opportunity.count({
-          where: {
-            source: name,
-            createdAt: { gte: oneDayAgo },
-          },
-        }),
-        prisma.opportunity.count({
-          where: {
-            source: name,
-            createdAt: { gte: sevenDaysAgo },
-          },
-        }),
-        prisma.opportunity.count({
-          where: {
-            source: name,
-            createdAt: { gte: thirtyDaysAgo },
-          },
-        }),
-        prisma.opportunity.aggregate({
-          where: { source: name },
-          _avg: { qualityScore: true },
-        }),
-        prisma.opportunity.findFirst({
-          where: { source: name },
-          orderBy: { createdAt: 'desc' },
-          select: { createdAt: true },
-        }),
-      ]);
+  // 4 queries instead of 90
+  const [allSourceData, last24h, last7d, last30d] = await Promise.all([
+    prisma.opportunity.groupBy({
+      by: ['source'],
+      _count: { id: true },
+      _max: { createdAt: true },
+      _avg: { qualityScore: true },
+    }),
+    prisma.opportunity.groupBy({
+      by: ['source'],
+      _count: { id: true },
+      where: { createdAt: { gte: oneDayAgo } },
+    }),
+    prisma.opportunity.groupBy({
+      by: ['source'],
+      _count: { id: true },
+      where: { createdAt: { gte: sevenDaysAgo } },
+    }),
+    prisma.opportunity.groupBy({
+      by: ['source'],
+      _count: { id: true },
+      where: { createdAt: { gte: thirtyDaysAgo } },
+    }),
+  ]);
 
-      // Determine status based on recent activity
-      let status: 'online' | 'degraded' | 'unknown';
-      if (lastRunRecord) {
-        const hoursSinceLastRun = (now.getTime() - lastRunRecord.createdAt.getTime()) / (1000 * 60 * 60);
-        if (hoursSinceLastRun < 48) {
-          status = 'online';
-        } else if (hoursSinceLastRun < 168) { // 7 days
-          status = 'degraded';
-        } else {
-          status = 'unknown';
-        }
+  const last24hMap = Object.fromEntries(last24h.map(s => [s.source, s._count.id]));
+  const last7dMap = Object.fromEntries(last7d.map(s => [s.source, s._count.id]));
+  const last30dMap = Object.fromEntries(last30d.map(s => [s.source, s._count.id]));
+
+  const healthMetrics: ScraperHealth[] = allSourceData.map(source => {
+    const lastRun = source._max.createdAt ? new Date(source._max.createdAt) : null;
+    const hoursSinceLastRun = lastRun
+      ? (now.getTime() - lastRun.getTime()) / (1000 * 60 * 60)
+      : Infinity;
+
+    let status: 'online' | 'degraded' | 'unknown';
+    if (lastRun) {
+      if (hoursSinceLastRun < 48) {
+        status = 'online';
+      } else if (hoursSinceLastRun < 168) {
+        status = 'degraded';
       } else {
         status = 'unknown';
       }
+    } else {
+      status = 'unknown';
+    }
 
-      return {
-        name,
-        status,
-        lastRun: lastRunRecord?.createdAt || null,
-        totalOpportunities,
-        last24h,
-        last7d,
-        last30d,
-        averageQualityScore: Math.round(avgQuality._avg.qualityScore || 0),
-      };
-    })
-  );
+    return {
+      name: source.source,
+      status,
+      lastRun,
+      totalOpportunities: source._count.id,
+      last24h: last24hMap[source.source] || 0,
+      last7d: last7dMap[source.source] || 0,
+      last30d: last30dMap[source.source] || 0,
+      averageQualityScore: Math.round(source._avg.qualityScore || 0),
+    };
+  });
 
   return healthMetrics.sort((a, b) => b.totalOpportunities - a.totalOpportunities);
 }
 
 /**
  * Get source quality metrics
+ * Uses 5 groupBy queries instead of N*5 per-source queries
  */
 export async function getSourceQuality(): Promise<SourceQuality[]> {
-  const sources = await prisma.opportunity.groupBy({
-    by: ['source'],
-    _count: true,
-    _avg: { qualityScore: true },
-  });
-
   const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
 
-  const qualityMetrics = await Promise.all(
-    sources.map(async (source) => {
-      const [last30dCount, hasDeadline, hasLocation, hasCompensation, total] = await Promise.all([
-        prisma.opportunity.count({
-          where: {
-            source: source.source,
-            createdAt: { gte: thirtyDaysAgo },
-          },
-        }),
-        prisma.opportunity.count({
-          where: {
-            source: source.source,
-            cfpDeadline: { not: null },
-          },
-        }),
-        prisma.opportunity.count({
-          where: {
-            source: source.source,
-            location: { not: null },
-          },
-        }),
-        prisma.opportunity.count({
-          where: {
-            source: source.source,
-            OR: [
-              { compensationType: { not: null } },
-              { compensationAmount: { not: null } },
-            ],
-          },
-        }),
-        prisma.opportunity.count({
-          where: { source: source.source },
-        }),
-      ]);
+  // 5 parallel groupBy queries instead of per-source loops
+  const [sourceTotals, last30dBySource, withDeadline, withLocation, withCompensation] = await Promise.all([
+    prisma.opportunity.groupBy({
+      by: ['source'],
+      _count: true,
+      _avg: { qualityScore: true },
+    }),
+    prisma.opportunity.groupBy({
+      by: ['source'],
+      _count: { id: true },
+      where: { createdAt: { gte: thirtyDaysAgo } },
+    }),
+    prisma.opportunity.groupBy({
+      by: ['source'],
+      _count: { id: true },
+      where: { cfpDeadline: { not: null } },
+    }),
+    prisma.opportunity.groupBy({
+      by: ['source'],
+      _count: { id: true },
+      where: { location: { not: null } },
+    }),
+    prisma.opportunity.groupBy({
+      by: ['source'],
+      _count: { id: true },
+      where: {
+        OR: [
+          { compensationType: { not: null } },
+          { compensationAmount: { not: null } },
+        ],
+      },
+    }),
+  ]);
 
-      const hasDeadlinePercentage = Math.round((hasDeadline / total) * 100);
-      const hasLocationPercentage = Math.round((hasLocation / total) * 100);
-      const hasCompensationPercentage = Math.round((hasCompensation / total) * 100);
-      const dataCompletenessScore = Math.round(
-        (hasDeadlinePercentage + hasLocationPercentage + hasCompensationPercentage) / 3
-      );
+  const last30dMap = Object.fromEntries(last30dBySource.map(s => [s.source, s._count.id]));
+  const deadlineMap = Object.fromEntries(withDeadline.map(s => [s.source, s._count.id]));
+  const locationMap = Object.fromEntries(withLocation.map(s => [s.source, s._count.id]));
+  const compMap = Object.fromEntries(withCompensation.map(s => [s.source, s._count.id]));
 
-      return {
-        source: source.source,
-        totalCount: source._count,
-        last30dCount,
-        averageQualityScore: Math.round(source._avg.qualityScore || 0),
-        hasDeadlinePercentage,
-        hasLocationPercentage,
-        hasCompensationPercentage,
-        dataCompletenessScore,
-      };
-    })
-  );
+  const qualityMetrics: SourceQuality[] = sourceTotals.map(source => {
+    const total = source._count;
+    const hasDeadlinePercentage = total > 0 ? Math.round(((deadlineMap[source.source] || 0) / total) * 100) : 0;
+    const hasLocationPercentage = total > 0 ? Math.round(((locationMap[source.source] || 0) / total) * 100) : 0;
+    const hasCompensationPercentage = total > 0 ? Math.round(((compMap[source.source] || 0) / total) * 100) : 0;
+    const dataCompletenessScore = Math.round(
+      (hasDeadlinePercentage + hasLocationPercentage + hasCompensationPercentage) / 3
+    );
+
+    return {
+      source: source.source,
+      totalCount: total,
+      last30dCount: last30dMap[source.source] || 0,
+      averageQualityScore: Math.round(source._avg.qualityScore || 0),
+      hasDeadlinePercentage,
+      hasLocationPercentage,
+      hasCompensationPercentage,
+      dataCompletenessScore,
+    };
+  });
 
   return qualityMetrics.sort((a, b) => b.totalCount - a.totalCount);
 }
 
 /**
  * Get database statistics
+ * Uses count/groupBy queries + capped findMany instead of loading ALL opportunities into memory
  */
 export async function getDatabaseStats(): Promise<DatabaseStats> {
   const now = new Date();
@@ -256,7 +230,12 @@ export async function getDatabaseStats(): Promise<DatabaseStats> {
     last7dAdded,
     last30dAdded,
     formatGroups,
-    allOpportunities,
+    qualityBucket0_20,
+    qualityBucket21_40,
+    qualityBucket41_60,
+    qualityBucket61_80,
+    qualityBucket81_100,
+    recentOpportunities,
   ] = await Promise.all([
     prisma.opportunity.count(),
     prisma.opportunity.count({
@@ -285,8 +264,26 @@ export async function getDatabaseStats(): Promise<DatabaseStats> {
       by: ['format'],
       _count: true,
     }),
+    // Quality distribution buckets - 5 count queries instead of loading all records
+    prisma.opportunity.count({
+      where: { OR: [{ qualityScore: { lte: 20 } }, { qualityScore: null }] },
+    }),
+    prisma.opportunity.count({
+      where: { qualityScore: { gt: 20, lte: 40 } },
+    }),
+    prisma.opportunity.count({
+      where: { qualityScore: { gt: 40, lte: 60 } },
+    }),
+    prisma.opportunity.count({
+      where: { qualityScore: { gt: 60, lte: 80 } },
+    }),
+    prisma.opportunity.count({
+      where: { qualityScore: { gt: 80 } },
+    }),
+    // Only load active opportunities for industry/location extraction (capped at 5000)
     prisma.opportunity.findMany({
-      select: { industries: true, location: true, qualityScore: true },
+      select: { industries: true, location: true },
+      take: 5000,
     }),
   ]);
 
@@ -296,18 +293,20 @@ export async function getDatabaseStats(): Promise<DatabaseStats> {
     formatBreakdown[group.format] = group._count;
   });
 
-  // Top industries
+  // Top industries (parsed from JSON strings)
   const industryCounts: Record<string, number> = {};
-  allOpportunities.forEach((opp) => {
+  for (const opp of recentOpportunities) {
     try {
       const industries = JSON.parse(opp.industries);
-      industries.forEach((industry: string) => {
-        industryCounts[industry] = (industryCounts[industry] || 0) + 1;
-      });
+      if (Array.isArray(industries)) {
+        for (const industry of industries) {
+          industryCounts[industry] = (industryCounts[industry] || 0) + 1;
+        }
+      }
     } catch {
       // Skip invalid JSON
     }
-  });
+  }
   const topIndustries = Object.entries(industryCounts)
     .sort((a, b) => b[1] - a[1])
     .slice(0, 10)
@@ -315,32 +314,24 @@ export async function getDatabaseStats(): Promise<DatabaseStats> {
 
   // Top locations
   const locationCounts: Record<string, number> = {};
-  allOpportunities.forEach((opp) => {
+  for (const opp of recentOpportunities) {
     if (opp.location) {
       locationCounts[opp.location] = (locationCounts[opp.location] || 0) + 1;
     }
-  });
+  }
   const topLocations = Object.entries(locationCounts)
     .sort((a, b) => b[1] - a[1])
     .slice(0, 10)
     .map(([location, count]) => ({ location, count }));
 
-  // Quality distribution
+  // Quality distribution from pre-computed counts
   const qualityDistribution: Record<string, number> = {
-    '0-20': 0,
-    '21-40': 0,
-    '41-60': 0,
-    '61-80': 0,
-    '81-100': 0,
+    '0-20': qualityBucket0_20,
+    '21-40': qualityBucket21_40,
+    '41-60': qualityBucket41_60,
+    '61-80': qualityBucket61_80,
+    '81-100': qualityBucket81_100,
   };
-  allOpportunities.forEach((opp) => {
-    const score = opp.qualityScore || 0;
-    if (score <= 20) qualityDistribution['0-20']++;
-    else if (score <= 40) qualityDistribution['21-40']++;
-    else if (score <= 60) qualityDistribution['41-60']++;
-    else if (score <= 80) qualityDistribution['61-80']++;
-    else qualityDistribution['81-100']++;
-  });
 
   return {
     totalOpportunities,
@@ -358,6 +349,7 @@ export async function getDatabaseStats(): Promise<DatabaseStats> {
 
 /**
  * Get live search analytics
+ * Caps the findMany for industry extraction instead of loading all live search results
  */
 export async function getLiveSearchAnalytics(): Promise<LiveSearchAnalytics> {
   const now = new Date();
@@ -389,26 +381,30 @@ export async function getLiveSearchAnalytics(): Promise<LiveSearchAnalytics> {
         createdAt: { gte: thirtyDaysAgo },
       },
     }),
+    // Cap at 5000 to avoid loading all live search results into memory
     prisma.opportunity.findMany({
       where: {
         source: { startsWith: 'Live Search' },
       },
       select: { industries: true },
+      take: 5000,
     }),
   ]);
 
   // Top industries from live searches
   const industryCounts: Record<string, number> = {};
-  liveResults.forEach((result) => {
+  for (const result of liveResults) {
     try {
       const industries = JSON.parse(result.industries);
-      industries.forEach((industry: string) => {
-        industryCounts[industry] = (industryCounts[industry] || 0) + 1;
-      });
+      if (Array.isArray(industries)) {
+        for (const industry of industries) {
+          industryCounts[industry] = (industryCounts[industry] || 0) + 1;
+        }
+      }
     } catch {
       // Skip invalid JSON
     }
-  });
+  }
   const topIndustries = Object.entries(industryCounts)
     .sort((a, b) => b[1] - a[1])
     .slice(0, 10)
@@ -450,77 +446,70 @@ export async function getSystemHealth(): Promise<SystemHealth> {
 
 /**
  * Get enrichment statistics
+ * Uses groupBy with [source, enrichmentStatus] instead of per-source loops
  */
 export async function getEnrichmentStats(): Promise<EnrichmentStats> {
-  const totalOpportunities = await prisma.opportunity.count();
-
-  // Count by enrichment status
-  const [enrichedCount, skippedCount, failedCount, unenrichedCount] = await Promise.all([
-    prisma.opportunity.count({
-      where: { enrichmentStatus: 'enriched' },
-    }),
-    prisma.opportunity.count({
-      where: { enrichmentStatus: 'skipped' },
-    }),
-    prisma.opportunity.count({
-      where: { enrichmentStatus: 'failed' },
-    }),
-    prisma.opportunity.count({
-      where: { enrichmentStatus: null },
-    }),
-  ]);
-
-  // Recent enrichments (last 24 hours)
   const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
-  const recentEnrichments = await prisma.opportunity.count({
-    where: {
-      enrichmentStatus: 'enriched',
-      enrichedAt: { gte: oneDayAgo },
-    },
+
+  // 4 queries instead of N*3+5 (where N = number of sources)
+  const [enrichedCount, skippedCount, failedCount, unenrichedCount, recentEnrichments, bySourceStatus] =
+    await Promise.all([
+      prisma.opportunity.count({
+        where: { enrichmentStatus: 'enriched' },
+      }),
+      prisma.opportunity.count({
+        where: { enrichmentStatus: 'skipped' },
+      }),
+      prisma.opportunity.count({
+        where: { enrichmentStatus: 'failed' },
+      }),
+      prisma.opportunity.count({
+        where: { enrichmentStatus: null },
+      }),
+      prisma.opportunity.count({
+        where: {
+          enrichmentStatus: 'enriched',
+          enrichedAt: { gte: oneDayAgo },
+        },
+      }),
+      // Single groupBy replaces N*3 per-source queries
+      prisma.opportunity.groupBy({
+        by: ['source', 'enrichmentStatus'],
+        _count: { id: true },
+      }),
+    ]);
+
+  const totalOpportunities = enrichedCount + skippedCount + failedCount + unenrichedCount;
+
+  // Build per-source enrichment breakdown from the single groupBy result
+  const sourceMap: Record<string, { enriched: number; skipped: number; failed: number; unenriched: number }> = {};
+  for (const row of bySourceStatus) {
+    if (!sourceMap[row.source]) {
+      sourceMap[row.source] = { enriched: 0, skipped: 0, failed: 0, unenriched: 0 };
+    }
+    const status = row.enrichmentStatus || 'unenriched';
+    if (status === 'enriched') {
+      sourceMap[row.source].enriched = row._count.id;
+    } else if (status === 'skipped') {
+      sourceMap[row.source].skipped = row._count.id;
+    } else if (status === 'failed') {
+      sourceMap[row.source].failed = row._count.id;
+    } else {
+      sourceMap[row.source].unenriched = row._count.id;
+    }
+  }
+
+  const bySource = Object.entries(sourceMap).map(([source, statuses]) => {
+    const total = statuses.enriched + statuses.skipped + statuses.failed + statuses.unenriched;
+    return {
+      source,
+      total,
+      enriched: statuses.enriched,
+      skipped: statuses.skipped,
+      failed: statuses.failed,
+      enrichmentRate: total > 0 ? (statuses.enriched / total) * 100 : 0,
+    };
   });
-
-  // By source
-  const bySourceData = await prisma.opportunity.groupBy({
-    by: ['source'],
-    _count: { _all: true },
-  });
-
-  const bySource = await Promise.all(
-    bySourceData.map(async (sourceGroup) => {
-      const source = sourceGroup.source;
-      const total = sourceGroup._count._all || 0;
-
-      const [enriched, skipped, failed] = await Promise.all([
-        prisma.opportunity.count({
-          where: {
-            source: sourceGroup.source,
-            enrichmentStatus: 'enriched',
-          },
-        }),
-        prisma.opportunity.count({
-          where: {
-            source: sourceGroup.source,
-            enrichmentStatus: 'skipped',
-          },
-        }),
-        prisma.opportunity.count({
-          where: {
-            source: sourceGroup.source,
-            enrichmentStatus: 'failed',
-          },
-        }),
-      ]);
-
-      return {
-        source,
-        total,
-        enriched,
-        skipped,
-        failed,
-        enrichmentRate: total > 0 ? (enriched / total) * 100 : 0,
-      };
-    })
-  );
 
   // Sort by total count descending
   bySource.sort((a, b) => b.total - a.total);
