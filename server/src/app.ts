@@ -3,6 +3,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
 import pinoHttp from 'pino-http';
+import type { IncomingMessage } from 'http';
 import { config } from './config/index.js';
 import routes from './routes/index.js';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
@@ -27,14 +28,15 @@ app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
 // Request logging
-const logger = pinoHttp({
+const createLogger = pinoHttp.default ?? pinoHttp;
+const logger = (createLogger as typeof pinoHttp.default)({
   level: process.env.NODE_ENV === 'production' ? 'info' : 'debug',
   transport: process.env.NODE_ENV !== 'production'
     ? { target: 'pino-pretty', options: { colorize: true } }
     : undefined,
   // Don't log health check requests (too noisy)
   autoLogging: {
-    ignore: (req) => req.url === '/api/health',
+    ignore: (req: IncomingMessage) => req.url === '/api/health',
   },
 });
 
