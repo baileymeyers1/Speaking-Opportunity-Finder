@@ -5,6 +5,20 @@ import { useAuth } from '../hooks/useAuth';
 import { OpportunityCard } from '../components/OpportunityCard';
 import type { SavedOpportunity, SavedCategory } from '../types';
 
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from '@/components/ui/select';
+import { Loader2, Bookmark, Trash2 } from 'lucide-react';
+import { cn } from '@/lib/utils';
+
 const categories: { value: SavedCategory | 'all'; label: string }[] = [
   { value: 'all', label: 'All' },
   { value: 'interested', label: 'Interested' },
@@ -66,83 +80,156 @@ export function SavedOpportunities() {
   };
 
   if (authLoading) {
-    return <div className="text-center py-12">Loading...</div>;
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    );
   }
 
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
   }
 
-  return (
-    <div>
-      <h1 className="text-2xl font-bold text-gray-900 mb-6">
-        Saved Opportunities
-      </h1>
+  const getCategoryCount = (cat: SavedCategory | 'all') => {
+    if (cat === 'all') return savedItems.length;
+    return savedItems.filter((item) => item.category === cat).length;
+  };
 
-      <div className="flex gap-2 mb-6 overflow-x-auto pb-2">
-        {categories.map((cat) => (
-          <button
-            key={cat.value}
-            onClick={() => setActiveCategory(cat.value)}
-            className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap ${
-              activeCategory === cat.value
-                ? 'bg-blue-600 text-white'
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-            }`}
-          >
-            {cat.label}
-          </button>
-        ))}
+  const getEmptyMessage = (cat: SavedCategory | 'all') => {
+    switch (cat) {
+      case 'interested':
+        return 'No opportunities marked as interested yet.';
+      case 'applied':
+        return 'No applications tracked yet.';
+      case 'accepted':
+        return 'No accepted opportunities yet -- keep applying!';
+      case 'rejected':
+        return 'No rejected opportunities.';
+      default:
+        return 'No saved opportunities yet.';
+    }
+  };
+
+  const renderGrid = (items: SavedOpportunity[]) => (
+    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+      {items.map((item) => (
+        <div key={item.id} className="relative group">
+          {item.opportunity && (
+            <OpportunityCard opportunity={item.opportunity} showSave={false} />
+          )}
+          <div className="absolute top-2 right-2 flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+            <Select
+              value={item.category}
+              onValueChange={(value) =>
+                handleUpdateCategory(item.id, value as SavedCategory)
+              }
+            >
+              <SelectTrigger className="h-7 w-[110px] text-xs bg-background/95 backdrop-blur-sm">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="interested">Interested</SelectItem>
+                <SelectItem value="applied">Applied</SelectItem>
+                <SelectItem value="accepted">Accepted</SelectItem>
+                <SelectItem value="rejected">Rejected</SelectItem>
+              </SelectContent>
+            </Select>
+            <Button
+              variant="destructive"
+              size="sm"
+              className="h-7 px-2"
+              onClick={() => handleRemove(item.id)}
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </Button>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+
+  const renderEmpty = (cat: SavedCategory | 'all') => (
+    <div className="flex flex-col items-center justify-center py-16 text-center">
+      <div className="rounded-full bg-muted p-4 mb-4">
+        <Bookmark className="h-8 w-8 text-muted-foreground" />
+      </div>
+      <p className="text-lg font-medium text-foreground mb-1">
+        {getEmptyMessage(cat)}
+      </p>
+      <p className="text-sm text-muted-foreground mb-4">
+        Browse opportunities and save the ones that interest you.
+      </p>
+      <Button variant="outline" asChild>
+        <Link to="/">Browse opportunities</Link>
+      </Button>
+    </div>
+  );
+
+  const renderSkeletons = () => (
+    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+      {[...Array(6)].map((_, i) => (
+        <div key={i} className="rounded-lg border bg-card p-6 space-y-3">
+          <Skeleton className="h-5 w-3/4" />
+          <Skeleton className="h-4 w-1/2" />
+          <Skeleton className="h-4 w-full" />
+          <Skeleton className="h-4 w-5/6" />
+        </div>
+      ))}
+    </div>
+  );
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-3xl font-bold tracking-tight text-foreground">
+          Saved Opportunities
+        </h1>
+        <p className="text-muted-foreground mt-1">
+          Track and manage your speaking opportunity pipeline
+        </p>
       </div>
 
-      {isLoading ? (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {[...Array(3)].map((_, i) => (
-            <div key={i} className="bg-white rounded-lg shadow p-6 animate-pulse">
-              <div className="h-4 bg-gray-200 rounded w-3/4 mb-4"></div>
-              <div className="h-3 bg-gray-200 rounded w-1/2 mb-4"></div>
-              <div className="h-3 bg-gray-200 rounded w-full"></div>
-            </div>
-          ))}
-        </div>
-      ) : savedItems.length === 0 ? (
-        <div className="text-center py-12">
-          <p className="text-gray-500 text-lg">No saved opportunities</p>
-          <Link to="/" className="text-blue-600 hover:underline mt-2 inline-block">
-            Browse opportunities
-          </Link>
-        </div>
-      ) : (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {savedItems.map((item) => (
-            <div key={item.id} className="relative">
-              {item.opportunity && (
-                <OpportunityCard opportunity={item.opportunity} showSave={false} />
+      <Tabs
+        value={activeCategory}
+        onValueChange={(value) =>
+          setActiveCategory(value as SavedCategory | 'all')
+        }
+      >
+        <TabsList className="w-full justify-start overflow-x-auto">
+          {categories.map((cat) => (
+            <TabsTrigger
+              key={cat.value}
+              value={cat.value}
+              className="gap-1.5"
+            >
+              {cat.label}
+              {!isLoading && (
+                <Badge
+                  variant="secondary"
+                  className={cn(
+                    'h-5 min-w-[20px] px-1.5 text-[10px]',
+                    activeCategory === cat.value &&
+                      'bg-primary/10 text-primary'
+                  )}
+                >
+                  {getCategoryCount(cat.value)}
+                </Badge>
               )}
-              <div className="absolute top-2 right-2 flex gap-1">
-                <select
-                  value={item.category}
-                  onChange={(e) =>
-                    handleUpdateCategory(item.id, e.target.value as SavedCategory)
-                  }
-                  className="text-xs px-2 py-1 rounded border bg-white"
-                >
-                  <option value="interested">Interested</option>
-                  <option value="applied">Applied</option>
-                  <option value="accepted">Accepted</option>
-                  <option value="rejected">Rejected</option>
-                </select>
-                <button
-                  onClick={() => handleRemove(item.id)}
-                  className="text-xs px-2 py-1 rounded bg-red-100 text-red-600 hover:bg-red-200"
-                >
-                  Remove
-                </button>
-              </div>
-            </div>
+            </TabsTrigger>
           ))}
-        </div>
-      )}
+        </TabsList>
+
+        {categories.map((cat) => (
+          <TabsContent key={cat.value} value={cat.value}>
+            {isLoading
+              ? renderSkeletons()
+              : savedItems.length === 0
+                ? renderEmpty(cat.value)
+                : renderGrid(savedItems)}
+          </TabsContent>
+        ))}
+      </Tabs>
     </div>
   );
 }
