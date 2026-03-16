@@ -45,6 +45,7 @@ export async function register(input: RegisterInput) {
     select: {
       id: true,
       email: true,
+      isAdmin: true,
       preferredIndustries: true,
       createdAt: true,
     },
@@ -80,6 +81,7 @@ export async function login(input: LoginInput) {
     user: {
       id: user.id,
       email: user.email,
+      isAdmin: user.isAdmin,
       preferredIndustries: parseJsonArray(user.preferredIndustries),
       createdAt: user.createdAt,
     },
@@ -93,6 +95,7 @@ export async function getCurrentUser(userId: string) {
     select: {
       id: true,
       email: true,
+      isAdmin: true,
       preferredIndustries: true,
       createdAt: true,
     },

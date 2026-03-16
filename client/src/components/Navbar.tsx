@@ -1,164 +1,191 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
+import { Menu, Mic2, Moon, Sun } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
-
-// Admin emails list
-const ADMIN_EMAILS = ['baileymeyers1@gmail.com'];
+import { useTheme } from '../context/ThemeContext';
+import { Button } from '@/components/ui/button';
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from '@/components/ui/sheet';
+import { Separator } from '@/components/ui/separator';
+import { cn } from '@/lib/utils';
 
 export function Navbar() {
   const { isAuthenticated, user, logout } = useAuth();
-  const isAdmin = user?.email && ADMIN_EMAILS.includes(user.email);
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const { resolvedTheme, setTheme } = useTheme();
+  const location = useLocation();
+  const [sheetOpen, setSheetOpen] = useState(false);
 
-  const closeMobileMenu = () => setIsMobileMenuOpen(false);
+  const isAdmin = user?.isAdmin;
+
+  const isActive = (path: string) => location.pathname === path;
+
+  const navLinkClass = (path: string) =>
+    cn(
+      'text-sm font-medium transition-colors hover:text-foreground/80',
+      isActive(path) ? 'text-foreground' : 'text-foreground/60'
+    );
+
+  const toggleTheme = () => {
+    setTheme(resolvedTheme === 'dark' ? 'light' : 'dark');
+  };
 
   return (
-    <nav className="bg-white shadow">
-      <div className="container mx-auto px-4">
-        <div className="flex h-16 items-center justify-between">
-          <div className="flex items-center space-x-8">
-            <Link to="/" className="text-xl font-bold text-gray-900">
-              Speaking Finder
-            </Link>
-            <div className="hidden md:flex md:space-x-4">
-              <Link
-                to="/"
-                className="text-gray-600 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium"
-              >
-                Browse
-              </Link>
-              {isAuthenticated && (
-                <>
-                  <Link
-                    to="/saved"
-                    className="text-gray-600 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium"
-                  >
-                    Saved
-                  </Link>
-                  {isAdmin && (
-                    <Link
-                      to="/admin/dashboard"
-                      className="text-gray-600 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium"
-                    >
-                      Analytics
-                    </Link>
-                  )}
-                </>
-              )}
-            </div>
-          </div>
+    <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+      <div className="container flex h-14 items-center">
+        {/* Logo */}
+        <Link to="/" className="mr-6 flex items-center space-x-2">
+          <Mic2 className="h-5 w-5" />
+          <span className="font-bold">Speaking Finder</span>
+        </Link>
 
-          {/* Desktop auth buttons */}
-          <div className="hidden md:flex items-center space-x-4">
+        {/* Desktop nav links */}
+        <nav className="hidden md:flex items-center space-x-6">
+          <Link to="/" className={navLinkClass('/')}>
+            Browse
+          </Link>
+          {isAuthenticated && (
+            <Link to="/saved" className={navLinkClass('/saved')}>
+              Saved
+            </Link>
+          )}
+          {isAuthenticated && isAdmin && (
+            <Link
+              to="/admin/dashboard"
+              className={navLinkClass('/admin/dashboard')}
+            >
+              Analytics
+            </Link>
+          )}
+        </nav>
+
+        {/* Right side: theme toggle + auth (desktop) */}
+        <div className="ml-auto flex items-center space-x-2">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={toggleTheme}
+            aria-label="Toggle theme"
+          >
+            {resolvedTheme === 'dark' ? (
+              <Sun className="h-4 w-4" />
+            ) : (
+              <Moon className="h-4 w-4" />
+            )}
+          </Button>
+
+          <div className="hidden md:flex items-center space-x-2">
             {isAuthenticated ? (
-              <button
-                onClick={logout}
-                className="text-gray-600 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium"
-              >
+              <Button variant="ghost" size="sm" onClick={logout}>
                 Logout
-              </button>
+              </Button>
             ) : (
               <>
-                <Link
-                  to="/login"
-                  className="text-gray-600 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium"
-                >
-                  Login
-                </Link>
-                <Link
-                  to="/register"
-                  className="bg-blue-600 text-white hover:bg-blue-700 px-4 py-2 rounded-md text-sm font-medium"
-                >
-                  Sign Up
-                </Link>
+                <Button variant="ghost" size="sm" asChild>
+                  <Link to="/login">Login</Link>
+                </Button>
+                <Button size="sm" asChild>
+                  <Link to="/register">Sign Up</Link>
+                </Button>
               </>
             )}
           </div>
 
-          {/* Mobile hamburger button */}
-          <button
-            className="md:hidden inline-flex items-center justify-center p-2 rounded-md text-gray-600 hover:text-gray-900 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500"
-            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-            aria-label="Toggle menu"
-            aria-expanded={isMobileMenuOpen}
-          >
-            {isMobileMenuOpen ? (
-              <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            ) : (
-              <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
-              </svg>
-            )}
-          </button>
-        </div>
-      </div>
-
-      {/* Mobile dropdown menu */}
-      {isMobileMenuOpen && (
-        <div className="md:hidden border-t border-gray-200">
-          <div className="space-y-1 px-4 pb-3 pt-2">
-            <Link
-              to="/"
-              onClick={closeMobileMenu}
-              className="block text-gray-600 hover:text-gray-900 hover:bg-gray-50 px-3 py-2 rounded-md text-base font-medium"
-            >
-              Browse
-            </Link>
-            {isAuthenticated && (
-              <>
+          {/* Mobile: sheet trigger */}
+          <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
+            <SheetTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="md:hidden"
+                aria-label="Open menu"
+              >
+                <Menu className="h-5 w-5" />
+              </Button>
+            </SheetTrigger>
+            <SheetContent side="right" className="w-72">
+              <SheetHeader>
+                <SheetTitle className="flex items-center space-x-2">
+                  <Mic2 className="h-5 w-5" />
+                  <span>Speaking Finder</span>
+                </SheetTitle>
+              </SheetHeader>
+              <nav className="mt-6 flex flex-col space-y-3">
                 <Link
-                  to="/saved"
-                  onClick={closeMobileMenu}
-                  className="block text-gray-600 hover:text-gray-900 hover:bg-gray-50 px-3 py-2 rounded-md text-base font-medium"
+                  to="/"
+                  onClick={() => setSheetOpen(false)}
+                  className={cn(
+                    'px-2 py-1.5 text-sm font-medium rounded-md transition-colors',
+                    isActive('/')
+                      ? 'bg-accent text-accent-foreground'
+                      : 'text-foreground/60 hover:text-foreground hover:bg-accent/50'
+                  )}
                 >
-                  Saved
+                  Browse
                 </Link>
-                {isAdmin && (
+                {isAuthenticated && (
+                  <Link
+                    to="/saved"
+                    onClick={() => setSheetOpen(false)}
+                    className={cn(
+                      'px-2 py-1.5 text-sm font-medium rounded-md transition-colors',
+                      isActive('/saved')
+                        ? 'bg-accent text-accent-foreground'
+                        : 'text-foreground/60 hover:text-foreground hover:bg-accent/50'
+                    )}
+                  >
+                    Saved
+                  </Link>
+                )}
+                {isAuthenticated && isAdmin && (
                   <Link
                     to="/admin/dashboard"
-                    onClick={closeMobileMenu}
-                    className="block text-gray-600 hover:text-gray-900 hover:bg-gray-50 px-3 py-2 rounded-md text-base font-medium"
+                    onClick={() => setSheetOpen(false)}
+                    className={cn(
+                      'px-2 py-1.5 text-sm font-medium rounded-md transition-colors',
+                      isActive('/admin/dashboard')
+                        ? 'bg-accent text-accent-foreground'
+                        : 'text-foreground/60 hover:text-foreground hover:bg-accent/50'
+                    )}
                   >
                     Analytics
                   </Link>
                 )}
-              </>
-            )}
-            <div className="border-t border-gray-200 pt-2 mt-2">
-              {isAuthenticated ? (
-                <button
-                  onClick={() => {
-                    logout();
-                    closeMobileMenu();
-                  }}
-                  className="block w-full text-left text-gray-600 hover:text-gray-900 hover:bg-gray-50 px-3 py-2 rounded-md text-base font-medium"
-                >
-                  Logout
-                </button>
-              ) : (
-                <>
-                  <Link
-                    to="/login"
-                    onClick={closeMobileMenu}
-                    className="block text-gray-600 hover:text-gray-900 hover:bg-gray-50 px-3 py-2 rounded-md text-base font-medium"
+                <Separator />
+                {isAuthenticated ? (
+                  <Button
+                    variant="ghost"
+                    className="justify-start"
+                    onClick={() => {
+                      logout();
+                      setSheetOpen(false);
+                    }}
                   >
-                    Login
-                  </Link>
-                  <Link
-                    to="/register"
-                    onClick={closeMobileMenu}
-                    className="block bg-blue-600 text-white hover:bg-blue-700 px-3 py-2 rounded-md text-base font-medium text-center mt-1"
-                  >
-                    Sign Up
-                  </Link>
-                </>
-              )}
-            </div>
-          </div>
+                    Logout
+                  </Button>
+                ) : (
+                  <>
+                    <Button variant="ghost" className="justify-start" asChild>
+                      <Link to="/login" onClick={() => setSheetOpen(false)}>
+                        Login
+                      </Link>
+                    </Button>
+                    <Button asChild>
+                      <Link to="/register" onClick={() => setSheetOpen(false)}>
+                        Sign Up
+                      </Link>
+                    </Button>
+                  </>
+                )}
+              </nav>
+            </SheetContent>
+          </Sheet>
         </div>
-      )}
-    </nav>
+      </div>
+    </header>
   );
 }
