@@ -94,43 +94,60 @@ async function processNextUnenriched(): Promise<void> {
       sourceUrl: opportunity.sourceUrl || undefined,
     };
 
-    // Enrich the opportunity
-    const enriched = await enrichOpportunity(scraperResult);
+    // Enrich the opportunity — wrapped in inner try/catch to ensure
+    // enrichmentStatus is ALWAYS set, even if enrichment throws
+    try {
+      const enriched = await enrichOpportunity(scraperResult);
 
-    // Update the opportunity with enrichment results
-    await prisma.opportunity.update({
-      where: { id: opportunity.id },
-      data: {
-        cfpDeadline: enriched.cfpDeadline || opportunity.cfpDeadline,
-        eventDate: enriched.eventDate || opportunity.eventDate,
-        industries: enriched.industries
-          ? JSON.stringify(enriched.industries)
-          : opportunity.industries,
-        location: enriched.location || opportunity.location,
-        compensationType: enriched.compensationType || opportunity.compensationType,
-        compensationAmount: enriched.compensationAmount || opportunity.compensationAmount,
-        compensationDetails: enriched.compensationDetails || opportunity.compensationDetails,
-        isRemote: enriched.isRemote !== undefined ? enriched.isRemote : opportunity.isRemote,
-        enrichmentStatus: enriched.enrichmentStatus || 'failed',
-        enrichedAt: enriched.enrichedAt || new Date(),
-        enrichmentError: enriched.enrichmentError,
-      },
-    });
+      // Update the opportunity with enrichment results
+      await prisma.opportunity.update({
+        where: { id: opportunity.id },
+        data: {
+          cfpDeadline: enriched.cfpDeadline || opportunity.cfpDeadline,
+          eventDate: enriched.eventDate || opportunity.eventDate,
+          industries: enriched.industries
+            ? JSON.stringify(enriched.industries)
+            : opportunity.industries,
+          location: enriched.location || opportunity.location,
+          compensationType: enriched.compensationType || opportunity.compensationType,
+          compensationAmount: enriched.compensationAmount || opportunity.compensationAmount,
+          compensationDetails: enriched.compensationDetails || opportunity.compensationDetails,
+          isRemote: enriched.isRemote !== undefined ? enriched.isRemote : opportunity.isRemote,
+          enrichmentStatus: enriched.enrichmentStatus || 'failed',
+          enrichedAt: enriched.enrichedAt || new Date(),
+          enrichmentError: enriched.enrichmentError,
+        },
+      });
 
-    // Update state
-    state.processed++;
-    state.lastRunTime = new Date();
+      // Update state
+      state.processed++;
+      state.lastRunTime = new Date();
 
-    if (enriched.enrichmentStatus === 'enriched') {
-      state.enriched++;
-      state.dailyEnrichmentCount++;
-      console.log(`Background enrichment: Successfully enriched "${opportunity.title}"`);
-    } else if (enriched.enrichmentStatus === 'skipped') {
-      state.skipped++;
-      console.log(`Background enrichment: Skipped "${opportunity.title}" (already complete)`);
-    } else {
+      if (enriched.enrichmentStatus === 'enriched') {
+        state.enriched++;
+        state.dailyEnrichmentCount++;
+        console.log(`Background enrichment: Successfully enriched "${opportunity.title}"`);
+      } else if (enriched.enrichmentStatus === 'skipped') {
+        state.skipped++;
+        console.log(`Background enrichment: Skipped "${opportunity.title}" (already complete)`);
+      } else {
+        state.failed++;
+        console.log(`Background enrichment: Failed "${opportunity.title}": ${enriched.enrichmentError}`);
+      }
+    } catch (enrichmentError) {
+      // ALWAYS mark as failed so it doesn't retry forever
+      await prisma.opportunity.update({
+        where: { id: opportunity.id },
+        data: {
+          enrichmentStatus: 'failed',
+          enrichmentError: enrichmentError instanceof Error ? enrichmentError.message : 'Unknown error',
+          enrichedAt: new Date(),
+        },
+      });
+      state.processed++;
       state.failed++;
-      console.log(`Background enrichment: Failed "${opportunity.title}": ${enriched.enrichmentError}`);
+      state.lastRunTime = new Date();
+      console.error(`[BackgroundEnrichment] Failed to enrich opportunity ${opportunity.id}:`, enrichmentError);
     }
 
   } catch (error) {
