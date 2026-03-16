@@ -4,6 +4,8 @@ import { OpportunityList } from '../components/OpportunityList';
 import { apiClient } from '../api/client';
 import type { Opportunity, OpportunityFilters, PaginatedResponse } from '../types';
 import { useDebounce } from '../hooks/useDebounce';
+import { Button } from '@/components/ui/button';
+import { AlertCircle, ChevronLeft, ChevronRight, Loader2, X } from 'lucide-react';
 
 const CACHE_KEY = 'cachedOpportunities';
 const FILTERS_KEY = 'opportunityFiltersState';
@@ -29,6 +31,7 @@ export function Home() {
   const [isLoading, setIsLoading] = useState(true);
   const [isStale, setIsStale] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [filters, setFilters] = useState<OpportunityFilters>({});
   const debouncedFilters = useDebounce(filters, 400);
   const [page, setPage] = useState(1);
@@ -81,6 +84,7 @@ export function Home() {
     if (liveSearch) {
       setIsSearching(true);
     }
+    setError(null);
     try {
       const params = new URLSearchParams();
       params.set('page', String(page));
@@ -121,8 +125,12 @@ export function Home() {
           }));
         }
       }
-    } catch (error) {
-      console.error('Failed to fetch opportunities:', error);
+    } catch (err) {
+      console.error('Failed to fetch opportunities:', err);
+      // Only show error if we don't have cached data to fall back on
+      if (!cacheLoaded.current && opportunities.length === 0) {
+        setError('Failed to load opportunities. Please check your connection and try again.');
+      }
     } finally {
       setIsLoading(false);
       setIsSearching(false);
@@ -156,12 +164,17 @@ export function Home() {
     setLiveResultCount(0);
   };
 
+  const handleClearFilters = () => {
+    setFilters({});
+    setPage(1);
+    setLiveResultCount(0);
+  };
+
   const handleLiveSearch = async () => {
     if (!filters.search && !filters.industries?.length) {
       alert('Please enter a search term or select an industry to perform a live search.');
       return;
     }
-    // Directly call with liveSearch=true -- no need for intermediate state
     fetchOpportunities(true);
   };
 
@@ -170,11 +183,22 @@ export function Home() {
     fetchOpportunities(false);
   };
 
+  const handleRetry = () => {
+    setError(null);
+    fetchOpportunities(false);
+  };
+
   return (
-    <div>
-      <h1 className="text-2xl font-bold text-gray-900 mb-6">
-        Find Speaking Opportunities
-      </h1>
+    <div className="space-y-6">
+      {/* Page header */}
+      <div>
+        <h1 className="text-3xl font-bold tracking-tight text-foreground">
+          Find Speaking Opportunities
+        </h1>
+        <p className="text-muted-foreground mt-1">
+          Discover conferences, meetups, and events looking for speakers
+        </p>
+      </div>
 
       <FilterPanel
         filters={filters}
@@ -183,60 +207,100 @@ export function Home() {
         isSearching={isSearching}
       />
 
-      {liveResultCount > 0 && (
-        <div className="flex items-center justify-between mb-4">
-          <p className="text-sm text-gray-600">
-            Showing {opportunities.length} results
-            <span className="ml-1">
-              ({liveResultCount} from live search)
-            </span>
-          </p>
-          <button
-            onClick={handleClearLiveResults}
-            className="text-sm text-gray-500 hover:text-gray-700"
-          >
-            Clear live results
-          </button>
+      {/* Stale cache indicator */}
+      {isStale && (
+        <div className="flex items-center gap-2 rounded-md border border-border bg-muted/50 px-4 py-2 text-sm text-muted-foreground">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          Showing cached results while loading fresh data...
         </div>
       )}
 
-      <div>
-        {isStale && (
-          <p className="text-xs text-gray-400 mb-2">
-            Showing cached results while loading fresh data...
+      {/* Error state */}
+      {error && !isLoading && (
+        <div className="flex flex-col items-center justify-center rounded-lg border border-destructive/20 bg-destructive/5 py-12 text-center">
+          <div className="rounded-full bg-destructive/10 p-3 mb-4">
+            <AlertCircle className="h-6 w-6 text-destructive" />
+          </div>
+          <h3 className="text-lg font-semibold text-foreground">
+            Something went wrong
+          </h3>
+          <p className="text-sm text-muted-foreground mt-1 max-w-md">
+            {error}
           </p>
-        )}
-        {lastUpdated && !isStale && liveResultCount === 0 && (
-          <p className="text-xs text-gray-400 mb-2">
-            Updated {lastUpdated.toLocaleTimeString()}
-          </p>
-        )}
-        <OpportunityList
-          opportunities={opportunities}
-          isLoading={isLoading}
-        />
-      </div>
-
-      {totalPages > 1 && liveResultCount === 0 && (
-        <div className="flex justify-center gap-2 mt-8">
-          <button
-            onClick={() => setPage((p) => Math.max(1, p - 1))}
-            disabled={page === 1}
-            className="px-4 py-2 border rounded-md disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
-          >
-            Previous
-          </button>
-          <span className="px-4 py-2">
-            Page {page} of {totalPages}
-          </span>
-          <button
-            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-            disabled={page === totalPages}
-            className="px-4 py-2 border rounded-md disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
-          >
-            Next
-          </button>
+          <Button variant="outline" className="mt-4" onClick={handleRetry}>
+            Try again
+          </Button>
         </div>
+      )}
+
+      {/* Results header + list (only when no error) */}
+      {!error && (
+        <>
+          {/* Results header */}
+          {!isLoading && opportunities.length > 0 && (
+            <div className="flex items-center justify-between">
+              <p className="text-sm text-muted-foreground">
+                Showing {opportunities.length} result{opportunities.length !== 1 ? 's' : ''}
+                {liveResultCount > 0 && (
+                  <span className="ml-1">
+                    ({liveResultCount} from live search)
+                  </span>
+                )}
+              </p>
+              <div className="flex items-center gap-3">
+                {liveResultCount > 0 && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleClearLiveResults}
+                    className="text-muted-foreground"
+                  >
+                    <X className="h-4 w-4" />
+                    Clear live results
+                  </Button>
+                )}
+                {lastUpdated && !isStale && liveResultCount === 0 && (
+                  <span className="text-xs text-muted-foreground">
+                    Updated {lastUpdated.toLocaleTimeString()}
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
+
+          <OpportunityList
+            opportunities={opportunities}
+            isLoading={isLoading}
+            onClearFilters={handleClearFilters}
+          />
+
+          {/* Pagination */}
+          {totalPages > 1 && !isLoading && liveResultCount === 0 && (
+            <div className="flex items-center justify-center gap-2 pt-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={page === 1}
+              >
+                <ChevronLeft className="h-4 w-4" />
+                Previous
+              </Button>
+              <span className="px-3 text-sm text-muted-foreground">
+                Page {page} of {totalPages}
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                disabled={page === totalPages}
+              >
+                Next
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+          )}
+        </>
       )}
     </div>
   );
