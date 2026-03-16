@@ -2,7 +2,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { config } from '../config/index.js';
 import type { ScraperResult } from '../scrapers/index.js';
 
-interface EnrichmentResult {
+export interface EnrichmentResult {
   cfpDeadline?: Date;
   eventDate?: Date;
   industries?: string[];
@@ -171,7 +171,7 @@ Missing: ${missing.join(', ')}
 {"cfpDeadline":"YYYY-MM-DD or null","eventDate":"YYYY-MM-DD or null","industries":["topic1","topic2"],"location":"City, Country or Remote or null","compensationType":"paid|travel|honorarium|exposure or null","compensationAmount":null,"isRemote":false}`;
 }
 
-function parseEnrichmentResponse(responseText: string): EnrichmentResult {
+export function parseEnrichmentResponse(responseText: string): EnrichmentResult {
   try {
     // Extract JSON from response (handle markdown code blocks)
     const jsonMatch = responseText.match(/\{[\s\S]*\}/);

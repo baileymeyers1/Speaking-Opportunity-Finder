@@ -37,7 +37,7 @@ export interface ScraperResult {
   sourceUrl?: string | null;
 }
 
-function computeQualityScore(result: ScraperResult): number {
+export function computeQualityScore(result: ScraperResult): number {
   let score = 20;
 
   if (result.cfpDeadline) score += 20;
@@ -107,7 +107,7 @@ async function backfillQualityScores(): Promise<number> {
   return updated;
 }
 
-function normalizeUrl(url: string): string {
+export function normalizeUrl(url: string): string {
   try {
     const u = new URL(url);
     // Strip trailing slash, www prefix, and common tracking params
