@@ -50,6 +50,9 @@ model Opportunity {
   @@index([createdAt])
   @@index([isRemote])
   @@index([enrichmentStatus])
+  @@index([source, createdAt])
+  @@index([enrichmentStatus, createdAt])
+  @@index([cfpDeadline, source])
 }
 
 model SavedOpportunity {
