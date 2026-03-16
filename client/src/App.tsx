@@ -12,6 +12,8 @@ const SavedOpportunities = lazy(() => import('./pages/SavedOpportunities'));
 const Login = lazy(() => import('./pages/Login'));
 const Register = lazy(() => import('./pages/Register'));
 const AdminDashboard = lazy(() => import('./pages/AdminDashboard'));
+const ForgotPassword = lazy(() => import('./pages/ForgotPassword'));
+const ResetPassword = lazy(() => import('./pages/ResetPassword'));
 
 function AppContent() {
   // Fire-and-forget health ping to wake Render instance on app load
@@ -34,6 +36,8 @@ function AppContent() {
           <Route path="/saved" element={<SavedOpportunities />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/admin/dashboard" element={<AdminDashboard />} />
         </Routes>
       </Suspense>

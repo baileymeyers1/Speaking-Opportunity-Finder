@@ -95,3 +95,42 @@ export async function me(
     next(error);
   }
 }
+
+export async function forgotPassword(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    const { email } = req.body;
+    if (!email) {
+      throw new AppError(400, 'Email is required');
+    }
+
+    const result = await authService.requestPasswordReset(email);
+    res.json({ success: true, data: result });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function resetPasswordHandler(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    const { token, password } = req.body;
+    if (!token || !password) {
+      throw new AppError(400, 'Token and password are required');
+    }
+    if (password.length < 8) {
+      throw new AppError(400, 'Password must be at least 8 characters');
+    }
+
+    const result = await authService.resetPassword(token, password);
+    res.json({ success: true, data: result });
+  } catch (error) {
+    next(error);
+  }
+}

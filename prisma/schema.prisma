@@ -13,6 +13,8 @@ model User {
   passwordHash        String
   preferredIndustries String             @default("[]") // JSON array stored as string
   isAdmin             Boolean            @default(false)
+  resetToken          String?
+  resetTokenExpires   DateTime?
   createdAt           DateTime           @default(now())
   savedOpportunities  SavedOpportunity[]
 }
