@@ -45,18 +45,35 @@ export function FilterPanel({
   const [filterOptions, setFilterOptions] = useState<FilterOptions | null>(null);
 
   useEffect(() => {
-    const fetchFilterOptions = async () => {
+    const CACHE_KEY = 'filter_options_cache';
+    const CACHE_TTL = 60 * 60 * 1000; // 1 hour
+
+    const cached = localStorage.getItem(CACHE_KEY);
+    if (cached) {
+      try {
+        const { data, timestamp } = JSON.parse(cached);
+        if (Date.now() - timestamp < CACHE_TTL) {
+          setFilterOptions(data);
+          return;
+        }
+      } catch { /* invalid cache, refetch */ }
+    }
+
+    const fetchFilters = async () => {
       try {
         const response = await apiClient.get<FilterOptions>('/opportunities/filters');
-        if (response.data) {
+        if (response.success && response.data) {
           setFilterOptions(response.data);
+          localStorage.setItem(CACHE_KEY, JSON.stringify({
+            data: response.data,
+            timestamp: Date.now(),
+          }));
         }
       } catch (error) {
         console.error('Failed to fetch filter options:', error);
       }
     };
-
-    fetchFilterOptions();
+    fetchFilters();
   }, []);
 
   const formats = filterOptions?.formats || defaultFormats;
