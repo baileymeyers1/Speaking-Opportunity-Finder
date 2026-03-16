@@ -18,7 +18,10 @@
     "prisma:generate": "prisma generate",
     "prisma:push": "prisma db push",
     "prisma:studio": "prisma studio",
-    "prisma:seed": "tsx prisma/seed.ts"
+    "prisma:seed": "tsx prisma/seed.ts",
+    "test": "npm run test:server && npm run test:client",
+    "test:server": "cd server && npx vitest run --passWithNoTests",
+    "test:client": "cd client && npx vitest run --passWithNoTests"
   },
   "devDependencies": {
     "concurrently": "^8.2.2",
