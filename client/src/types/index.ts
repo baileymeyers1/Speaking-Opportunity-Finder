@@ -83,7 +83,6 @@ export type SavedCategory = 'interested' | 'applied' | 'accepted' | 'rejected';
 // Auth types
 export interface AuthResponse {
   user: User;
-  token: string;
 }
 
 // API response types

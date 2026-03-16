@@ -83,7 +83,6 @@ export interface SaveOpportunityInput {
 // Auth types
 export interface AuthResponse {
   user: User;
-  token: string;
 }
 
 // API response types

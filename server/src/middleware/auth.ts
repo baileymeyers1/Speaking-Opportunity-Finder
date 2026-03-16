@@ -16,18 +16,28 @@ declare global {
   }
 }
 
+function extractToken(req: Request): string | null {
+  // Check HttpOnly cookie first, then fall back to Authorization header
+  if (req.cookies?.token) {
+    return req.cookies.token;
+  }
+  const authHeader = req.headers.authorization;
+  if (authHeader?.startsWith('Bearer ')) {
+    return authHeader.slice(7);
+  }
+  return null;
+}
+
 export function authMiddleware(
   req: Request,
   _res: Response,
   next: NextFunction
 ): void {
-  const authHeader = req.headers.authorization;
+  const token = extractToken(req);
 
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+  if (!token) {
     throw new AppError(401, 'Authentication required');
   }
-
-  const token = authHeader.substring(7);
 
   try {
     const payload = jwt.verify(token, config.jwt.secret) as JwtPayload;
@@ -43,14 +53,12 @@ export function optionalAuthMiddleware(
   _res: Response,
   next: NextFunction
 ): void {
-  const authHeader = req.headers.authorization;
+  const token = extractToken(req);
 
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+  if (!token) {
     next();
     return;
   }
-
-  const token = authHeader.substring(7);
 
   try {
     const payload = jwt.verify(token, config.jwt.secret) as JwtPayload;

@@ -4,24 +4,9 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
 
 class ApiClient {
   private baseUrl: string;
-  private token: string | null = null;
 
   constructor(baseUrl: string) {
     this.baseUrl = baseUrl;
-    this.token = localStorage.getItem('token');
-  }
-
-  setToken(token: string | null) {
-    this.token = token;
-    if (token) {
-      localStorage.setItem('token', token);
-    } else {
-      localStorage.removeItem('token');
-    }
-  }
-
-  getToken() {
-    return this.token;
   }
 
   private async request<T>(
@@ -33,13 +18,9 @@ class ApiClient {
       ...options.headers,
     };
 
-    if (this.token) {
-      (headers as Record<string, string>)['Authorization'] =
-        `Bearer ${this.token}`;
-    }
-
     const response = await fetch(`${this.baseUrl}${endpoint}`, {
       ...options,
+      credentials: 'include',
       headers,
     });
 
