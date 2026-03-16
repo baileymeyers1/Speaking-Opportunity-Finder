@@ -51,6 +51,9 @@ export function MultiSelectDropdown({
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
+        aria-expanded={isOpen}
+        aria-haspopup="listbox"
+        aria-label={`Select ${label}${selected.length > 0 ? `, ${selected.length} selected` : ''}`}
         className="w-full max-w-xs flex items-center justify-between rounded-md border border-gray-300 px-3 py-2 text-sm bg-white hover:bg-gray-50 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
       >
         <span className="text-gray-700">
@@ -79,11 +82,12 @@ export function MultiSelectDropdown({
               placeholder={placeholder}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
+              aria-label={`Search ${label}`}
               className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
               autoFocus
             />
           </div>
-          <div className="max-h-48 overflow-y-auto px-2 pb-2">
+          <div className="max-h-48 overflow-y-auto px-2 pb-2" role="listbox" aria-label={label}>
             {filtered.length === 0 && (
               <p className="text-sm text-gray-400 py-2 px-1">No matches</p>
             )}
@@ -106,6 +110,7 @@ export function MultiSelectDropdown({
             <div className="border-t px-2 py-2">
               <button
                 onClick={() => onChange([])}
+                aria-label={`Clear all selected ${label}`}
                 className="text-xs text-blue-600 hover:text-blue-800"
               >
                 Clear all
@@ -126,6 +131,7 @@ export function MultiSelectDropdown({
               <span className="capitalize">{item}</span>
               <button
                 onClick={() => removeChip(item)}
+                aria-label={`Remove ${item}`}
                 className="hover:text-blue-900"
               >
                 &times;

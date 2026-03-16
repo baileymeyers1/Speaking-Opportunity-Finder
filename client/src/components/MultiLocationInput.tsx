@@ -61,11 +61,12 @@ export function MultiLocationInput({
 
   return (
     <div className="max-w-xs">
-      <label className="block text-sm font-medium text-gray-700 mb-2">
+      <label htmlFor="location-input" className="block text-sm font-medium text-gray-700 mb-2">
         {label}
       </label>
       <input
         type="text"
+        id="location-input"
         value={input}
         onChange={(e) => setInput(e.target.value)}
         onKeyDown={handleKeyDown}
@@ -83,6 +84,7 @@ export function MultiLocationInput({
               <span>{item}</span>
               <button
                 onClick={() => removeChip(item)}
+                aria-label={`Remove ${item}`}
                 className="hover:text-blue-900"
               >
                 &times;

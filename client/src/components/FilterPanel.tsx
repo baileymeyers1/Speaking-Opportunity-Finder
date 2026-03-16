@@ -263,9 +263,11 @@ export function FilterPanel({
     <Card className="p-4 mb-6">
       {/* Top row: Search input */}
       <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" aria-hidden="true" />
+        <label htmlFor="opportunity-search" className="sr-only">Search opportunities</label>
         <Input
           type="text"
+          id="opportunity-search"
           placeholder="Search opportunities..."
           value={filters.search || ''}
           onChange={handleSearchChange}
@@ -356,6 +358,8 @@ export function FilterPanel({
             variant="outline"
             size="sm"
             onClick={() => setIsExpanded(!isExpanded)}
+            aria-expanded={isExpanded}
+            aria-controls="advanced-filters"
             className="gap-1.5"
           >
             <SlidersHorizontal className="h-4 w-4" />
@@ -376,6 +380,9 @@ export function FilterPanel({
 
       {/* Expandable advanced filters section */}
       <div
+        id="advanced-filters"
+        role="region"
+        aria-label="Advanced filters"
         className={cn(
           'grid transition-all duration-300 ease-in-out',
           isExpanded ? 'grid-rows-[1fr] opacity-100 mt-4' : 'grid-rows-[0fr] opacity-0'
@@ -484,6 +491,7 @@ export function FilterPanel({
                       step={100}
                       value={filters.compensationMin || 0}
                       onChange={handleCompensationMinChange}
+                      aria-label="Minimum compensation amount"
                       className="w-32 accent-primary"
                     />
                     <span className="text-sm text-muted-foreground w-20">
@@ -500,6 +508,7 @@ export function FilterPanel({
                       step={100}
                       value={filters.compensationMax || COMPENSATION_MAX}
                       onChange={handleCompensationMaxChange}
+                      aria-label="Maximum compensation amount"
                       className="w-32 accent-primary"
                     />
                     <span className="text-sm text-muted-foreground w-20">
@@ -532,6 +541,7 @@ export function FilterPanel({
                       qualityMin: value > 0 ? value : undefined,
                     });
                   }}
+                  aria-label="Minimum quality score"
                   className="w-48 accent-primary"
                 />
                 <span className="text-sm text-muted-foreground w-16">

@@ -209,15 +209,15 @@ export function Home() {
 
       {/* Stale cache indicator */}
       {isStale && (
-        <div className="flex items-center gap-2 rounded-md border border-border bg-muted/50 px-4 py-2 text-sm text-muted-foreground">
-          <Loader2 className="h-4 w-4 animate-spin" />
+        <div className="flex items-center gap-2 rounded-md border border-border bg-muted/50 px-4 py-2 text-sm text-muted-foreground" role="status" aria-live="polite">
+          <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
           Showing cached results while loading fresh data...
         </div>
       )}
 
       {/* Error state */}
       {error && !isLoading && (
-        <div className="flex flex-col items-center justify-center rounded-lg border border-destructive/20 bg-destructive/5 py-12 text-center">
+        <div role="alert" className="flex flex-col items-center justify-center rounded-lg border border-destructive/20 bg-destructive/5 py-12 text-center">
           <div className="rounded-full bg-destructive/10 p-3 mb-4">
             <AlertCircle className="h-6 w-6 text-destructive" />
           </div>
@@ -238,7 +238,7 @@ export function Home() {
         <>
           {/* Results header */}
           {!isLoading && opportunities.length > 0 && (
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between" aria-live="polite">
               <p className="text-sm text-muted-foreground">
                 Showing {opportunities.length} result{opportunities.length !== 1 ? 's' : ''}
                 {liveResultCount > 0 && (
@@ -255,7 +255,7 @@ export function Home() {
                     onClick={handleClearLiveResults}
                     className="text-muted-foreground"
                   >
-                    <X className="h-4 w-4" />
+                    <X className="h-4 w-4" aria-hidden="true" />
                     Clear live results
                   </Button>
                 )}
@@ -276,14 +276,15 @@ export function Home() {
 
           {/* Pagination */}
           {totalPages > 1 && !isLoading && liveResultCount === 0 && (
-            <div className="flex items-center justify-center gap-2 pt-2">
+            <nav aria-label="Pagination" className="flex items-center justify-center gap-2 pt-2">
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
                 disabled={page === 1}
+                aria-label="Go to previous page"
               >
-                <ChevronLeft className="h-4 w-4" />
+                <ChevronLeft className="h-4 w-4" aria-hidden="true" />
                 Previous
               </Button>
               <span className="px-3 text-sm text-muted-foreground">
@@ -294,11 +295,12 @@ export function Home() {
                 size="sm"
                 onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                 disabled={page === totalPages}
+                aria-label="Go to next page"
               >
                 Next
-                <ChevronRight className="h-4 w-4" />
+                <ChevronRight className="h-4 w-4" aria-hidden="true" />
               </Button>
-            </div>
+            </nav>
           )}
         </>
       )}

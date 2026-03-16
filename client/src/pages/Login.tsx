@@ -56,8 +56,8 @@ export function Login() {
         <form onSubmit={handleSubmit}>
           <CardContent className="space-y-4">
             {error && (
-              <div className="flex items-center gap-2 rounded-md border border-destructive/20 bg-destructive/5 px-4 py-3 text-sm text-destructive">
-                <AlertCircle className="h-4 w-4 flex-shrink-0" />
+              <div role="alert" className="flex items-center gap-2 rounded-md border border-destructive/20 bg-destructive/5 px-4 py-3 text-sm text-destructive">
+                <AlertCircle className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
                 {error}
               </div>
             )}

@@ -180,13 +180,15 @@ export function OpportunityCard({ opportunity, showSave = true }: OpportunityCar
       <CardHeader className="pb-3">
         {/* Title row with badges */}
         <div className="flex items-start justify-between gap-2">
-          <Link
-            to={`/opportunities/${current.id}`}
-            state={{ from: `${location.pathname}${location.search}` }}
-            className="text-base font-semibold leading-snug text-foreground hover:text-primary transition-colors line-clamp-2"
-          >
-            {current.title}
-          </Link>
+          <h3 className="text-base font-semibold leading-snug">
+            <Link
+              to={`/opportunities/${current.id}`}
+              state={{ from: `${location.pathname}${location.search}` }}
+              className="text-foreground hover:text-primary transition-colors line-clamp-2"
+            >
+              {current.title}
+            </Link>
+          </h3>
           <div className="flex items-center gap-1.5 flex-shrink-0">
             {isLive && (
               <Badge className="bg-emerald-100 text-emerald-700 border-emerald-300 dark:bg-emerald-950 dark:text-emerald-400 dark:border-emerald-700">
@@ -220,7 +222,7 @@ export function OpportunityCard({ opportunity, showSave = true }: OpportunityCar
         <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
           {/* Event date */}
           <div className="flex items-center gap-1.5 text-muted-foreground">
-            <Calendar className="h-3.5 w-3.5 flex-shrink-0" />
+            <Calendar className="h-3.5 w-3.5 flex-shrink-0" aria-hidden="true" />
             <span className="truncate">
               {current.eventDate ? formatDate(current.eventDate) : 'Date TBD'}
             </span>
@@ -228,7 +230,7 @@ export function OpportunityCard({ opportunity, showSave = true }: OpportunityCar
 
           {/* Deadline */}
           <div className="flex items-center gap-1.5">
-            <Clock className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
+            <Clock className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" aria-hidden="true" />
             <Badge
               variant={deadlineBadge.variant}
               className={cn('text-[11px] px-1.5 py-0', deadlineBadge.className)}
@@ -368,9 +370,10 @@ export function OpportunityCard({ opportunity, showSave = true }: OpportunityCar
               href={current.applyUrl}
               target="_blank"
               rel="noopener noreferrer"
+              aria-label={`Apply to ${current.title}`}
             >
               Apply
-              <ExternalLink className="h-3.5 w-3.5" />
+              <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
             </a>
           </Button>
         </div>

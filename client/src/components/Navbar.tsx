@@ -38,18 +38,18 @@ export function Navbar() {
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="container flex h-14 items-center">
         {/* Logo */}
-        <Link to="/" className="mr-6 flex items-center space-x-2">
-          <Mic2 className="h-5 w-5" />
+        <Link to="/" className="mr-6 flex items-center space-x-2" aria-label="Speaking Finder home">
+          <Mic2 className="h-5 w-5" aria-hidden="true" />
           <span className="font-bold">Speaking Finder</span>
         </Link>
 
         {/* Desktop nav links */}
-        <nav className="hidden md:flex items-center space-x-6">
-          <Link to="/" className={navLinkClass('/')}>
+        <nav aria-label="Main navigation" className="hidden md:flex items-center space-x-6">
+          <Link to="/" className={navLinkClass('/')} aria-current={isActive('/') ? 'page' : undefined}>
             Browse
           </Link>
           {isAuthenticated && (
-            <Link to="/saved" className={navLinkClass('/saved')}>
+            <Link to="/saved" className={navLinkClass('/saved')} aria-current={isActive('/saved') ? 'page' : undefined}>
               Saved
             </Link>
           )}
@@ -57,6 +57,7 @@ export function Navbar() {
             <Link
               to="/admin/dashboard"
               className={navLinkClass('/admin/dashboard')}
+              aria-current={isActive('/admin/dashboard') ? 'page' : undefined}
             >
               Analytics
             </Link>
@@ -114,10 +115,11 @@ export function Navbar() {
                   <span>Speaking Finder</span>
                 </SheetTitle>
               </SheetHeader>
-              <nav className="mt-6 flex flex-col space-y-3">
+              <nav aria-label="Mobile navigation" className="mt-6 flex flex-col space-y-3">
                 <Link
                   to="/"
                   onClick={() => setSheetOpen(false)}
+                  aria-current={isActive('/') ? 'page' : undefined}
                   className={cn(
                     'px-2 py-1.5 text-sm font-medium rounded-md transition-colors',
                     isActive('/')
@@ -131,6 +133,7 @@ export function Navbar() {
                   <Link
                     to="/saved"
                     onClick={() => setSheetOpen(false)}
+                    aria-current={isActive('/saved') ? 'page' : undefined}
                     className={cn(
                       'px-2 py-1.5 text-sm font-medium rounded-md transition-colors',
                       isActive('/saved')
@@ -145,6 +148,7 @@ export function Navbar() {
                   <Link
                     to="/admin/dashboard"
                     onClick={() => setSheetOpen(false)}
+                    aria-current={isActive('/admin/dashboard') ? 'page' : undefined}
                     className={cn(
                       'px-2 py-1.5 text-sm font-medium rounded-md transition-colors',
                       isActive('/admin/dashboard')

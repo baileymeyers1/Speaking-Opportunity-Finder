@@ -172,9 +172,9 @@ export function OpportunityDetail() {
 
   if (error || !opportunity) {
     return (
-      <div className="flex flex-col items-center justify-center py-16 text-center">
+      <div role="alert" className="flex flex-col items-center justify-center py-16 text-center">
         <div className="rounded-full bg-destructive/10 p-4 mb-4">
-          <AlertCircle className="h-8 w-8 text-destructive" />
+          <AlertCircle className="h-8 w-8 text-destructive" aria-hidden="true" />
         </div>
         <h2 className="text-xl font-semibold text-foreground mb-1">
           {error || 'Opportunity not found'}
@@ -365,8 +365,9 @@ export function OpportunityDetail() {
                 href={opportunity.applyUrl}
                 target="_blank"
                 rel="noopener noreferrer"
+                aria-label={`Apply now to ${opportunity.title}`}
               >
-                <ExternalLink className="h-4 w-4" />
+                <ExternalLink className="h-4 w-4" aria-hidden="true" />
                 Apply Now
               </a>
             </Button>
