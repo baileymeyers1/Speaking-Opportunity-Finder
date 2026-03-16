@@ -146,3 +146,5 @@ export function SavedOpportunities() {
     </div>
   );
 }
+
+export default SavedOpportunities;

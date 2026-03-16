@@ -290,3 +290,5 @@ export function OpportunityDetail() {
     </div>
   );
 }
+
+export default OpportunityDetail;
