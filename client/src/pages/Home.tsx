@@ -4,6 +4,7 @@ import { OpportunityList } from '../components/OpportunityList';
 import { apiClient } from '../api/client';
 import type { Opportunity, OpportunityFilters, PaginatedResponse } from '../types';
 import { upsertLiveResults, getAllLiveResults } from '../utils/liveResultsCache';
+import { useDebounce } from '../hooks/useDebounce';
 
 const CACHE_KEY = 'cachedOpportunities';
 const FILTERS_KEY = 'opportunityFiltersState';
@@ -31,6 +32,7 @@ export function Home() {
   const [isStale, setIsStale] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
   const [filters, setFilters] = useState<OpportunityFilters>({});
+  const debouncedFilters = useDebounce(filters, 400);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
@@ -87,17 +89,17 @@ export function Home() {
       const params = new URLSearchParams();
       params.set('page', String(page));
 
-      if (filters.search) params.set('search', filters.search);
-      if (filters.isRemote) params.set('isRemote', 'true');
-      if (filters.compensationMin) params.set('compensationMin', String(filters.compensationMin));
-      if (filters.compensationMax) params.set('compensationMax', String(filters.compensationMax));
-      if (filters.sortBy) params.set('sortBy', filters.sortBy);
-      if (filters.qualityMin !== undefined) params.set('qualityMin', String(filters.qualityMin));
+      if (debouncedFilters.search) params.set('search', debouncedFilters.search);
+      if (debouncedFilters.isRemote) params.set('isRemote', 'true');
+      if (debouncedFilters.compensationMin) params.set('compensationMin', String(debouncedFilters.compensationMin));
+      if (debouncedFilters.compensationMax) params.set('compensationMax', String(debouncedFilters.compensationMax));
+      if (debouncedFilters.sortBy) params.set('sortBy', debouncedFilters.sortBy);
+      if (debouncedFilters.qualityMin !== undefined) params.set('qualityMin', String(debouncedFilters.qualityMin));
 
-      filters.locations?.forEach((loc) => params.append('location', loc));
-      filters.format?.forEach((f) => params.append('format', f));
-      filters.industries?.forEach((i) => params.append('industries', i));
-      filters.compensationType?.forEach((c) => params.append('compensationType', c));
+      debouncedFilters.locations?.forEach((loc) => params.append('location', loc));
+      debouncedFilters.format?.forEach((f) => params.append('format', f));
+      debouncedFilters.industries?.forEach((i) => params.append('industries', i));
+      debouncedFilters.compensationType?.forEach((c) => params.append('compensationType', c));
 
       const response = await apiClient.get<PaginatedResponse<Opportunity>>(
         `/opportunities?${params.toString()}`
@@ -110,7 +112,7 @@ export function Home() {
         setIsStale(false);
 
         // Cache the default (unfiltered, page 1) response
-        if (page === 1 && Object.keys(filters).length === 0) {
+        if (page === 1 && Object.keys(debouncedFilters).length === 0) {
           localStorage.setItem(CACHE_KEY, JSON.stringify({
             items: response.data.items,
             totalPages: response.data.totalPages,
@@ -124,7 +126,7 @@ export function Home() {
       setIsLoading(false);
       cacheLoaded.current = false;
     }
-  }, [filters, page]);
+  }, [debouncedFilters, page]);
 
   useEffect(() => {
     fetchOpportunities();
