@@ -1,7 +1,29 @@
 import { useState, useEffect } from 'react';
+import {
+  Search,
+  SlidersHorizontal,
+  X,
+  Zap,
+  ChevronDown,
+  ChevronUp,
+  Loader2,
+} from 'lucide-react';
 import { apiClient } from '../api/client';
 import { MultiSelectDropdown } from './MultiSelectDropdown';
 import { MultiLocationInput } from './MultiLocationInput';
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import {
+  Select,
+  SelectTrigger,
+  SelectContent,
+  SelectItem,
+  SelectValue,
+} from '@/components/ui/select';
+import { Separator } from '@/components/ui/separator';
+import { Card } from '@/components/ui/card';
+import { cn } from '@/lib/utils';
 import type {
   OpportunityFilters,
   OpportunityFormat,
@@ -39,7 +61,7 @@ export function FilterPanel({
   filters,
   onFiltersChange,
   onLiveSearch,
-  isSearching = false
+  isSearching = false,
 }: FilterPanelProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [filterOptions, setFilterOptions] = useState<FilterOptions | null>(null);
@@ -156,245 +178,390 @@ export function FilterPanel({
 
   const formatQualityValue = (value: number) => `${value}+`;
 
+  // Build active filter pills for display
+  const activeFilterPills: { label: string; onRemove: () => void }[] = [];
+
+  if (filters.format?.length) {
+    filters.format.forEach((f) => {
+      activeFilterPills.push({
+        label: f.charAt(0).toUpperCase() + f.slice(1),
+        onRemove: () => handleFormatChange(f),
+      });
+    });
+  }
+
+  if (filters.industries?.length) {
+    filters.industries.forEach((ind) => {
+      activeFilterPills.push({
+        label: ind.charAt(0).toUpperCase() + ind.slice(1),
+        onRemove: () => {
+          const next = (filters.industries || []).filter((i) => i !== ind);
+          onFiltersChange({
+            ...filters,
+            industries: next.length > 0 ? next : undefined,
+          });
+        },
+      });
+    });
+  }
+
+  if (filters.isRemote) {
+    activeFilterPills.push({
+      label: 'Remote',
+      onRemove: () => onFiltersChange({ ...filters, isRemote: undefined }),
+    });
+  }
+
+  if (selectedLocations.length) {
+    selectedLocations.forEach((loc) => {
+      activeFilterPills.push({
+        label: loc,
+        onRemove: () => {
+          const next = selectedLocations.filter((l) => l !== loc);
+          onFiltersChange({
+            ...filters,
+            locations: next.length > 0 ? next : undefined,
+          });
+        },
+      });
+    });
+  }
+
+  if (filters.compensationType?.length) {
+    filters.compensationType.forEach((ct) => {
+      activeFilterPills.push({
+        label: ct.charAt(0).toUpperCase() + ct.slice(1),
+        onRemove: () => handleCompensationTypeChange(ct),
+      });
+    });
+  }
+
+  if (filters.compensationMin) {
+    activeFilterPills.push({
+      label: `Min ${formatCompensationValue(filters.compensationMin, false)}`,
+      onRemove: () => onFiltersChange({ ...filters, compensationMin: undefined }),
+    });
+  }
+
+  if (filters.compensationMax && filters.compensationMax < COMPENSATION_MAX) {
+    activeFilterPills.push({
+      label: `Max ${formatCompensationValue(filters.compensationMax, true)}`,
+      onRemove: () => onFiltersChange({ ...filters, compensationMax: undefined }),
+    });
+  }
+
+  if (filters.qualityMin) {
+    activeFilterPills.push({
+      label: `Quality ${filters.qualityMin}+`,
+      onRemove: () => onFiltersChange({ ...filters, qualityMin: undefined }),
+    });
+  }
+
+  const liveSearchDisabled = isSearching || (!filters.search && !filters.industries?.length);
+
   return (
-    <div className="bg-white rounded-lg shadow p-4 mb-6">
-      <div className="flex items-center gap-4 mb-4">
-        <input
+    <Card className="p-4 mb-6">
+      {/* Top row: Search input */}
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <Input
           type="text"
           placeholder="Search opportunities..."
           value={filters.search || ''}
           onChange={handleSearchChange}
-          className="flex-1 rounded-md border border-gray-300 px-4 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          className="pl-10"
         />
-        <button
-          onClick={() => setIsExpanded(!isExpanded)}
-          className="text-gray-600 hover:text-gray-900 px-4 py-2 border border-gray-300 rounded-md flex items-center gap-2"
-        >
-          {isExpanded ? 'Hide Filters' : 'Filters'}
-          {activeFilterCount > 0 && (
-            <span className="bg-blue-600 text-white text-xs px-2 py-0.5 rounded-full">
-              {activeFilterCount}
-            </span>
-          )}
-        </button>
+      </div>
+
+      {/* Active filter pills */}
+      {activeFilterPills.length > 0 && (
+        <div className="flex flex-wrap gap-2 mt-3">
+          {activeFilterPills.map((pill, idx) => (
+            <Badge
+              key={`${pill.label}-${idx}`}
+              variant="secondary"
+              className="gap-1 pr-1"
+            >
+              {pill.label}
+              <button
+                onClick={pill.onRemove}
+                className="ml-0.5 rounded-full p-0.5 hover:bg-muted-foreground/20 transition-colors"
+                aria-label={`Remove ${pill.label} filter`}
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </Badge>
+          ))}
+        </div>
+      )}
+
+      {/* Second row: Sort + Live Search + Filter count + Filters toggle + Clear */}
+      <div className="flex flex-wrap items-center gap-3 mt-3">
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-medium text-muted-foreground">Sort</span>
+          <Select
+            value={filters.sortBy || 'deadline'}
+            onValueChange={(value) =>
+              onFiltersChange({
+                ...filters,
+                sortBy: value as 'quality' | 'deadline' | 'eventDate',
+              })
+            }
+          >
+            <SelectTrigger className="w-[180px] h-9">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="deadline">Deadline (soonest)</SelectItem>
+              <SelectItem value="eventDate">Event date (soonest)</SelectItem>
+              <SelectItem value="quality">Quality (highest)</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
         {onLiveSearch && (
-          <button
+          <Button
             onClick={onLiveSearch}
-            disabled={isSearching}
-            className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+            disabled={liveSearchDisabled}
+            size="sm"
+            className="gap-1.5"
           >
             {isSearching ? (
               <>
-                <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                </svg>
+                <Loader2 className="h-4 w-4 animate-spin" />
                 Searching...
               </>
             ) : (
               <>
-                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                </svg>
+                <Zap className="h-4 w-4" />
                 Live Search
               </>
             )}
-          </button>
+          </Button>
         )}
+
+        <div className="ml-auto flex items-center gap-2">
+          {activeFilterCount > 0 && (
+            <Button
+              variant="link"
+              size="sm"
+              onClick={handleClearFilters}
+              className="text-muted-foreground hover:text-foreground px-1 h-auto"
+            >
+              Clear all
+            </Button>
+          )}
+
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setIsExpanded(!isExpanded)}
+            className="gap-1.5"
+          >
+            <SlidersHorizontal className="h-4 w-4" />
+            Filters
+            {activeFilterCount > 0 && (
+              <Badge variant="default" className="ml-1 h-5 w-5 p-0 justify-center text-[10px]">
+                {activeFilterCount}
+              </Badge>
+            )}
+            {isExpanded ? (
+              <ChevronUp className="h-3.5 w-3.5" />
+            ) : (
+              <ChevronDown className="h-3.5 w-3.5" />
+            )}
+          </Button>
+        </div>
       </div>
 
-      <div className="flex items-center gap-4 mb-4">
-        <label className="text-sm font-medium text-gray-700">Sort by</label>
-        <select
-          value={filters.sortBy || 'deadline'}
-          onChange={(e) =>
-            onFiltersChange({
-              ...filters,
-              sortBy: e.target.value as 'quality' | 'deadline' | 'eventDate',
-            })
-          }
-          className="text-sm px-3 py-2 rounded-md border border-gray-300 bg-white focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-        >
-          <option value="deadline">Deadline (soonest)</option>
-          <option value="eventDate">Event date (soonest)</option>
-          <option value="quality">Quality (highest)</option>
-        </select>
-      </div>
+      {/* Expandable advanced filters section */}
+      <div
+        className={cn(
+          'grid transition-all duration-300 ease-in-out',
+          isExpanded ? 'grid-rows-[1fr] opacity-100 mt-4' : 'grid-rows-[0fr] opacity-0'
+        )}
+      >
+        <div className="overflow-hidden">
+          <Separator className="mb-4" />
 
-      {isExpanded && (
-        <div className="space-y-6 pt-4 border-t">
-          {/* Location Filter - Free Response */}
-          <div className="flex flex-wrap gap-6 items-start">
-            <div>
-              <h3 className="text-sm font-medium text-gray-700 mb-2">Location</h3>
-              <MultiLocationInput
-                label="Locations"
-                selected={selectedLocations}
-                onChange={(sel) =>
-                  onFiltersChange({ ...filters, locations: sel.length > 0 ? sel : undefined })
-                }
-                placeholder="Add locations (e.g., Los Angeles, CA)"
-              />
-              <label className="inline-flex items-center mt-3 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={filters.isRemote || false}
-                  onChange={handleRemoteChange}
-                  className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 h-4 w-4"
+          <div className="space-y-6">
+            {/* Location + Industry row */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Location Filter */}
+              <div>
+                <h3 className="text-sm font-medium text-foreground mb-2">Location</h3>
+                <MultiLocationInput
+                  label="Locations"
+                  selected={selectedLocations}
+                  onChange={(sel) =>
+                    onFiltersChange({ ...filters, locations: sel.length > 0 ? sel : undefined })
+                  }
+                  placeholder="Add locations (e.g., Los Angeles, CA)"
                 />
-                <span className="ml-2 text-sm text-gray-700 font-medium">Remote only</span>
-              </label>
-            </div>
-
-            {/* Industry Filter - Dropdown */}
-            <div>
-              <h3 className="text-sm font-medium text-gray-700 mb-2">Industry</h3>
-              <MultiSelectDropdown
-                label="Industries"
-                options={industries}
-                selected={filters.industries || []}
-                onChange={(sel) =>
-                  onFiltersChange({ ...filters, industries: sel.length > 0 ? sel : undefined })
-                }
-                placeholder="Search industries..."
-              />
-            </div>
-          </div>
-
-          {/* Format Filter */}
-          <div>
-            <h3 className="text-sm font-medium text-gray-700 mb-2">Format</h3>
-            <div className="flex flex-wrap gap-x-4 gap-y-2">
-              {formats.map((format) => (
-                <label key={format} className="inline-flex items-center cursor-pointer">
+                <label className="inline-flex items-center mt-3 cursor-pointer">
                   <input
                     type="checkbox"
-                    checked={filters.format?.includes(format) || false}
-                    onChange={() => handleFormatChange(format)}
-                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 h-4 w-4"
+                    checked={filters.isRemote || false}
+                    onChange={handleRemoteChange}
+                    className="rounded border-input text-primary focus:ring-ring h-4 w-4"
                   />
-                  <span className="ml-2 text-sm text-gray-600 capitalize">
-                    {format}
-                  </span>
+                  <span className="ml-2 text-sm text-foreground font-medium">Remote only</span>
                 </label>
-              ))}
-            </div>
-          </div>
+              </div>
 
-          {/* Compensation Type Filter */}
-          {hasCompensation && (
+              {/* Industry Filter */}
+              <div>
+                <h3 className="text-sm font-medium text-foreground mb-2">Industry</h3>
+                <MultiSelectDropdown
+                  label="Industries"
+                  options={industries}
+                  selected={filters.industries || []}
+                  onChange={(sel) =>
+                    onFiltersChange({ ...filters, industries: sel.length > 0 ? sel : undefined })
+                  }
+                  placeholder="Search industries..."
+                />
+              </div>
+            </div>
+
+            {/* Format Filter */}
             <div>
-              <h3 className="text-sm font-medium text-gray-700 mb-2">
-                Compensation Type
-              </h3>
+              <h3 className="text-sm font-medium text-foreground mb-2">Format</h3>
               <div className="flex flex-wrap gap-x-4 gap-y-2">
-                {compensationTypes.map((type) => (
-                  <label key={type} className="inline-flex items-center cursor-pointer">
+                {formats.map((format) => (
+                  <label key={format} className="inline-flex items-center cursor-pointer">
                     <input
                       type="checkbox"
-                      checked={filters.compensationType?.includes(type) || false}
-                      onChange={() => handleCompensationTypeChange(type)}
-                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 h-4 w-4"
+                      checked={filters.format?.includes(format) || false}
+                      onChange={() => handleFormatChange(format)}
+                      className="rounded border-input text-primary focus:ring-ring h-4 w-4"
                     />
-                    <span className="ml-2 text-sm text-gray-600 capitalize">
-                      {type}
+                    <span className="ml-2 text-sm text-muted-foreground capitalize">
+                      {format}
                     </span>
                   </label>
                 ))}
               </div>
             </div>
-          )}
 
-          {/* Compensation Amount Range */}
-          {hasCompensation && (
-            <div>
-              <h3 className="text-sm font-medium text-gray-700 mb-2">
-                Compensation Amount (USD)
-              </h3>
-              <div className="flex items-center gap-4">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm text-gray-500">Min:</span>
-                  <input
-                    type="range"
-                    min={0}
-                    max={COMPENSATION_MAX}
-                    step={100}
-                    value={filters.compensationMin || 0}
-                    onChange={handleCompensationMinChange}
-                    className="w-32"
-                  />
-                  <span className="text-sm text-gray-600 w-20">
-                    {formatCompensationValue(filters.compensationMin || 0, false)}
-                  </span>
-                </div>
-                <span className="text-gray-400">to</span>
-                <div className="flex items-center gap-2">
-                  <span className="text-sm text-gray-500">Max:</span>
-                  <input
-                    type="range"
-                    min={0}
-                    max={COMPENSATION_MAX}
-                    step={100}
-                    value={filters.compensationMax || COMPENSATION_MAX}
-                    onChange={handleCompensationMaxChange}
-                    className="w-32"
-                  />
-                  <span className="text-sm text-gray-600 w-20">
-                    {formatCompensationValue(filters.compensationMax || COMPENSATION_MAX, true)}
-                  </span>
+            {/* Compensation Type Filter */}
+            {hasCompensation && (
+              <div>
+                <h3 className="text-sm font-medium text-foreground mb-2">
+                  Compensation Type
+                </h3>
+                <div className="flex flex-wrap gap-x-4 gap-y-2">
+                  {compensationTypes.map((type) => (
+                    <label key={type} className="inline-flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={filters.compensationType?.includes(type) || false}
+                        onChange={() => handleCompensationTypeChange(type)}
+                        className="rounded border-input text-primary focus:ring-ring h-4 w-4"
+                      />
+                      <span className="ml-2 text-sm text-muted-foreground capitalize">
+                        {type}
+                      </span>
+                    </label>
+                  ))}
                 </div>
               </div>
-              <p className="text-xs text-gray-500 mt-1">
-                Slide max to $2,000+ to include all higher amounts
+            )}
+
+            {/* Compensation Amount Range */}
+            {hasCompensation && (
+              <div>
+                <h3 className="text-sm font-medium text-foreground mb-2">
+                  Compensation Amount (USD)
+                </h3>
+                <div className="flex flex-wrap items-center gap-4">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-muted-foreground">Min:</span>
+                    <input
+                      type="range"
+                      min={0}
+                      max={COMPENSATION_MAX}
+                      step={100}
+                      value={filters.compensationMin || 0}
+                      onChange={handleCompensationMinChange}
+                      className="w-32 accent-primary"
+                    />
+                    <span className="text-sm text-muted-foreground w-20">
+                      {formatCompensationValue(filters.compensationMin || 0, false)}
+                    </span>
+                  </div>
+                  <span className="text-muted-foreground">to</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-muted-foreground">Max:</span>
+                    <input
+                      type="range"
+                      min={0}
+                      max={COMPENSATION_MAX}
+                      step={100}
+                      value={filters.compensationMax || COMPENSATION_MAX}
+                      onChange={handleCompensationMaxChange}
+                      className="w-32 accent-primary"
+                    />
+                    <span className="text-sm text-muted-foreground w-20">
+                      {formatCompensationValue(filters.compensationMax || COMPENSATION_MAX, true)}
+                    </span>
+                  </div>
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Slide max to $2,000+ to include all higher amounts
+                </p>
+              </div>
+            )}
+
+            {/* Quality Score Filter */}
+            <div>
+              <h3 className="text-sm font-medium text-foreground mb-2">
+                Minimum Quality Score
+              </h3>
+              <div className="flex items-center gap-4">
+                <input
+                  type="range"
+                  min={0}
+                  max={100}
+                  step={5}
+                  value={filters.qualityMin ?? 0}
+                  onChange={(e) => {
+                    const value = parseInt(e.target.value, 10);
+                    onFiltersChange({
+                      ...filters,
+                      qualityMin: value > 0 ? value : undefined,
+                    });
+                  }}
+                  className="w-48 accent-primary"
+                />
+                <span className="text-sm text-muted-foreground w-16">
+                  {formatQualityValue(filters.qualityMin ?? 0)}
+                </span>
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">
+                Filters out lower-confidence results (0 shows all)
               </p>
             </div>
-          )}
 
-          {/* Quality Score Filter */}
-          <div>
-            <h3 className="text-sm font-medium text-gray-700 mb-2">
-              Minimum Quality Score
-            </h3>
+            {/* Clear all footer */}
             <div className="flex items-center gap-4">
-              <input
-                type="range"
-                min={0}
-                max={100}
-                step={5}
-                value={filters.qualityMin ?? 0}
-                onChange={(e) => {
-                  const value = parseInt(e.target.value, 10);
-                  onFiltersChange({
-                    ...filters,
-                    qualityMin: value > 0 ? value : undefined,
-                  });
-                }}
-                className="w-48"
-              />
-              <span className="text-sm text-gray-600 w-16">
-                {formatQualityValue(filters.qualityMin ?? 0)}
-              </span>
+              <Button
+                variant="link"
+                size="sm"
+                onClick={handleClearFilters}
+                className="px-0 h-auto text-primary"
+              >
+                Clear all filters
+              </Button>
+              {activeFilterCount > 0 && (
+                <span className="text-sm text-muted-foreground">
+                  {activeFilterCount} filter{activeFilterCount > 1 ? 's' : ''} active
+                </span>
+              )}
             </div>
-            <p className="text-xs text-gray-500 mt-1">
-              Filters out lower-confidence results (0 shows all)
-            </p>
-          </div>
-
-          <div className="flex items-center gap-4">
-            <button
-              onClick={handleClearFilters}
-              className="text-sm text-blue-600 hover:text-blue-800"
-            >
-              Clear all filters
-            </button>
-            {activeFilterCount > 0 && (
-              <span className="text-sm text-gray-500">
-                {activeFilterCount} filter{activeFilterCount > 1 ? 's' : ''} active
-              </span>
-            )}
           </div>
         </div>
-      )}
-    </div>
+      </div>
+    </Card>
   );
 }
