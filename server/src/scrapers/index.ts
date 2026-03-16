@@ -14,6 +14,7 @@ import { scrapeLinkedInEvents } from './linkedinEvents.js';
 import { scrapePacEvents } from './pacEvents.js';
 import { scrapePrNewsOnline } from './prNewsOnline.js';
 import { config } from '../config/index.js';
+import { generateDeduplicationKey } from '../services/deduplicationService.js';
 
 const prisma = new PrismaClient();
 
@@ -278,8 +279,36 @@ async function persistResults(results: ScraperResult[]): Promise<{ added: number
         });
         updated++;
       } else {
-        await prisma.opportunity.create({ data });
-        added++;
+        // Cross-source dedup: check if an event with the same normalized title+org already exists
+        const dedupKey = generateDeduplicationKey(result.title, result.organization);
+        const orgPrefix = (result.organization || '').substring(0, 10);
+        let dedupMatch: { id: number; title: string; organization: string; qualityScore: number | null } | undefined;
+
+        if (orgPrefix.length > 0) {
+          const candidates = await prisma.opportunity.findMany({
+            where: { organization: { contains: orgPrefix } },
+            select: { id: true, title: true, organization: true, qualityScore: true },
+            take: 50,
+          });
+
+          dedupMatch = candidates.find(c =>
+            generateDeduplicationKey(c.title, c.organization) === dedupKey
+          );
+        }
+
+        if (dedupMatch) {
+          // Update existing record if the new one has equal or better quality
+          if ((data.qualityScore || 0) >= (dedupMatch.qualityScore || 0)) {
+            await prisma.opportunity.update({
+              where: { id: dedupMatch.id },
+              data,
+            });
+          }
+          updated++;
+        } else {
+          await prisma.opportunity.create({ data });
+          added++;
+        }
       }
     } catch (error) {
       console.error(`Error saving opportunity: ${result.title}`, error);
