@@ -228,11 +228,12 @@ export async function performLiveSearch(
     return [];
   }
 
-  if (apiKey) {
-    return await performLinkupSearch(searchQuery, apiKey, industries);
+  if (!apiKey) {
+    console.log('[LiveSearch] No WEB_SEARCH_API_KEY configured. Live search disabled.');
+    return [];
   }
 
-  return generateSimulatedResults(query, industries);
+  return await performLinkupSearch(searchQuery, apiKey, industries);
 }
 
 interface LinkupSearchResult {
@@ -343,81 +344,6 @@ function extractOrganization(title: string): string {
     }
   }
   return 'Unknown Organization';
-}
-
-function generateSimulatedResults(
-  query: string,
-  industries: string[]
-): EnrichedLiveResult[] {
-  const results: EnrichedLiveResult[] = [];
-  const searchTerm = query || industries[0] || 'technology';
-  const now = new Date().toISOString();
-  const inferredIndustries = industries.length > 0 ? industries : ['technology'];
-
-  const templates = [
-    {
-      title: `Global ${capitalize(searchTerm)} Summit ${new Date().getFullYear()} - Call for Speakers`,
-      organization: `${capitalize(searchTerm)} Leaders Network`,
-      description: `Submit your proposal to speak at the premier ${searchTerm} event. We are looking for innovative talks, workshops, and panel discussions.`,
-    },
-    {
-      title: `${capitalize(searchTerm)} Innovation Conference - CFP Open`,
-      organization: 'Innovation Events Inc.',
-      description: `Share your expertise at our annual ${searchTerm} conference. Speaking slots available for keynotes, breakout sessions, and lightning talks.`,
-    },
-    {
-      title: `International ${capitalize(searchTerm)} Forum - Speakers Wanted`,
-      organization: `World ${capitalize(searchTerm)} Association`,
-      description: `Join industry leaders at our international forum. CFP deadline approaching - submit your abstract today.`,
-    },
-    {
-      title: `${capitalize(searchTerm)} Trends Podcast - Guest Speakers`,
-      organization: `${capitalize(searchTerm)} Weekly`,
-      description: `Looking for ${searchTerm} professionals to share insights on our popular podcast. Remote recording available.`,
-    },
-    {
-      title: `Future of ${capitalize(searchTerm)} Conference ${new Date().getFullYear()}`,
-      organization: 'TechFuture Events',
-      description: `Be part of the conversation about the future of ${searchTerm}. Now accepting speaker applications for our flagship event.`,
-    },
-  ];
-
-  for (let i = 0; i < templates.length; i++) {
-    const t = templates[i];
-    const url = `https://example.com/${searchTerm.toLowerCase().replace(/\s+/g, '-')}-conf-${i + 1}`;
-    results.push({
-      id: `live-${randomUUID()}`,
-      title: t.title,
-      organization: t.organization,
-      description: t.description,
-      location: null,
-      isRemote: i === 3, // podcast is remote
-      eventDate: null,
-      cfpDeadline: null,
-      format: i === 3 ? 'podcast' : 'conference',
-      industries: inferredIndustries,
-      compensationType: null,
-      compensationAmount: null,
-      compensationDetails: null,
-      applyUrl: url,
-      qualityScore: 25,
-      source: 'Web Search',
-      sourceUrl: url,
-      createdAt: now,
-      updatedAt: now,
-      isLiveResult: true,
-      liveSearchUrl: url,
-    });
-  }
-
-  return results;
-}
-
-function capitalize(str: string): string {
-  return str
-    .split(' ')
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(' ');
 }
 
 /**
