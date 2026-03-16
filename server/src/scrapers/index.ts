@@ -3,7 +3,6 @@ import { scrapeConfsTech } from './confstech.js';
 import { scrapeJavaConferences } from './javaconferences.js';
 import { scrapeCallingAllPapers } from './callingallpapers.js';
 import { scrapeLinkupCFPs } from './linkupcfp.js';
-import { scrapeSessionize } from './sessionize.js';
 import { scrapePaperCall } from './papercall.js';
 import { scrapeWikiCFP } from './wikicfp.js';
 import { scrapeUsMegaEvents } from './usMegaEvents.js';
@@ -48,7 +47,6 @@ function computeQualityScore(result: ScraperResult): number {
   if (result.description && result.description.length > 120) score += 10;
 
   const sourceBoost = [
-    'sessionize.com',
     'papercall.io',
     'confs.tech',
     'javaconferences.org',
@@ -186,8 +184,7 @@ export async function runWeeklyScrapers(): Promise<ScraperResult[]> {
   console.log('Running weekly deep scrapers...');
 
   // Run API-based scrapers in parallel
-  const [sessionizeResults, paperCallResults, wikiCFPResults] = await Promise.all([
-    scrapeSessionize(),
+  const [paperCallResults, wikiCFPResults] = await Promise.all([
     scrapePaperCall(),
     scrapeWikiCFP(),
   ]);
@@ -215,7 +212,6 @@ export async function runWeeklyScrapers(): Promise<ScraperResult[]> {
   ]);
 
   const results = deduplicateResults([
-    ...sessionizeResults,
     ...paperCallResults,
     ...wikiCFPResults,
     ...linkupResults,
@@ -294,20 +290,28 @@ async function persistResults(results: ScraperResult[]): Promise<{ added: number
 }
 
 async function cleanupExpired(): Promise<number> {
-  const expiredDate = new Date();
+  const now = new Date();
+  const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
 
-  const deleted = await prisma.opportunity.deleteMany({
+  // Delete expired non-live results (existing behavior)
+  const expiredResult = await prisma.opportunity.deleteMany({
     where: {
-      cfpDeadline: {
-        lt: expiredDate,
-      },
-      source: {
-        not: 'Live Search',
-      },
+      cfpDeadline: { lt: now },
+      NOT: { source: { startsWith: 'Live Search' } },
     },
   });
 
-  return deleted.count;
+  // Delete stale live search results (7-day TTL)
+  const staleLiveResult = await prisma.opportunity.deleteMany({
+    where: {
+      source: { startsWith: 'Live Search' },
+      createdAt: { lt: sevenDaysAgo },
+    },
+  });
+
+  const total = expiredResult.count + staleLiveResult.count;
+  console.log(`[Cleanup] Removed ${expiredResult.count} expired + ${staleLiveResult.count} stale live results`);
+  return total;
 }
 
 async function cleanupPlaceholderData(): Promise<number> {
