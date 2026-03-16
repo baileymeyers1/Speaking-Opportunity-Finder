@@ -100,6 +100,7 @@ export interface PaginatedResponse<T> {
   page: number;
   pageSize: number;
   totalPages: number;
+  liveResultCount?: number;
 }
 
 // Pagination params

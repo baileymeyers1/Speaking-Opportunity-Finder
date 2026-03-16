@@ -1,9 +1,8 @@
-import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { FilterPanel } from '../components/FilterPanel';
 import { OpportunityList } from '../components/OpportunityList';
 import { apiClient } from '../api/client';
 import type { Opportunity, OpportunityFilters, PaginatedResponse } from '../types';
-import { upsertLiveResults, getAllLiveResults } from '../utils/liveResultsCache';
 import { useDebounce } from '../hooks/useDebounce';
 
 const CACHE_KEY = 'cachedOpportunities';
@@ -27,7 +26,6 @@ function loadCache(): { items: Opportunity[]; totalPages: number; timestamp: num
 
 export function Home() {
   const [opportunities, setOpportunities] = useState<Opportunity[]>([]);
-  const [liveResults, setLiveResults] = useState<Opportunity[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isStale, setIsStale] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
@@ -36,6 +34,7 @@ export function Home() {
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [liveResultCount, setLiveResultCount] = useState(0);
   const cacheLoaded = useRef(false);
   const filtersHydrated = useRef(false);
 
@@ -52,7 +51,7 @@ export function Home() {
     }
   }, []);
 
-  // Restore filters + page + live results from session (for back navigation / tab switch)
+  // Restore filters + page from session (for back navigation / tab switch)
   useEffect(() => {
     try {
       const raw = sessionStorage.getItem(FILTERS_KEY);
@@ -60,18 +59,12 @@ export function Home() {
         filtersHydrated.current = true;
         return;
       }
-      const parsed = JSON.parse(raw) as { filters: OpportunityFilters; page: number; hasLiveResults?: boolean };
+      const parsed = JSON.parse(raw) as { filters: OpportunityFilters; page: number };
       if (parsed?.filters) {
         setFilters(parsed.filters);
       }
       if (parsed?.page) {
         setPage(parsed.page);
-      }
-      if (parsed?.hasLiveResults) {
-        const cachedLive = getAllLiveResults();
-        if (cachedLive.length > 0) {
-          setLiveResults(cachedLive);
-        }
       }
     } catch {
       // ignore parse issues
@@ -80,10 +73,13 @@ export function Home() {
     }
   }, []);
 
-  const fetchOpportunities = useCallback(async () => {
+  const fetchOpportunities = useCallback(async (liveSearch = false) => {
     if (!filtersHydrated.current) return;
-    if (!cacheLoaded.current) {
+    if (!cacheLoaded.current && !liveSearch) {
       setIsLoading(true);
+    }
+    if (liveSearch) {
+      setIsSearching(true);
     }
     try {
       const params = new URLSearchParams();
@@ -101,6 +97,10 @@ export function Home() {
       debouncedFilters.industries?.forEach((i) => params.append('industries', i));
       debouncedFilters.compensationType?.forEach((c) => params.append('compensationType', c));
 
+      if (liveSearch) {
+        params.set('liveSearch', 'true');
+      }
+
       const response = await apiClient.get<PaginatedResponse<Opportunity>>(
         `/opportunities?${params.toString()}`
       );
@@ -108,11 +108,12 @@ export function Home() {
       if (response.data) {
         setOpportunities(response.data.items);
         setTotalPages(response.data.totalPages);
+        setLiveResultCount(response.data.liveResultCount || 0);
         setLastUpdated(new Date());
         setIsStale(false);
 
         // Cache the default (unfiltered, page 1) response
-        if (page === 1 && Object.keys(debouncedFilters).length === 0) {
+        if (page === 1 && Object.keys(debouncedFilters).length === 0 && !liveSearch) {
           localStorage.setItem(CACHE_KEY, JSON.stringify({
             items: response.data.items,
             totalPages: response.data.totalPages,
@@ -124,12 +125,14 @@ export function Home() {
       console.error('Failed to fetch opportunities:', error);
     } finally {
       setIsLoading(false);
+      setIsSearching(false);
       cacheLoaded.current = false;
     }
   }, [debouncedFilters, page]);
 
+  // Fetch DB results on filter/page changes
   useEffect(() => {
-    fetchOpportunities();
+    fetchOpportunities(false);
   }, [fetchOpportunities]);
 
   // Clamp page to valid range when totalPages changes
@@ -143,18 +146,14 @@ export function Home() {
     if (!filtersHydrated.current) return;
     sessionStorage.setItem(
       FILTERS_KEY,
-      JSON.stringify({
-        filters,
-        page,
-        hasLiveResults: liveResults.length > 0,
-      })
+      JSON.stringify({ filters, page })
     );
-  }, [filters, page, liveResults.length]);
+  }, [filters, page]);
 
   const handleFiltersChange = (newFilters: OpportunityFilters) => {
     setFilters(newFilters);
     setPage(1);
-    setLiveResults([]);
+    setLiveResultCount(0);
   };
 
   const handleLiveSearch = async () => {
@@ -162,57 +161,14 @@ export function Home() {
       alert('Please enter a search term or select an industry to perform a live search.');
       return;
     }
-
-    setIsSearching(true);
-    try {
-      const params = new URLSearchParams();
-      if (filters.search) params.set('query', filters.search);
-      filters.industries?.forEach((i) => params.append('industries', i));
-
-      const response = await apiClient.get<Opportunity[]>(
-        `/opportunities/live-search?${params.toString()}`
-      );
-
-      if (response.data) {
-        setLiveResults(response.data);
-        upsertLiveResults(response.data);
-      }
-    } catch (error) {
-      console.error('Failed to perform live search:', error);
-    } finally {
-      setIsSearching(false);
-    }
+    // Directly call with liveSearch=true -- no need for intermediate state
+    fetchOpportunities(true);
   };
 
-  // Merge live + stored, deduplicating by applyUrl (prefer stored version)
-  const mergedOpportunities = useMemo(() => {
-    const storedUrls = new Set(opportunities.map((o) => o.applyUrl));
-    const dedupedLive = liveResults.filter((lr) => !storedUrls.has(lr.applyUrl));
-    // Live results first, then stored
-    return [...dedupedLive, ...opportunities];
-  }, [opportunities, liveResults]);
-
-  const sortedOpportunities = useMemo(() => {
-    const list = liveResults.length > 0 ? mergedOpportunities : opportunities;
-    const sortBy = filters.sortBy || 'deadline';
-    const sorted = [...list];
-
-    const dateValue = (value: string | null) => {
-      if (!value) return Number.MAX_SAFE_INTEGER;
-      const parsed = new Date(value);
-      return Number.isNaN(parsed.getTime()) ? Number.MAX_SAFE_INTEGER : parsed.getTime();
-    };
-
-    if (sortBy === 'quality') {
-      sorted.sort((a, b) => (b.qualityScore || 0) - (a.qualityScore || 0));
-    } else if (sortBy === 'eventDate') {
-      sorted.sort((a, b) => dateValue(a.eventDate) - dateValue(b.eventDate));
-    } else {
-      sorted.sort((a, b) => dateValue(a.cfpDeadline) - dateValue(b.cfpDeadline));
-    }
-
-    return sorted;
-  }, [liveResults.length, mergedOpportunities, opportunities, filters.sortBy]);
+  const handleClearLiveResults = () => {
+    setLiveResultCount(0);
+    fetchOpportunities(false);
+  };
 
   return (
     <div>
@@ -227,18 +183,16 @@ export function Home() {
         isSearching={isSearching}
       />
 
-      {liveResults.length > 0 && (
+      {liveResultCount > 0 && (
         <div className="flex items-center justify-between mb-4">
           <p className="text-sm text-gray-600">
-            Showing {mergedOpportunities.length} results
-            {liveResults.length > 0 && (
-              <span className="ml-1">
-                ({liveResults.filter((lr) => !opportunities.some((o) => o.applyUrl === lr.applyUrl)).length} from live search)
-              </span>
-            )}
+            Showing {opportunities.length} results
+            <span className="ml-1">
+              ({liveResultCount} from live search)
+            </span>
           </p>
           <button
-            onClick={() => setLiveResults([])}
+            onClick={handleClearLiveResults}
             className="text-sm text-gray-500 hover:text-gray-700"
           >
             Clear live results
@@ -252,18 +206,18 @@ export function Home() {
             Showing cached results while loading fresh data...
           </p>
         )}
-        {lastUpdated && !isStale && !liveResults.length && (
+        {lastUpdated && !isStale && liveResultCount === 0 && (
           <p className="text-xs text-gray-400 mb-2">
             Updated {lastUpdated.toLocaleTimeString()}
           </p>
         )}
         <OpportunityList
-          opportunities={sortedOpportunities}
+          opportunities={opportunities}
           isLoading={isLoading}
         />
       </div>
 
-      {totalPages > 1 && liveResults.length === 0 && (
+      {totalPages > 1 && liveResultCount === 0 && (
         <div className="flex justify-center gap-2 mt-8">
           <button
             onClick={() => setPage((p) => Math.max(1, p - 1))}
