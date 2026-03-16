@@ -5,6 +5,35 @@ import { useAuth } from '../hooks/useAuth';
 import type { Opportunity, SavedOpportunity, SavedCategory } from '../types';
 import { getLiveResultById, removeLiveResult } from '../utils/liveResultsCache';
 
+import { Card, CardHeader, CardContent } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Separator } from '@/components/ui/separator';
+import { Skeleton } from '@/components/ui/skeleton';
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from '@/components/ui/select';
+
+import {
+  ArrowLeft,
+  Calendar,
+  Clock,
+  MapPin,
+  Globe,
+  DollarSign,
+  ExternalLink,
+  Zap,
+  Star,
+  AlertCircle,
+  Bookmark,
+  BookmarkCheck,
+} from 'lucide-react';
+import { cn } from '@/lib/utils';
+
 export function OpportunityDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -108,185 +137,298 @@ export function OpportunityDetail() {
 
   if (isLoading) {
     return (
-      <div className="animate-pulse">
-        <div className="h-8 bg-gray-200 rounded w-1/2 mb-4"></div>
-        <div className="h-4 bg-gray-200 rounded w-1/4 mb-8"></div>
-        <div className="h-4 bg-gray-200 rounded w-full mb-2"></div>
-        <div className="h-4 bg-gray-200 rounded w-full mb-2"></div>
-        <div className="h-4 bg-gray-200 rounded w-3/4"></div>
+      <div className="max-w-3xl mx-auto space-y-4">
+        <Skeleton className="h-8 w-48" />
+        <Card>
+          <CardHeader className="space-y-4">
+            <Skeleton className="h-8 w-3/4" />
+            <Skeleton className="h-5 w-1/3" />
+            <div className="flex gap-2">
+              <Skeleton className="h-6 w-20 rounded-full" />
+              <Skeleton className="h-6 w-24 rounded-full" />
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <div className="space-y-2">
+              <Skeleton className="h-4 w-full" />
+              <Skeleton className="h-4 w-full" />
+              <Skeleton className="h-4 w-3/4" />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Skeleton className="h-4 w-24" />
+                <Skeleton className="h-5 w-40" />
+              </div>
+              <div className="space-y-2">
+                <Skeleton className="h-4 w-24" />
+                <Skeleton className="h-5 w-40" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
       </div>
     );
   }
 
   if (error || !opportunity) {
     return (
-      <div className="text-center py-12">
-        <p className="text-red-500 text-lg">{error || 'Opportunity not found'}</p>
-        <Link to="/" className="text-blue-600 hover:underline mt-4 inline-block">
-          Back to home
-        </Link>
+      <div className="flex flex-col items-center justify-center py-16 text-center">
+        <div className="rounded-full bg-destructive/10 p-4 mb-4">
+          <AlertCircle className="h-8 w-8 text-destructive" />
+        </div>
+        <h2 className="text-xl font-semibold text-foreground mb-1">
+          {error || 'Opportunity not found'}
+        </h2>
+        <p className="text-sm text-muted-foreground mb-4">
+          This opportunity may have been removed or the link is invalid.
+        </p>
+        <Button variant="outline" asChild>
+          <Link to="/">
+            <ArrowLeft className="h-4 w-4" />
+            Back to opportunities
+          </Link>
+        </Button>
       </div>
     );
   }
 
+  const hasQualityScore =
+    opportunity.qualityScore !== undefined && opportunity.qualityScore !== null;
+
   return (
-    <div className="max-w-3xl mx-auto">
-      <Link
-        to={(location.state as { from?: string } | null)?.from || '/'}
-        className="text-blue-600 hover:underline mb-4 inline-block"
-      >
-        &larr; Back to opportunities
-      </Link>
+    <div className="max-w-3xl mx-auto space-y-4">
+      {/* Back button */}
+      <Button variant="ghost" size="sm" asChild>
+        <Link to={(location.state as { from?: string } | null)?.from || '/'}>
+          <ArrowLeft className="h-4 w-4" />
+          Back to opportunities
+        </Link>
+      </Button>
 
-      <div className="bg-white rounded-lg shadow p-8">
-        <div className="flex justify-between items-start mb-4">
-          <h1 className="text-2xl font-bold text-gray-900">
-            {opportunity.title}
-          </h1>
-          <div className="flex items-center gap-2">
-            {opportunity.isLiveResult && (
-              <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-800">
-                Live
-              </span>
-            )}
-            <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800 capitalize">
-              {opportunity.format}
-            </span>
-          </div>
-        </div>
-
-        <p className="text-lg text-gray-600 mb-6">{opportunity.organization}</p>
-
-        <div className="flex flex-wrap gap-2 mb-6">
-          {opportunity.isRemote && (
-            <span className="inline-flex items-center px-3 py-1 rounded text-sm font-medium bg-green-100 text-green-800">
-              Remote
-            </span>
-          )}
-          {opportunity.location && (
-            <span className="inline-flex items-center px-3 py-1 rounded text-sm font-medium bg-gray-100 text-gray-800">
-              {opportunity.location}
-            </span>
-          )}
-          {opportunity.compensationType ? (
-            <span className="inline-flex items-center px-3 py-1 rounded text-sm font-medium bg-yellow-100 text-yellow-800 capitalize">
-              {opportunity.compensationType}
-            </span>
-          ) : (
-            <span className="inline-flex items-center px-3 py-1 rounded text-sm font-medium bg-gray-50 text-gray-600 border border-gray-200">
-              Compensation not listed
-            </span>
-          )}
-        </div>
-
-        {opportunity.description && (
-          <div className="mb-6">
-            <h2 className="text-lg font-semibold mb-2">Description</h2>
-            <p className="text-gray-700 whitespace-pre-wrap">
-              {opportunity.description}
-            </p>
-          </div>
-        )}
-
-        <div className="grid grid-cols-2 gap-4 mb-6">
-          <div>
-            <h3 className="text-sm font-medium text-gray-500">Event Date</h3>
-            <p className="text-gray-900">
-              {opportunity.eventDate ? formatDate(opportunity.eventDate) : 'Not listed'}
-            </p>
-          </div>
-          <div>
-            <h3 className="text-sm font-medium text-gray-500">
-              CFP Deadline
-            </h3>
-            <p className="text-gray-900">
-              {opportunity.cfpDeadline ? formatDate(opportunity.cfpDeadline) : 'Not listed'}
-            </p>
-          </div>
-          {opportunity.compensationDetails && (
-            <div className="col-span-2">
-              <h3 className="text-sm font-medium text-gray-500">
-                Compensation Details
-              </h3>
-              <p className="text-gray-900">{opportunity.compensationDetails}</p>
+      <Card>
+        <CardHeader className="space-y-4">
+          {/* Title + badges */}
+          <div className="flex items-start justify-between gap-4">
+            <h1 className="text-2xl font-bold tracking-tight text-foreground">
+              {opportunity.title}
+            </h1>
+            <div className="flex items-center gap-2 flex-shrink-0">
+              {opportunity.isLiveResult && (
+                <Badge className="bg-emerald-100 text-emerald-700 border-emerald-300 dark:bg-emerald-950 dark:text-emerald-400 dark:border-emerald-700">
+                  <Zap className="h-3 w-3 mr-0.5" />
+                  Live
+                </Badge>
+              )}
+              <Badge variant="secondary" className="capitalize text-sm">
+                {opportunity.format}
+              </Badge>
             </div>
-          )}
-        </div>
+          </div>
 
-        <div className="mb-6">
-          <h3 className="text-sm font-medium text-gray-500 mb-2">
-            Industries
-          </h3>
+          {/* Organization */}
+          <p className="text-lg text-muted-foreground">
+            {opportunity.organization}
+          </p>
+
+          {/* Quick metadata badges */}
           <div className="flex flex-wrap gap-2">
-            {opportunity.industries.length > 0 ? (
-              opportunity.industries.map((industry) => (
-                <span
-                  key={industry}
-                  className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-purple-100 text-purple-800"
-                >
-                  {industry}
-                </span>
-              ))
+            {opportunity.isRemote && (
+              <Badge className="bg-emerald-100 text-emerald-700 border-emerald-300 dark:bg-emerald-950 dark:text-emerald-400 dark:border-emerald-700">
+                <Globe className="h-3 w-3 mr-1" />
+                Remote
+              </Badge>
+            )}
+            {opportunity.location && (
+              <Badge variant="secondary">
+                <MapPin className="h-3 w-3 mr-1" />
+                {opportunity.location}
+              </Badge>
+            )}
+            {opportunity.compensationType ? (
+              <Badge className="bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-950 dark:text-amber-400 dark:border-amber-700 capitalize">
+                <DollarSign className="h-3 w-3 mr-1" />
+                {opportunity.compensationType}
+                {opportunity.compensationAmount
+                  ? ` - $${opportunity.compensationAmount.toLocaleString()}`
+                  : ''}
+              </Badge>
             ) : (
-              <span className="text-sm text-gray-500">Not listed</span>
+              <Badge variant="outline" className="text-muted-foreground">
+                Compensation not listed
+              </Badge>
+            )}
+            {hasQualityScore && (
+              <Badge variant="outline" className="gap-1">
+                <Star className="h-3 w-3" />
+                Quality {opportunity.qualityScore}/100
+              </Badge>
             )}
           </div>
-        </div>
+        </CardHeader>
 
-        <div className="flex gap-4 pt-6 border-t">
-          <a
-            href={opportunity.applyUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex-1 bg-blue-600 text-white text-center py-3 px-4 rounded-md font-medium hover:bg-blue-700"
-          >
-            Apply Now
-          </a>
-
-          {isAuthenticated && (
-            <div className="relative">
-              <select
-                value={savedCategory || ''}
-                onChange={(e) =>
-                  handleSave(e.target.value as SavedCategory)
-                }
-                disabled={isSaving}
-                className="block w-40 py-3 px-4 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="">Save to...</option>
-                <option value="interested">Interested</option>
-                <option value="applied">Applied</option>
-                <option value="accepted">Accepted</option>
-                <option value="rejected">Rejected</option>
-              </select>
+        <CardContent className="space-y-6">
+          {/* Description */}
+          {opportunity.description && (
+            <div className="space-y-2">
+              <h2 className="text-base font-semibold text-foreground">
+                Description
+              </h2>
+              <p className="text-sm text-muted-foreground whitespace-pre-wrap leading-relaxed">
+                {opportunity.description}
+              </p>
             </div>
           )}
-        </div>
 
-        <p className="text-sm text-gray-500 mt-4">
-          Source: {opportunity.source}
-          {opportunity.sourceUrl && (
-            <>
-              {' '}
-              (
+          <Separator />
+
+          {/* Date details */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+            <div className="flex items-start gap-3">
+              <div className="rounded-md bg-muted p-2">
+                <Calendar className="h-4 w-4 text-muted-foreground" />
+              </div>
+              <div>
+                <p className="text-sm font-medium text-foreground">
+                  Event Date
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  {opportunity.eventDate
+                    ? formatDate(opportunity.eventDate)
+                    : 'Not listed'}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-start gap-3">
+              <div className="rounded-md bg-muted p-2">
+                <Clock className="h-4 w-4 text-muted-foreground" />
+              </div>
+              <div>
+                <p className="text-sm font-medium text-foreground">
+                  CFP Deadline
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  {opportunity.cfpDeadline
+                    ? formatDate(opportunity.cfpDeadline)
+                    : 'Not listed'}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Compensation details */}
+          {opportunity.compensationDetails && (
+            <div className="flex items-start gap-3">
+              <div className="rounded-md bg-muted p-2">
+                <DollarSign className="h-4 w-4 text-muted-foreground" />
+              </div>
+              <div>
+                <p className="text-sm font-medium text-foreground">
+                  Compensation Details
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  {opportunity.compensationDetails}
+                </p>
+              </div>
+            </div>
+          )}
+
+          <Separator />
+
+          {/* Industries */}
+          <div className="space-y-3">
+            <h3 className="text-sm font-medium text-foreground">Industries</h3>
+            <div className="flex flex-wrap gap-2">
+              {opportunity.industries.length > 0 ? (
+                opportunity.industries.map((industry) => (
+                  <Badge
+                    key={industry}
+                    variant="outline"
+                    className="capitalize"
+                  >
+                    {industry}
+                  </Badge>
+                ))
+              ) : (
+                <span className="text-sm text-muted-foreground">
+                  Not listed
+                </span>
+              )}
+            </div>
+          </div>
+
+          <Separator />
+
+          {/* Action buttons */}
+          <div className="flex flex-col sm:flex-row gap-3">
+            <Button className="flex-1" size="lg" asChild>
               <a
-                href={opportunity.sourceUrl}
+                href={opportunity.applyUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-blue-600 hover:underline"
               >
-                view
+                <ExternalLink className="h-4 w-4" />
+                Apply Now
               </a>
-              )
-            </>
-          )}
-          {opportunity.qualityScore !== undefined && opportunity.qualityScore !== null && (
-            <span className="ml-2 text-gray-400">
-              • Quality {opportunity.qualityScore}/100
-            </span>
-          )}
-        </p>
-      </div>
+            </Button>
+
+            {isAuthenticated && (
+              <div className="flex items-center gap-2">
+                {savedCategory ? (
+                  <div className="flex items-center gap-2 px-4 py-2 rounded-md bg-primary/5 border border-primary/20">
+                    <BookmarkCheck className="h-4 w-4 text-primary" />
+                    <span className="text-sm font-medium text-primary capitalize">
+                      Saved as {savedCategory}
+                    </span>
+                  </div>
+                ) : (
+                  <Select
+                    onValueChange={(value) =>
+                      handleSave(value as SavedCategory)
+                    }
+                    disabled={isSaving}
+                  >
+                    <SelectTrigger
+                      className={cn(
+                        'w-[160px]',
+                        isSaving && 'opacity-50 cursor-not-allowed'
+                      )}
+                    >
+                      <Bookmark className="h-4 w-4 mr-2" />
+                      <SelectValue placeholder="Save to..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="interested">Interested</SelectItem>
+                      <SelectItem value="applied">Applied</SelectItem>
+                      <SelectItem value="accepted">Accepted</SelectItem>
+                      <SelectItem value="rejected">Rejected</SelectItem>
+                    </SelectContent>
+                  </Select>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Source info */}
+          <p className="text-xs text-muted-foreground">
+            Source: {opportunity.source}
+            {opportunity.sourceUrl && (
+              <>
+                {' '}
+                (
+                <a
+                  href={opportunity.sourceUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-primary hover:underline"
+                >
+                  view
+                </a>
+                )
+              </>
+            )}
+          </p>
+        </CardContent>
+      </Card>
     </div>
   );
 }
