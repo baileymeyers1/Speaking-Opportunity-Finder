@@ -4,6 +4,8 @@ import { config } from '../config/index.js';
 
 const prisma = new PrismaClient();
 
+const DAILY_ENRICHMENT_LIMIT = 200;
+
 interface BackgroundEnrichmentState {
   isRunning: boolean;
   processed: number;
@@ -11,6 +13,8 @@ interface BackgroundEnrichmentState {
   skipped: number;
   failed: number;
   lastRunTime: Date | null;
+  dailyEnrichmentCount: number;
+  dailyBudgetResetDate: string;
 }
 
 let state: BackgroundEnrichmentState = {
@@ -20,6 +24,8 @@ let state: BackgroundEnrichmentState = {
   skipped: 0,
   failed: 0,
   lastRunTime: null,
+  dailyEnrichmentCount: 0,
+  dailyBudgetResetDate: new Date().toDateString(),
 };
 
 let enrichmentTimer: NodeJS.Timeout | null = null;
@@ -31,6 +37,17 @@ let enrichmentTimer: NodeJS.Timeout | null = null;
 async function processNextUnenriched(): Promise<void> {
   if (!config.claude.apiKey) {
     console.log('Background enrichment: No Claude API key configured, skipping');
+    return;
+  }
+
+  const today = new Date().toDateString();
+  if (state.dailyBudgetResetDate !== today) {
+    state.dailyEnrichmentCount = 0;
+    state.dailyBudgetResetDate = today;
+  }
+
+  if (state.dailyEnrichmentCount >= DAILY_ENRICHMENT_LIMIT) {
+    console.log(`[BackgroundEnrichment] Daily budget of ${DAILY_ENRICHMENT_LIMIT} reached. Pausing until tomorrow.`);
     return;
   }
 
@@ -106,6 +123,7 @@ async function processNextUnenriched(): Promise<void> {
 
     if (enriched.enrichmentStatus === 'enriched') {
       state.enriched++;
+      state.dailyEnrichmentCount++;
       console.log(`Background enrichment: Successfully enriched "${opportunity.title}"`);
     } else if (enriched.enrichmentStatus === 'skipped') {
       state.skipped++;
