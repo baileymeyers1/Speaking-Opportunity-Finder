@@ -4,10 +4,101 @@ import type { Opportunity } from '../types';
 import { useAuth } from '../hooks/useAuth';
 import { apiClient } from '../api/client';
 import { removeLiveResult } from '../utils/liveResultsCache';
+import { cn } from '@/lib/utils';
+
+import { Card, CardHeader, CardContent, CardFooter } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+} from '@/components/ui/dropdown-menu';
+import {
+  Tooltip,
+  TooltipTrigger,
+  TooltipContent,
+} from '@/components/ui/tooltip';
+
+import {
+  MapPin,
+  Calendar,
+  Clock,
+  DollarSign,
+  Globe,
+  Bookmark,
+  BookmarkCheck,
+  ExternalLink,
+  Zap,
+  Star,
+} from 'lucide-react';
 
 interface OpportunityCardProps {
   opportunity: Opportunity;
   showSave?: boolean;
+}
+
+const SAVE_CATEGORIES = [
+  { value: 'interested', label: 'Interested' },
+  { value: 'applied', label: 'Applied' },
+  { value: 'accepted', label: 'Accepted' },
+  { value: 'rejected', label: 'Rejected' },
+] as const;
+
+function formatDate(dateString: string | null): string | null {
+  if (!dateString) return null;
+  return new Date(dateString).toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+}
+
+function getDeadlineBadge(dateString: string | null): {
+  label: string;
+  variant: 'secondary' | 'destructive' | 'outline';
+  className?: string;
+} {
+  if (!dateString) {
+    return { label: 'No deadline', variant: 'secondary' };
+  }
+
+  const now = new Date();
+  const deadline = new Date(dateString);
+  const daysLeft = Math.ceil(
+    (deadline.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
+  );
+
+  if (daysLeft <= 0) {
+    return { label: 'Closed', variant: 'destructive' };
+  }
+  if (daysLeft <= 3) {
+    return { label: `${daysLeft}d left`, variant: 'destructive' };
+  }
+  if (daysLeft <= 7) {
+    return {
+      label: `${daysLeft}d left`,
+      variant: 'outline',
+      className: 'border-amber-400 bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-400 dark:border-amber-700',
+    };
+  }
+
+  return { label: formatDate(dateString)!, variant: 'secondary' };
+}
+
+function getQualityColor(score: number): string {
+  if (score >= 70) return 'bg-emerald-500';
+  if (score >= 40) return 'bg-amber-500';
+  return 'bg-red-500';
+}
+
+function getQualityLabel(score: number): string {
+  if (score >= 70) return 'High quality';
+  if (score >= 40) return 'Medium quality';
+  return 'Low quality';
 }
 
 export function OpportunityCard({ opportunity, showSave = true }: OpportunityCardProps) {
@@ -22,47 +113,17 @@ export function OpportunityCard({ opportunity, showSave = true }: OpportunityCar
     setCurrent(opportunity);
   }, [opportunity]);
 
-  const formatDate = (dateString: string | null) => {
-    if (!dateString) return null;
-    return new Date(dateString).toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-    });
-  };
-
-  const getDeadlineInfo = (dateString: string | null) => {
-    if (!dateString) return { label: 'Deadline not listed', color: 'bg-gray-100 text-gray-600' };
-    const now = new Date();
-    const deadline = new Date(dateString);
-    const daysLeft = Math.ceil((deadline.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-    if (daysLeft <= 0) return { label: 'Closed', color: 'bg-red-100 text-red-800' };
-    if (daysLeft <= 3) return { label: `${daysLeft}d left`, color: 'bg-red-100 text-red-800' };
-    if (daysLeft <= 7) return { label: `${daysLeft}d left`, color: 'bg-yellow-100 text-yellow-800' };
-    return { label: formatDate(dateString)!, color: 'bg-gray-100 text-gray-600' };
-  };
-
-  const getEventInfo = (dateString: string | null) => {
-    if (!dateString) return { label: 'Event date not listed', color: 'bg-gray-100 text-gray-600' };
-    return { label: formatDate(dateString)!, color: 'bg-blue-100 text-blue-800' };
-  };
-
-  const deadlineInfo = getDeadlineInfo(current.cfpDeadline);
-  const eventInfo = getEventInfo(current.eventDate);
+  const deadlineBadge = getDeadlineBadge(current.cfpDeadline);
   const isLive = current.isLiveResult;
+  const hasCompensation = !!current.compensationType;
+  const hasQualityScore =
+    current.qualityScore !== undefined && current.qualityScore !== null;
 
-  const titleElement = (
-    <Link
-      to={`/opportunities/${current.id}`}
-      state={{ from: `${location.pathname}${location.search}` }}
-      className={`text-lg font-semibold text-gray-900 ${
-        isLive ? 'hover:text-green-600' : 'hover:text-blue-600'
-      }`}
-    >
-      {current.title}
-    </Link>
-  );
-
+  const compensationLabel = hasCompensation
+    ? current.compensationAmount
+      ? `${current.compensationType} - $${current.compensationAmount.toLocaleString()}`
+      : current.compensationType
+    : null;
 
   const handleSave = async (category: string) => {
     if (!category) return;
@@ -115,115 +176,207 @@ export function OpportunityCard({ opportunity, showSave = true }: OpportunityCar
   };
 
   return (
-    <div className="rounded-lg shadow p-6 hover:shadow-md transition-shadow bg-white">
-      <div className="flex justify-between items-start mb-2">
-        {titleElement}
-        <div className="flex gap-1 flex-shrink-0 ml-2">
-          {isLive && (
-            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-              Live
-            </span>
-          )}
-          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 capitalize">
-            {opportunity.format}
-          </span>
+    <Card className="group hover:shadow-lg hover:border-primary/20 transition-all duration-200">
+      <CardHeader className="pb-3">
+        {/* Title row with badges */}
+        <div className="flex items-start justify-between gap-2">
+          <Link
+            to={`/opportunities/${current.id}`}
+            state={{ from: `${location.pathname}${location.search}` }}
+            className="text-base font-semibold leading-snug text-foreground hover:text-primary transition-colors line-clamp-2"
+          >
+            {current.title}
+          </Link>
+          <div className="flex items-center gap-1.5 flex-shrink-0">
+            {isLive && (
+              <Badge className="bg-emerald-100 text-emerald-700 border-emerald-300 dark:bg-emerald-950 dark:text-emerald-400 dark:border-emerald-700">
+                <Zap className="h-3 w-3 mr-0.5" />
+                Live
+              </Badge>
+            )}
+            <Badge variant="secondary" className="capitalize">
+              {current.format}
+            </Badge>
+          </div>
         </div>
-      </div>
 
-      <p className="text-sm text-gray-600 mb-2">{current.organization}</p>
-
-      {current.description && (
-        <p className="text-gray-700 text-sm mb-4 line-clamp-2">
-          {current.description}
-        </p>
-      )}
-
-      <div className="flex flex-wrap gap-2 mb-3">
-        <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${eventInfo.color}`}>
-          {eventInfo.label}
-        </span>
-        <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${deadlineInfo.color}`}>
-          {deadlineInfo.label}
-        </span>
-      </div>
-
-      <div className="flex flex-wrap gap-2 mb-3">
-        {current.isRemote && (
-          <span className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-green-100 text-green-800">
-            Remote
-          </span>
+        {/* Organization */}
+        {current.organization && (
+          <p className="text-sm text-muted-foreground leading-none">
+            {current.organization}
+          </p>
         )}
-        {current.location && (
-          <span className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-gray-100 text-gray-800">
-            {current.location}
-          </span>
-        )}
-        {current.compensationType ? (
-          <span className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-yellow-100 text-yellow-800 capitalize">
-            {current.compensationType}
-            {current.compensationAmount && ` ($${current.compensationAmount.toLocaleString()})`}
-          </span>
-        ) : (
-          <span className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-gray-50 text-gray-500 border border-gray-200">
-            Compensation not listed
-          </span>
-        )}
-      </div>
+      </CardHeader>
 
-      {/* Industry tags */}
-      <div className="flex flex-wrap gap-1 mb-3">
-        {current.industries && current.industries.length > 0 ? (
-          <>
-            {current.industries.slice(0, 3).map((industry) => (
-              <span
+      <CardContent className="space-y-3">
+        {/* Description */}
+        {current.description && (
+          <p className="text-sm text-muted-foreground line-clamp-3">
+            {current.description}
+          </p>
+        )}
+
+        {/* Metadata grid */}
+        <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+          {/* Event date */}
+          <div className="flex items-center gap-1.5 text-muted-foreground">
+            <Calendar className="h-3.5 w-3.5 flex-shrink-0" />
+            <span className="truncate">
+              {current.eventDate ? formatDate(current.eventDate) : 'Date TBD'}
+            </span>
+          </div>
+
+          {/* Deadline */}
+          <div className="flex items-center gap-1.5">
+            <Clock className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
+            <Badge
+              variant={deadlineBadge.variant}
+              className={cn('text-[11px] px-1.5 py-0', deadlineBadge.className)}
+            >
+              {deadlineBadge.label}
+            </Badge>
+          </div>
+
+          {/* Location / Remote */}
+          <div className="flex items-center gap-1.5 text-muted-foreground">
+            {current.isRemote ? (
+              <>
+                <Globe className="h-3.5 w-3.5 flex-shrink-0 text-emerald-600 dark:text-emerald-400" />
+                <span className="truncate">
+                  {current.location ? `${current.location} (Remote)` : 'Remote'}
+                </span>
+              </>
+            ) : current.location ? (
+              <>
+                <MapPin className="h-3.5 w-3.5 flex-shrink-0" />
+                <span className="truncate">{current.location}</span>
+              </>
+            ) : (
+              <>
+                <MapPin className="h-3.5 w-3.5 flex-shrink-0" />
+                <span className="truncate">Location TBD</span>
+              </>
+            )}
+          </div>
+
+          {/* Compensation -- only render if present */}
+          {hasCompensation && compensationLabel && (
+            <div className="flex items-center gap-1.5 text-muted-foreground">
+              <DollarSign className="h-3.5 w-3.5 flex-shrink-0 text-amber-600 dark:text-amber-400" />
+              <span className="truncate capitalize">{compensationLabel}</span>
+            </div>
+          )}
+        </div>
+
+        {/* Industry tags -- show ALL, wrap naturally */}
+        {current.industries && current.industries.length > 0 && (
+          <div className="flex flex-wrap gap-1.5 pt-1">
+            {current.industries.map((industry) => (
+              <Badge
                 key={industry}
-                className="inline-flex items-center px-1.5 py-0.5 rounded text-xs bg-gray-50 text-gray-500 border border-gray-200 capitalize"
+                variant="outline"
+                className="text-[11px] px-2 py-0 font-normal capitalize"
               >
                 {industry}
-              </span>
+              </Badge>
             ))}
-            {current.industries.length > 3 && (
-              <span className="text-xs text-gray-400">
-                +{current.industries.length - 3} more
-              </span>
-            )}
-          </>
-        ) : (
-          <span className="text-xs text-gray-400">Industries not listed</span>
+          </div>
         )}
-      </div>
+      </CardContent>
 
-      <div className="flex justify-between items-center text-sm text-gray-500">
-        <span className="text-xs text-gray-400">
-          {current.qualityScore !== undefined && current.qualityScore !== null
-            ? `Quality ${current.qualityScore}/100`
-            : 'Quality pending'}
-        </span>
-        <div className="flex items-center gap-3">
-          {showSave && (
-            <select
-              value={savedCategory}
-              onChange={(e) => handleSave(e.target.value)}
-              disabled={isSaving}
-              className="text-xs px-2 py-1 rounded border bg-white"
-            >
-              <option value="">Save to...</option>
-              <option value="interested">Interested</option>
-              <option value="applied">Applied</option>
-              <option value="accepted">Accepted</option>
-              <option value="rejected">Rejected</option>
-            </select>
+      <CardFooter className="justify-between gap-2">
+        {/* Quality score indicator */}
+        <div className="flex items-center">
+          {hasQualityScore ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div className="flex items-center gap-1.5 cursor-default">
+                  <Star className="h-3.5 w-3.5 text-muted-foreground" />
+                  <div className="flex items-center gap-1">
+                    <div
+                      className={cn(
+                        'h-2 w-2 rounded-full',
+                        getQualityColor(current.qualityScore!)
+                      )}
+                    />
+                    <span className="text-xs text-muted-foreground">
+                      {current.qualityScore}
+                    </span>
+                  </div>
+                </div>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>
+                  {getQualityLabel(current.qualityScore!)} &mdash;{' '}
+                  {current.qualityScore}/100
+                </p>
+              </TooltipContent>
+            </Tooltip>
+          ) : (
+            <span className="text-xs text-muted-foreground">Score pending</span>
           )}
-          <a
-            href={current.applyUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-blue-600 hover:text-blue-800 font-medium"
-          >
-            Apply &rarr;
-          </a>
         </div>
-      </div>
-    </div>
+
+        {/* Actions */}
+        <div className="flex items-center gap-2">
+          {showSave && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={isSaving}
+                  className={cn(
+                    'h-8 px-2',
+                    savedCategory && 'text-primary'
+                  )}
+                >
+                  {savedCategory ? (
+                    <BookmarkCheck className="h-4 w-4" />
+                  ) : (
+                    <Bookmark className="h-4 w-4" />
+                  )}
+                  <span className="sr-only">
+                    {savedCategory ? `Saved as ${savedCategory}` : 'Save opportunity'}
+                  </span>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuLabel>Save to...</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                {SAVE_CATEGORIES.map((cat) => (
+                  <DropdownMenuItem
+                    key={cat.value}
+                    onClick={() => handleSave(cat.value)}
+                    className={cn(
+                      'cursor-pointer',
+                      savedCategory === cat.value && 'font-semibold text-primary'
+                    )}
+                  >
+                    {cat.label}
+                    {savedCategory === cat.value && (
+                      <span className="ml-auto text-xs text-primary">Saved</span>
+                    )}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+
+          <Button variant="default" size="sm" className="h-8" asChild>
+            <a
+              href={current.applyUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Apply
+              <ExternalLink className="h-3.5 w-3.5" />
+            </a>
+          </Button>
+        </div>
+      </CardFooter>
+    </Card>
   );
 }
+
+export default OpportunityCard;
