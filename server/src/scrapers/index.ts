@@ -282,7 +282,7 @@ async function persistResults(results: ScraperResult[]): Promise<{ added: number
         // Cross-source dedup: check if an event with the same normalized title+org already exists
         const dedupKey = generateDeduplicationKey(result.title, result.organization);
         const orgPrefix = (result.organization || '').substring(0, 10);
-        let dedupMatch: { id: number; title: string; organization: string; qualityScore: number | null } | undefined;
+        let dedupMatch: { id: string; title: string; organization: string; qualityScore: number | null } | undefined;
 
         if (orgPrefix.length > 0) {
           const candidates = await prisma.opportunity.findMany({
