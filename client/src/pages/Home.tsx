@@ -5,6 +5,7 @@ import { OpportunityList } from '../components/OpportunityList';
 import { apiClient } from '../api/client';
 import type { Opportunity, OpportunityFilters, OpportunityFormat, PaginatedResponse } from '../types';
 import { useDebounce } from '../hooks/useDebounce';
+import { upsertLiveResults } from '../utils/liveResultsCache';
 import { Button } from '@/components/ui/button';
 import { AlertCircle, ChevronLeft, ChevronRight, Clock, Loader2, X } from 'lucide-react';
 
@@ -125,6 +126,12 @@ export function Home() {
         setLiveResultCount(response.data.liveResultCount || 0);
         setLastUpdated(new Date());
         setIsStale(false);
+
+        // Cache live results so detail page can find them
+        const liveItems = response.data.items.filter((item) => item.isLiveResult);
+        if (liveItems.length > 0) {
+          upsertLiveResults(liveItems);
+        }
 
         // Cache the default (unfiltered, page 1) response
         if (page === 1 && Object.keys(debouncedFilters).length === 0 && !liveSearch) {
