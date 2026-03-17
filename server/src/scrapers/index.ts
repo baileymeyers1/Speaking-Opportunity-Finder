@@ -122,6 +122,53 @@ async function backfillQualityScores(): Promise<number> {
   return updated;
 }
 
+export async function recalculateAllQualityScores(): Promise<number> {
+  const batchSize = 200;
+  let updated = 0;
+  let skip = 0;
+
+  while (true) {
+    const batch = await prisma.opportunity.findMany({
+      take: batchSize,
+      skip,
+    });
+
+    if (batch.length === 0) break;
+
+    for (const opp of batch) {
+      const result: ScraperResult = {
+        title: opp.title,
+        organization: opp.organization,
+        description: opp.description || undefined,
+        location: opp.location || undefined,
+        isRemote: opp.isRemote,
+        eventDate: opp.eventDate ? new Date(opp.eventDate) : undefined,
+        cfpDeadline: opp.cfpDeadline ? new Date(opp.cfpDeadline) : undefined,
+        format: opp.format,
+        industries: (() => { try { return JSON.parse(opp.industries || '[]'); } catch { return []; } })(),
+        compensationType: opp.compensationType || undefined,
+        compensationAmount: opp.compensationAmount || undefined,
+        applyUrl: opp.applyUrl,
+        source: opp.source,
+      };
+
+      const newScore = computeQualityScore(result);
+      if (newScore !== opp.qualityScore) {
+        await prisma.opportunity.update({
+          where: { id: opp.id },
+          data: { qualityScore: newScore },
+        });
+        updated++;
+      }
+    }
+
+    skip += batchSize;
+  }
+
+  console.log(`Recalculated quality scores: ${updated} records updated`);
+  return updated;
+}
+
 export function normalizeUrl(url: string): string {
   try {
     const u = new URL(url);
@@ -409,9 +456,10 @@ export async function syncOpportunities(
   const { added, updated } = await persistResults(results);
   const deletedCount = await cleanupExpired();
   const backfilled = await backfillQualityScores();
+  const recalculated = await recalculateAllQualityScores();
 
   console.log(
-    `Sync complete (${mode}): ${added} added, ${updated} updated, ${deletedCount} expired removed, ${backfilled} quality backfilled`
+    `Sync complete (${mode}): ${added} added, ${updated} updated, ${deletedCount} expired removed, ${backfilled} quality backfilled, ${recalculated} quality recalculated`
   );
 
   const total = await prisma.opportunity.count();
