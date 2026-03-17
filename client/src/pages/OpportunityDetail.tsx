@@ -64,7 +64,11 @@ export function OpportunityDetail() {
         const response = await apiClient.get<Opportunity>(`/opportunities/${id}`);
         if (response.data) setOpportunity(response.data);
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to load');
+        if (id.startsWith('live-')) {
+          setError('This live search result is no longer cached. Please search again to find it.');
+        } else {
+          setError(err instanceof Error ? err.message : 'Failed to load');
+        }
       } finally {
         setIsLoading(false);
       }

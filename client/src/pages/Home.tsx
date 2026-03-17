@@ -1,14 +1,14 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { FilterPanel } from '../components/FilterPanel';
 import { OpportunityList } from '../components/OpportunityList';
 import { apiClient } from '../api/client';
-import type { Opportunity, OpportunityFilters, PaginatedResponse } from '../types';
+import type { Opportunity, OpportunityFilters, OpportunityFormat, PaginatedResponse } from '../types';
 import { useDebounce } from '../hooks/useDebounce';
 import { Button } from '@/components/ui/button';
-import { AlertCircle, ChevronLeft, ChevronRight, Loader2, X } from 'lucide-react';
+import { AlertCircle, ChevronLeft, ChevronRight, Clock, Loader2, X } from 'lucide-react';
 
 const CACHE_KEY = 'cachedOpportunities';
-const FILTERS_KEY = 'opportunityFiltersState';
 const CACHE_MAX_AGE = 24 * 60 * 60 * 1000; // 24 hours
 
 function loadCache(): { items: Opportunity[]; totalPages: number; timestamp: number } | null {
@@ -26,20 +26,51 @@ function loadCache(): { items: Opportunity[]; totalPages: number; timestamp: num
   }
 }
 
+function parseFiltersFromParams(searchParams: URLSearchParams): OpportunityFilters {
+  const filters: OpportunityFilters = {};
+  const q = searchParams.get('q');
+  if (q) filters.search = q;
+  const industries = searchParams.getAll('industries');
+  if (industries.length) filters.industries = industries;
+  const locations = searchParams.getAll('locations');
+  if (locations.length) filters.locations = locations;
+  const types = searchParams.getAll('types');
+  if (types.length) filters.format = types as OpportunityFormat[];
+  const sort = searchParams.get('sort');
+  if (sort) filters.sortBy = sort as OpportunityFilters['sortBy'];
+  return filters;
+}
+
+function filtersToParams(filters: OpportunityFilters, page: number): URLSearchParams {
+  const params = new URLSearchParams();
+  if (filters.search) params.set('q', filters.search);
+  if (filters.sortBy) params.set('sort', filters.sortBy);
+  if (page > 1) params.set('page', String(page));
+  filters.industries?.forEach((i) => params.append('industries', i));
+  filters.locations?.forEach((l) => params.append('locations', l));
+  filters.format?.forEach((f) => params.append('types', f));
+  return params;
+}
+
 export function Home() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [opportunities, setOpportunities] = useState<Opportunity[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isStale, setIsStale] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [filters, setFilters] = useState<OpportunityFilters>({});
+  const [rateLimitWarning, setRateLimitWarning] = useState<string | null>(null);
+  const [filters, setFilters] = useState<OpportunityFilters>(() => parseFiltersFromParams(searchParams));
   const debouncedFilters = useDebounce(filters, 400);
-  const [page, setPage] = useState(1);
+  const [page, setPage] = useState(() => {
+    const p = searchParams.get('page');
+    return p ? Math.max(1, parseInt(p, 10)) : 1;
+  });
   const [totalPages, setTotalPages] = useState(1);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [liveResultCount, setLiveResultCount] = useState(0);
   const cacheLoaded = useRef(false);
-  const filtersHydrated = useRef(false);
+  const filtersHydrated = useRef(true);
 
   // Load cached results on first mount (before API call)
   useEffect(() => {
@@ -54,28 +85,6 @@ export function Home() {
     }
   }, []);
 
-  // Restore filters + page from session (for back navigation / tab switch)
-  useEffect(() => {
-    try {
-      const raw = sessionStorage.getItem(FILTERS_KEY);
-      if (!raw) {
-        filtersHydrated.current = true;
-        return;
-      }
-      const parsed = JSON.parse(raw) as { filters: OpportunityFilters; page: number };
-      if (parsed?.filters) {
-        setFilters(parsed.filters);
-      }
-      if (parsed?.page) {
-        setPage(parsed.page);
-      }
-    } catch {
-      // ignore parse issues
-    } finally {
-      filtersHydrated.current = true;
-    }
-  }, []);
-
   const fetchOpportunities = useCallback(async (liveSearch = false) => {
     if (!filtersHydrated.current) return;
     if (!cacheLoaded.current && !liveSearch) {
@@ -85,6 +94,7 @@ export function Home() {
       setIsSearching(true);
     }
     setError(null);
+    setRateLimitWarning(null);
     try {
       const params = new URLSearchParams();
       params.set('page', String(page));
@@ -127,8 +137,11 @@ export function Home() {
       }
     } catch (err) {
       console.error('Failed to fetch opportunities:', err);
-      // Only show error if we don't have cached data to fall back on
-      if (!cacheLoaded.current && opportunities.length === 0) {
+      const errorMessage = err instanceof Error ? err.message : '';
+      const isRateLimit = errorMessage.toLowerCase().includes('too many');
+      if (isRateLimit) {
+        setRateLimitWarning('Search limit reached. Showing cached results. Try again in a moment.');
+      } else if (!cacheLoaded.current && opportunities.length === 0) {
         setError('Failed to load opportunities. Please check your connection and try again.');
       }
     } finally {
@@ -150,18 +163,18 @@ export function Home() {
     }
   }, [totalPages, page]);
 
+  // Sync filters + page to URL search params
   useEffect(() => {
     if (!filtersHydrated.current) return;
-    sessionStorage.setItem(
-      FILTERS_KEY,
-      JSON.stringify({ filters, page })
-    );
-  }, [filters, page]);
+    const newParams = filtersToParams(filters, page);
+    setSearchParams(newParams, { replace: true });
+  }, [filters, page, setSearchParams]);
 
   const handleFiltersChange = (newFilters: OpportunityFilters) => {
     setFilters(newFilters);
     setPage(1);
     setLiveResultCount(0);
+    setRateLimitWarning(null);
   };
 
   const handleClearFilters = () => {
@@ -212,6 +225,21 @@ export function Home() {
         <div className="flex items-center gap-2 rounded-md border border-border bg-muted/50 px-4 py-2 text-sm text-muted-foreground" role="status" aria-live="polite">
           <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
           Showing cached results while loading fresh data...
+        </div>
+      )}
+
+      {/* Rate limit warning banner */}
+      {rateLimitWarning && (
+        <div className="flex items-center gap-2 rounded-md border border-amber-300 bg-amber-50 px-4 py-2 text-sm text-amber-800 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-300" role="status" aria-live="polite">
+          <Clock className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
+          {rateLimitWarning}
+          <button
+            onClick={() => setRateLimitWarning(null)}
+            className="ml-auto rounded-full p-0.5 hover:bg-amber-200 dark:hover:bg-amber-800 transition-colors"
+            aria-label="Dismiss rate limit warning"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
         </div>
       )}
 

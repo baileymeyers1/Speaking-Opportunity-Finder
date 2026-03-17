@@ -18,7 +18,7 @@ export const authLimiter = rateLimit({
 
 export const searchLimiter = rateLimit({
   windowMs: 1 * 60 * 1000, // 1 minute
-  max: 10,
+  max: 30,
   standardHeaders: true,
   legacyHeaders: false,
   message: { success: false, error: 'Too many search requests, please try again later.' },
