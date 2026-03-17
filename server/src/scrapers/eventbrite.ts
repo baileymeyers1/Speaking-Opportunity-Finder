@@ -1,5 +1,24 @@
 import type { ScraperResult } from './index.js';
 import { config } from '../config/index.js';
+import { cleanTitle, normalizeIndustries } from '../services/dataNormalization.js';
+
+function inferIndustriesFromContent(title: string, description: string): string[] {
+  const text = (title + ' ' + description).toLowerCase();
+  const tags: string[] = [];
+  const keywords: Record<string, string> = {
+    'technology': 'technology', 'software': 'technology', 'developer': 'technology',
+    'healthcare': 'healthcare', 'medical': 'healthcare',
+    'marketing': 'marketing', 'sales': 'sales',
+    'finance': 'finance', 'fintech': 'finance',
+    'education': 'education', 'leadership': 'leadership',
+    'ai': 'ai', 'artificial intelligence': 'ai', 'machine learning': 'ai',
+    'data': 'data science', 'cloud': 'cloud', 'security': 'cybersecurity',
+  };
+  for (const [keyword, tag] of Object.entries(keywords)) {
+    if (text.includes(keyword) && !tags.includes(tag)) tags.push(tag);
+  }
+  return tags;
+}
 
 interface EventbriteEvent {
   name?: { text?: string };
@@ -102,7 +121,7 @@ export async function scrapeEventbrite(): Promise<ScraperResult[]> {
         ].filter(Boolean);
 
         results.push({
-          title: `${title} - Call for Speakers`,
+          title: cleanTitle(title),
           organization: title,
           description: description
             ? description.substring(0, 500)
@@ -112,7 +131,7 @@ export async function scrapeEventbrite(): Promise<ScraperResult[]> {
           eventDate: event.start?.utc ? new Date(event.start.utc) : undefined,
           cfpDeadline,
           format: 'conference',
-          industries: ['events'],
+          industries: normalizeIndustries(inferIndustriesFromContent(title, description)),
           compensationType: compensation.compensationType,
           compensationAmount: compensation.compensationAmount,
           compensationDetails: undefined,

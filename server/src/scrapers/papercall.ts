@@ -1,4 +1,5 @@
 import type { ScraperResult } from './index.js';
+import { cleanTitle, normalizeIndustries } from '../services/dataNormalization.js';
 
 /**
  * Scrapes PaperCall's public events API for open CFPs.
@@ -42,16 +43,13 @@ function mapToScraperResult(event: PaperCallEvent): ScraperResult | null {
   const applyUrl = event.cfp_url || event.website || `https://www.papercall.io/cfps/${event.id}`;
   const locationStr = event.location || (event.city && event.country ? `${event.city}, ${event.country}` : event.country) || null;
 
-  const industries: string[] = [];
-  if (event.tags && event.tags.length > 0) {
-    industries.push(...event.tags.slice(0, 5));
-  }
+  const industries = normalizeIndustries(event.tags);
   if (industries.length === 0) {
     industries.push('technology');
   }
 
   return {
-    title: `${event.name} - Call for Speakers`,
+    title: cleanTitle(event.name),
     organization: event.name,
     description: event.description || `Submit your talk proposal to ${event.name}.`,
     location: locationStr,

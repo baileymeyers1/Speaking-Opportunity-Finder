@@ -1,4 +1,5 @@
 import type { ScraperResult } from './index.js';
+import { cleanTitle, normalizeIndustries } from '../services/dataNormalization.js';
 
 /**
  * Scrapes WikiCFP for academic and professional conference CFPs.
@@ -105,7 +106,7 @@ function mapToScraperResult(
     .substring(0, 500);
 
   return {
-    title: `${item.title} - Call for Papers`,
+    title: cleanTitle(item.title),
     organization: item.title,
     description: cleanDescription || `Submit your paper to ${item.title}.`,
     location,
@@ -113,7 +114,7 @@ function mapToScraperResult(
     eventDate: undefined,
     cfpDeadline: deadline,
     format: 'conference',
-    industries,
+    industries: normalizeIndustries(industries),
     compensationType: undefined,
     compensationDetails: undefined,
     applyUrl: item.link,

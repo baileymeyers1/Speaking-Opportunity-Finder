@@ -1,4 +1,5 @@
 import type { ScraperResult } from './index.js';
+import { cleanTitle, normalizeIndustries } from '../services/dataNormalization.js';
 
 const API_URL = 'https://api.callingallpapers.com/v1/cfp';
 
@@ -42,16 +43,13 @@ function mapToScraperResult(cfp: CallingAllPapersCFP): ScraperResult | null {
     cfp.location.toLowerCase().includes('virtual');
 
   // Map tags to industries
-  const industries: string[] = [];
-  if (cfp.tags && cfp.tags.length > 0) {
-    industries.push(...cfp.tags.slice(0, 5));
-  }
+  const industries = normalizeIndustries(cfp.tags);
   if (industries.length === 0) {
     industries.push('technology');
   }
 
   return {
-    title: `${cfp.name} - Call for Speakers`,
+    title: cleanTitle(cfp.name),
     organization: cfp.name,
     description: cfp.description || `Submit your talk proposal to ${cfp.name}.`,
     location: cfp.location || null,

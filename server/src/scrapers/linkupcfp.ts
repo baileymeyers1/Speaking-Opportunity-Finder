@@ -62,17 +62,6 @@ const INDUSTRY_CFP_QUERIES = [
   { query: withUsFocus('podcast guest speaker application submit pitch'), industries: [] },
 ];
 
-function extractOrganization(title: string): string {
-  const separators = [' - ', ' | ', ' by ', ' @ ', ' at '];
-  for (const sep of separators) {
-    if (title.includes(sep)) {
-      const parts = title.split(sep);
-      return parts[0].trim();
-    }
-  }
-  return title;
-}
-
 function isLikelyCFP(content: string, url: string): boolean {
   const lowerContent = content.toLowerCase();
   const lowerUrl = url.toLowerCase();
@@ -241,7 +230,7 @@ function mapToScraperResult(
   const eventDate = extractEventDate(result.content);
 
   return {
-    title: result.name,
+    title: cleanTitle(result.name),
     organization,
     description: result.content.substring(0, 500),
     location,
@@ -251,7 +240,7 @@ function mapToScraperResult(
     eventDate,
     cfpDeadline,
     format: 'conference',
-    industries,
+    industries: normalizeIndustries(industries),
     compensationType: compensation.compensationType,
     compensationAmount: compensation.compensationAmount,
     compensationDetails: compensation.compensationType ? result.content.substring(0, 300) : undefined,

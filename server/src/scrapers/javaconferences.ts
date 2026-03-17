@@ -1,4 +1,5 @@
 import type { ScraperResult } from './index.js';
+import { cleanTitle, normalizeIndustries } from '../services/dataNormalization.js';
 
 const JAVA_CONFERENCES_URL = 'https://javaconferences.org/conferences.json';
 
@@ -71,7 +72,7 @@ function mapToScraperResult(conf: JavaConference): ScraperResult | null {
   const location = conf.locationName?.toLowerCase() === 'online' ? null : conf.locationName;
 
   return {
-    title: `${conf.name} - Call for Speakers`,
+    title: cleanTitle(conf.name),
     organization: conf.name,
     description: `Submit your talk proposal to ${conf.name}. ${isRemote && !location ? 'This is an online event.' : location ? `Taking place in ${location}.` : ''} ${conf.hybrid ? 'Hybrid event with online option available.' : ''}`.trim(),
     location: location || null,
@@ -79,7 +80,7 @@ function mapToScraperResult(conf: JavaConference): ScraperResult | null {
     eventDate: parseDate(conf.date),
     cfpDeadline: conf.cfpEndDate ? parseCfpDeadline(conf.cfpEndDate) : undefined,
     format: 'conference',
-    industries: ['technology', 'java', 'software development'],
+    industries: normalizeIndustries(['technology', 'java', 'software development']),
     compensationType: undefined,
     compensationDetails: undefined,
     applyUrl: conf.cfpLink,

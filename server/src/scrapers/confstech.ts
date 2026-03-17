@@ -1,4 +1,5 @@
 import type { ScraperResult } from './index.js';
+import { cleanTitle, normalizeIndustries } from '../services/dataNormalization.js';
 
 const CONFS_TECH_BASE_URL =
   'https://raw.githubusercontent.com/tech-conferences/conference-data/main/conferences';
@@ -88,7 +89,7 @@ function mapToScraperResult(
     conf.city && conf.country ? `${conf.city}, ${conf.country}` : conf.country;
 
   return {
-    title: `${conf.name} - Call for Speakers`,
+    title: cleanTitle(conf.name),
     organization: conf.name,
     description: `Submit your talk proposal to ${conf.name}. ${conf.online ? 'This is an online event.' : location ? `Taking place in ${location}.` : ''}`,
     location: location || null,
@@ -96,7 +97,7 @@ function mapToScraperResult(
     eventDate: conf.startDate ? new Date(conf.startDate) : undefined,
     cfpDeadline: conf.cfpEndDate ? new Date(conf.cfpEndDate) : undefined,
     format: 'conference',
-    industries: ['technology', topic],
+    industries: normalizeIndustries(['technology', topic]),
     compensationType: undefined, // confs.tech doesn't provide compensation info
     compensationDetails: undefined,
     applyUrl: conf.cfpUrl,

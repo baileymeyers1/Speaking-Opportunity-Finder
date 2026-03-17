@@ -2,6 +2,7 @@ import { config } from '../config/index.js';
 import { randomUUID } from 'crypto';
 import { PrismaClient } from '@prisma/client';
 import { enrichOpportunitiesBatch } from './enrichmentService.js';
+import { cleanTitle, extractOrganization, normalizeIndustries } from './dataNormalization.js';
 import type { ScraperResult } from '../scrapers/index.js';
 
 const prisma = new PrismaClient();
@@ -199,7 +200,7 @@ function extractMetadata(content: string, title: string, searchIndustries: strin
   const compensation = extractCompensation(content);
   const eventDate = extractEventDate(content);
 
-  return { format, isRemote, location, cfpDeadline, industries, eventDate, ...compensation };
+  return { format, isRemote, location, cfpDeadline, industries: normalizeIndustries(industries), eventDate, ...compensation };
 }
 
 /**
@@ -294,8 +295,8 @@ async function performLinkupSearch(
 
         results.push({
           id: `live-${randomUUID()}`,
-          title: item.name || 'Untitled',
-          organization: extractOrganization(item.name || ''),
+          title: cleanTitle(item.name || 'Untitled'),
+          organization: extractOrganization(item.name || '', true),
           description: item.content || null,
           location: meta.location,
           isRemote: meta.isRemote,
@@ -333,17 +334,6 @@ async function performLinkupSearch(
   }
 
   return results.sort((a, b) => b.qualityScore - a.qualityScore);
-}
-
-function extractOrganization(title: string): string {
-  const separators = [' - ', ' | ', ' by ', ' @ ', ' at '];
-  for (const sep of separators) {
-    if (title.includes(sep)) {
-      const parts = title.split(sep);
-      return parts[parts.length - 1].trim();
-    }
-  }
-  return 'Unknown Organization';
 }
 
 /**
