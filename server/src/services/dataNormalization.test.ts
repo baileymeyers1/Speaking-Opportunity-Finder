@@ -5,7 +5,7 @@ import {
   parseDate,
   detectPlaceholderDescription,
   normalizeIndustries,
-} from './dataNormalization';
+} from './dataNormalization.js';
 
 describe('cleanTitle', () => {
   it('strips " - Call for Speakers" suffix', () => {

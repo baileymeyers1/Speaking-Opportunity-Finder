@@ -41,7 +41,7 @@ function getAnthropicClient(): Anthropic | null {
  */
 export async function enrichOpportunity(
   result: ScraperResult
-): Promise<ScraperResult & { enrichmentStatus?: string; enrichedAt?: Date; enrichmentError?: string }> {
+): Promise<ScraperResult & { enrichmentStatus?: string; enrichedAt?: Date; enrichmentError?: string; cleanTitle?: string; cleanOrganization?: string; isRelevant?: boolean }> {
   const client = getAnthropicClient();
 
   if (!client) {
@@ -116,6 +116,9 @@ export async function enrichOpportunity(
       compensationAmount: enriched.compensationAmount || result.compensationAmount,
       compensationDetails: enriched.compensationDetails || result.compensationDetails,
       isRemote: enriched.isRemote !== undefined ? enriched.isRemote : result.isRemote,
+      cleanTitle: enriched.cleanTitle,
+      cleanOrganization: enriched.cleanOrganization,
+      isRelevant: enriched.isRelevant,
       enrichmentStatus: 'enriched',
       enrichedAt: new Date()
     };
