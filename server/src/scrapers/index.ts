@@ -38,25 +38,40 @@ export interface ScraperResult {
 }
 
 export function computeQualityScore(result: ScraperResult): number {
-  let score = 20;
+  let score = 5; // Low base — must earn points
 
-  if (result.cfpDeadline) score += 20;
+  // Critical fields (55 points)
+  if (result.cfpDeadline) score += 25;
   if (result.eventDate) score += 15;
   if (result.location) score += 10;
-  if (result.industries && result.industries.length > 0) score += 10;
-  if (result.compensationType || result.compensationAmount) score += 10;
-  if (result.description && result.description.length > 120) score += 10;
+  if (result.compensationType || result.compensationAmount) score += 5;
 
-  const sourceBoost = [
-    'papercall.io',
-    'confs.tech',
-    'javaconferences.org',
-    'callingallpapers.com',
-    'wikicfp.com',
+  // Industries (10 points, scaled)
+  const validIndustries = (result.industries || []).filter(
+    (i) => !['events', 'cross-industry', 'general'].includes(i.toLowerCase())
+  );
+  score += Math.min(10, validIndustries.length * 5);
+
+  // Description quality (20 points)
+  const desc = result.description || '';
+  if (desc.length > 200) {
+    const isPlaceholder =
+      /^submit your talk/i.test(desc) ||
+      /^call for (speakers|papers)/i.test(desc) ||
+      /^we invite you/i.test(desc);
+    score += isPlaceholder ? 3 : 20;
+  } else if (desc.length > 80) {
+    score += 8;
+  }
+
+  // Source trust (10 points)
+  const trustedSources = [
+    'papercall.io', 'confs.tech', 'javaconferences.org',
+    'callingallpapers.com', 'wikicfp.com',
   ];
-  if (sourceBoost.includes(result.source)) score += 5;
+  if (trustedSources.includes(result.source)) score += 10;
 
-  return Math.min(100, score);
+  return Math.min(100, Math.max(0, score));
 }
 
 async function backfillQualityScores(): Promise<number> {
