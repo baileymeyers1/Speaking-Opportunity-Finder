@@ -12,6 +12,9 @@ export interface EnrichmentResult {
   compensationDetails?: string;
   isRemote?: boolean;
   timezone?: string;
+  cleanTitle?: string;
+  cleanOrganization?: string;
+  isRelevant?: boolean;
   enrichmentStatus: 'enriched' | 'failed' | 'skipped';
   enrichmentError?: string;
 }
@@ -161,14 +164,19 @@ function buildEnrichmentPrompt(result: ScraperResult): string {
   if (!result.location) missing.push('location');
   if (!result.compensationType) missing.push('compensationType');
 
-  return `Extract missing fields from this speaking opportunity. Return ONLY a JSON object, no other text.
+  return `Analyze this speaking opportunity listing. Return ONLY a JSON object, no other text.
 
 Title: ${result.title}
-Org: ${result.organization}
-Desc: ${(result.description || '').substring(0, 500)}
-Missing: ${missing.join(', ')}
+Organization: ${result.organization}
+Description: ${(result.description || '').substring(0, 800)}
 
-{"cfpDeadline":"YYYY-MM-DD or null","eventDate":"YYYY-MM-DD or null","industries":["topic1","topic2"],"location":"City, Country or Remote or null","compensationType":"paid|travel|honorarium|exposure or null","compensationAmount":null,"isRemote":false}`;
+Tasks:
+1. Extract any missing fields: ${missing.join(', ')}
+2. Clean up the title: remove redundant suffixes like "Call for Speakers", "| Company Name" etc. Return the clean event name.
+3. Extract the organizing body (company, association, or group running this event). Not the event name itself.
+4. Determine if this is genuinely a speaking/presenting opportunity (true) or just a conference listing, job posting, or unrelated page (false).
+
+{"cfpDeadline":"YYYY-MM-DD or null","eventDate":"YYYY-MM-DD or null","industries":["topic1","topic2"],"location":"City, Country or Remote or null","compensationType":"paid|travel|honorarium|exposure or null","compensationAmount":null,"isRemote":false,"cleanTitle":"cleaned event name","cleanOrganization":"organizing body name","isRelevant":true}`;
 }
 
 export function parseEnrichmentResponse(responseText: string): EnrichmentResult {
@@ -210,6 +218,13 @@ export function parseEnrichmentResponse(responseText: string): EnrichmentResult 
       compensationDetails: parsed.compensationDetails || undefined,
       isRemote: parsed.isRemote !== undefined ? parsed.isRemote : undefined,
       timezone: parsed.timezone || undefined,
+      cleanTitle: parsed.cleanTitle && parsed.cleanTitle !== 'null'
+        ? parsed.cleanTitle
+        : undefined,
+      cleanOrganization: parsed.cleanOrganization && parsed.cleanOrganization !== 'null'
+        ? parsed.cleanOrganization
+        : undefined,
+      isRelevant: parsed.isRelevant !== undefined ? parsed.isRelevant : undefined,
       enrichmentStatus: 'enriched',
     };
   } catch (error) {

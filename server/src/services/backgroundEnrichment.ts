@@ -104,6 +104,8 @@ async function processNextUnenriched(): Promise<void> {
       await prisma.opportunity.update({
         where: { id: opportunity.id },
         data: {
+          title: enriched.cleanTitle || opportunity.title,
+          organization: enriched.cleanOrganization || opportunity.organization,
           cfpDeadline: enriched.cfpDeadline || opportunity.cfpDeadline,
           eventDate: enriched.eventDate || opportunity.eventDate,
           industries: enriched.industries
@@ -142,6 +144,13 @@ async function processNextUnenriched(): Promise<void> {
         where: { id: opportunity.id },
         data: { qualityScore: newScore },
       });
+
+      if (enriched.isRelevant === false) {
+        await prisma.opportunity.update({
+          where: { id: opportunity.id },
+          data: { qualityScore: 0 },
+        });
+      }
 
       // Update state
       state.processed++;

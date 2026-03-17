@@ -151,4 +151,16 @@ describe('parseEnrichmentResponse', () => {
     expect(result.enrichmentStatus).toBe('failed');
     expect(result.enrichmentError).toBeDefined();
   });
+
+  it('parses cleanTitle and cleanOrganization fields', () => {
+    const result = parseEnrichmentResponse('{"cleanTitle":"KubeCon","cleanOrganization":"CNCF","isRelevant":true}');
+    expect(result.cleanTitle).toBe('KubeCon');
+    expect(result.cleanOrganization).toBe('CNCF');
+    expect(result.isRelevant).toBe(true);
+  });
+
+  it('flags irrelevant results', () => {
+    const result = parseEnrichmentResponse('{"isRelevant":false,"cleanTitle":"Random Job Post"}');
+    expect(result.isRelevant).toBe(false);
+  });
 });
