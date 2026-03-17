@@ -1,6 +1,7 @@
 import { PrismaClient } from '@prisma/client';
 import { enrichOpportunity } from './enrichmentService.js';
 import { config } from '../config/index.js';
+import { computeQualityScore, ScraperResult } from '../scrapers/index.js';
 
 const prisma = new PrismaClient();
 
@@ -117,6 +118,29 @@ async function processNextUnenriched(): Promise<void> {
           enrichedAt: enriched.enrichedAt || new Date(),
           enrichmentError: enriched.enrichmentError,
         },
+      });
+
+      // Recalculate quality score with enriched data
+      const enrichedResult: ScraperResult = {
+        title: opportunity.title,
+        organization: opportunity.organization,
+        description: opportunity.description || undefined,
+        location: enriched.location || opportunity.location || undefined,
+        isRemote: enriched.isRemote ?? opportunity.isRemote,
+        eventDate: enriched.eventDate || (opportunity.eventDate ? new Date(opportunity.eventDate) : undefined),
+        cfpDeadline: enriched.cfpDeadline || (opportunity.cfpDeadline ? new Date(opportunity.cfpDeadline) : undefined),
+        format: opportunity.format,
+        industries: enriched.industries || (() => { try { return JSON.parse(opportunity.industries || '[]'); } catch { return []; } })(),
+        compensationType: enriched.compensationType || opportunity.compensationType || undefined,
+        compensationAmount: enriched.compensationAmount || opportunity.compensationAmount || undefined,
+        applyUrl: opportunity.applyUrl,
+        source: opportunity.source,
+      };
+
+      const newScore = computeQualityScore(enrichedResult);
+      await prisma.opportunity.update({
+        where: { id: opportunity.id },
+        data: { qualityScore: newScore },
       });
 
       // Update state
