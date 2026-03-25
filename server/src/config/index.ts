@@ -24,7 +24,9 @@ export const config = {
   },
 
   cors: {
-    origin: process.env.CORS_ORIGIN || 'http://localhost:5173',
+    // On Vercel, frontend and API share the same origin — no CORS needed.
+    // In local dev, allow the Vite dev server origin.
+    origin: process.env.CORS_ORIGIN || (process.env.VERCEL ? '' : 'http://localhost:5173'),
   },
 
   scrapers: {

@@ -59,38 +59,43 @@ function startAutoSync() {
   console.log('Auto-sync scheduled: daily (fast scrapers) + weekly (deep scrapers)');
 }
 
-const server = app.listen(config.port, () => {
-  console.log(`Server running on http://localhost:${config.port}`);
-  console.log(`Environment: ${config.nodeEnv}`);
+// Only start the HTTP server and interval timers outside Vercel.
+// On Vercel, the app is imported as a serverless function (via api/index.ts)
+// and cron jobs handle scheduling.
+if (!process.env.VERCEL) {
+  const server = app.listen(config.port, () => {
+    console.log(`Server running on http://localhost:${config.port}`);
+    console.log(`Environment: ${config.nodeEnv}`);
 
-  // Start auto-sync in production, or if explicitly enabled
-  if (config.nodeEnv === 'production' || process.env.ENABLE_AUTO_SYNC === 'true') {
-    startAutoSync();
+    // Start auto-sync in production, or if explicitly enabled
+    if (config.nodeEnv === 'production' || process.env.ENABLE_AUTO_SYNC === 'true') {
+      startAutoSync();
+    }
+
+    // Start background enrichment in production (processes 1 opportunity every 2 minutes)
+    if (config.nodeEnv === 'production') {
+      startBackgroundEnrichment();
+    }
+  });
+
+  // Graceful shutdown
+  function shutdown() {
+    if (dailySyncTimer) clearInterval(dailySyncTimer);
+    if (weeklySyncTimer) clearInterval(weeklySyncTimer);
+    stopBackgroundEnrichment();
+    server.close(() => {
+      console.log('Process terminated');
+      process.exit(0);
+    });
   }
 
-  // Start background enrichment in production (processes 1 opportunity every 2 minutes)
-  if (config.nodeEnv === 'production') {
-    startBackgroundEnrichment();
-  }
-});
+  process.on('SIGTERM', () => {
+    console.log('SIGTERM received, shutting down gracefully');
+    shutdown();
+  });
 
-// Graceful shutdown
-function shutdown() {
-  if (dailySyncTimer) clearInterval(dailySyncTimer);
-  if (weeklySyncTimer) clearInterval(weeklySyncTimer);
-  stopBackgroundEnrichment();
-  server.close(() => {
-    console.log('Process terminated');
-    process.exit(0);
+  process.on('SIGINT', () => {
+    console.log('SIGINT received, shutting down gracefully');
+    shutdown();
   });
 }
-
-process.on('SIGTERM', () => {
-  console.log('SIGTERM received, shutting down gracefully');
-  shutdown();
-});
-
-process.on('SIGINT', () => {
-  console.log('SIGINT received, shutting down gracefully');
-  shutdown();
-});
