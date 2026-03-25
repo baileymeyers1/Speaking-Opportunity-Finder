@@ -1,10 +1,11 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { FilterPanel } from '../components/FilterPanel';
 import { OpportunityList } from '../components/OpportunityList';
 import { apiClient } from '../api/client';
 import type { Opportunity, OpportunityFilters, OpportunityFormat, PaginatedResponse } from '../types';
 import { useDebounce } from '../hooks/useDebounce';
+import { useAuth } from '../hooks/useAuth';
 import { upsertLiveResults } from '../utils/liveResultsCache';
 import { Button } from '@/components/ui/button';
 import { AlertCircle, ChevronLeft, ChevronRight, Clock, Loader2, X } from 'lucide-react';
@@ -53,7 +54,10 @@ function filtersToParams(filters: OpportunityFilters, page: number): URLSearchPa
   return params;
 }
 
+const BANNER_DISMISSED_KEY = 'loginBannerDismissed';
+
 export function Home() {
+  const { isAuthenticated } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const [opportunities, setOpportunities] = useState<Opportunity[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -72,6 +76,9 @@ export function Home() {
   const [liveResultCount, setLiveResultCount] = useState(0);
   const cacheLoaded = useRef(false);
   const filtersHydrated = useRef(true);
+  const [bannerDismissed, setBannerDismissed] = useState(
+    () => sessionStorage.getItem(BANNER_DISMISSED_KEY) === 'true'
+  );
 
   // Load cached results on first mount (before API call)
   useEffect(() => {
@@ -203,6 +210,11 @@ export function Home() {
     fetchOpportunities(false);
   };
 
+  const handleDismissBanner = () => {
+    setBannerDismissed(true);
+    sessionStorage.setItem(BANNER_DISMISSED_KEY, 'true');
+  };
+
   const handleRetry = () => {
     setError(null);
     fetchOpportunities(false);
@@ -247,6 +259,21 @@ export function Home() {
           >
             <X className="h-3.5 w-3.5" />
           </button>
+        </div>
+      )}
+
+      {/* Log in to save banner */}
+      {!isAuthenticated && !bannerDismissed && (
+        <div className="flex items-center justify-between rounded-lg border bg-muted/50 px-4 py-3">
+          <p className="text-sm text-muted-foreground">
+            <Link to="/register" className="font-medium text-primary hover:underline">Sign up</Link>
+            {' '}or{' '}
+            <Link to="/login" className="font-medium text-primary hover:underline">log in</Link>
+            {' '}to save opportunities and searches.
+          </p>
+          <Button variant="ghost" size="icon" onClick={handleDismissBanner} aria-label="Dismiss banner">
+            <X className="h-4 w-4" />
+          </Button>
         </div>
       )}
 
