@@ -2,7 +2,7 @@ import { config } from '../config/index.js';
 import { randomUUID } from 'crypto';
 import { PrismaClient } from '@prisma/client';
 import { enrichOpportunitiesBatch } from './enrichmentService.js';
-import { cleanTitle, extractOrganization, normalizeIndustries } from './dataNormalization.js';
+import { cleanTitle, extractOrganization, normalizeIndustries, decodeHtmlEntities } from './dataNormalization.js';
 import type { ScraperResult } from '../scrapers/index.js';
 
 const prisma = new PrismaClient();
@@ -295,9 +295,9 @@ async function performLinkupSearch(
 
         results.push({
           id: `live-${randomUUID()}`,
-          title: cleanTitle(item.name || 'Untitled'),
-          organization: extractOrganization(item.name || '', true),
-          description: item.content || null,
+          title: cleanTitle(decodeHtmlEntities(item.name || 'Untitled')),
+          organization: extractOrganization(decodeHtmlEntities(item.name || ''), true),
+          description: item.content ? decodeHtmlEntities(item.content) : null,
           location: meta.location,
           isRemote: meta.isRemote,
           eventDate: meta.eventDate,

@@ -15,6 +15,7 @@ import { scrapePacEvents } from './pacEvents.js';
 import { scrapePrNewsOnline } from './prNewsOnline.js';
 import { config } from '../config/index.js';
 import { generateDeduplicationKey } from '../services/deduplicationService.js';
+import { decodeHtmlEntities } from '../services/dataNormalization.js';
 
 const prisma = new PrismaClient();
 
@@ -307,6 +308,13 @@ async function persistResults(results: ScraperResult[]): Promise<{ added: number
 
   for (const result of results) {
     try {
+      // Decode HTML entities before any processing
+      result.title = decodeHtmlEntities(result.title);
+      result.organization = decodeHtmlEntities(result.organization);
+      if (result.description) {
+        result.description = decodeHtmlEntities(result.description);
+      }
+
       const existing = await prisma.opportunity.findFirst({
         where: { applyUrl: result.applyUrl },
       });
