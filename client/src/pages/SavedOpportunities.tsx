@@ -111,12 +111,29 @@ export function SavedOpportunities() {
     }
   };
 
+  const isOpportunityPast = (item: SavedOpportunity): boolean => {
+    const deadline = item.opportunity?.cfpDeadline;
+    return !!deadline && new Date(deadline) < new Date();
+  };
+
+  const sortedItems = (items: SavedOpportunity[]) =>
+    [...items].sort((a, b) => {
+      const aPast = isOpportunityPast(a);
+      const bPast = isOpportunityPast(b);
+      if (aPast !== bPast) return aPast ? 1 : -1;
+      return 0;
+    });
+
   const renderGrid = (items: SavedOpportunity[]) => (
     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-      {items.map((item) => (
+      {sortedItems(items).map((item) => (
         <div key={item.id} className="relative group">
           {item.opportunity && (
-            <OpportunityCard opportunity={item.opportunity} showSave={false} />
+            <OpportunityCard
+              opportunity={item.opportunity}
+              showSave={false}
+              isPast={isOpportunityPast(item)}
+            />
           )}
           <div className="absolute top-2 right-2 flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
             <Select

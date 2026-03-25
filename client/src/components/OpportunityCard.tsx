@@ -39,6 +39,7 @@ import {
 interface OpportunityCardProps {
   opportunity: Opportunity;
   showSave?: boolean;
+  isPast?: boolean;
 }
 
 const SAVE_CATEGORIES = [
@@ -101,7 +102,7 @@ function getQualityLabel(score: number): string {
   return 'Low quality';
 }
 
-export function OpportunityCard({ opportunity, showSave = true }: OpportunityCardProps) {
+export function OpportunityCard({ opportunity, showSave = true, isPast }: OpportunityCardProps) {
   const { isAuthenticated } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -115,6 +116,7 @@ export function OpportunityCard({ opportunity, showSave = true }: OpportunityCar
 
   const deadlineBadge = getDeadlineBadge(current.cfpDeadline);
   const isLive = current.isLiveResult;
+  const isPastDeadline = isPast ?? (!!current.cfpDeadline && new Date(current.cfpDeadline) < new Date());
   const hasCompensation = !!current.compensationType;
   const hasQualityScore =
     current.qualityScore !== undefined && current.qualityScore !== null;
@@ -176,7 +178,10 @@ export function OpportunityCard({ opportunity, showSave = true }: OpportunityCar
   };
 
   return (
-    <Card className="group hover:shadow-lg hover:border-primary/20 transition-all duration-200">
+    <Card className={cn(
+      'group hover:shadow-lg hover:border-primary/20 transition-all duration-200',
+      isPastDeadline && 'opacity-50 grayscale'
+    )}>
       <CardHeader className="pb-3">
         {/* Title row with badges */}
         <div className="flex items-start justify-between gap-2">
@@ -190,6 +195,11 @@ export function OpportunityCard({ opportunity, showSave = true }: OpportunityCar
             </Link>
           </h3>
           <div className="flex items-center gap-1.5 flex-shrink-0">
+            {isPastDeadline && (
+              <Badge variant="secondary" className="text-[11px] px-1.5 py-0">
+                Deadline passed
+              </Badge>
+            )}
             {isLive && (
               <Badge className="bg-emerald-100 text-emerald-700 border-emerald-300 dark:bg-emerald-950 dark:text-emerald-400 dark:border-emerald-700">
                 <Zap className="h-3 w-3 mr-0.5" />
