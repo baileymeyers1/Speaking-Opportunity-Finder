@@ -43,3 +43,18 @@ export const config = {
     maxTokens: parseInt(process.env.CLAUDE_MAX_TOKENS || '256', 10),
   },
 };
+
+const REQUIRED_VARS: Array<{ key: string; value: unknown; prodOnly?: boolean }> = [
+  { key: 'DATABASE_URL', value: config.database.url },
+  { key: 'JWT_SECRET', value: process.env.JWT_SECRET, prodOnly: true },
+];
+
+export function validateConfig(): void {
+  const missing = REQUIRED_VARS
+    .filter(v => !v.value && (!v.prodOnly || config.nodeEnv === 'production'))
+    .map(v => v.key);
+
+  if (missing.length > 0) {
+    throw new Error(`Missing required environment variables: ${missing.join(', ')}`);
+  }
+}

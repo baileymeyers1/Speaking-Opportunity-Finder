@@ -1,7 +1,10 @@
 import app from './app.js';
-import { config } from './config/index.js';
+import { config, validateConfig } from './config/index.js';
 import { syncOpportunities } from './scrapers/index.js';
 import { startBackgroundEnrichment, stopBackgroundEnrichment } from './services/backgroundEnrichment.js';
+
+// Fail fast if required environment variables are missing
+validateConfig();
 
 // Sync intervals
 const DAILY_SYNC_INTERVAL = 24 * 60 * 60 * 1000; // 24 hours
