@@ -231,6 +231,32 @@ export function getBackgroundEnrichmentState(): BackgroundEnrichmentState {
 }
 
 /**
+ * Process a batch of N unenriched opportunities synchronously.
+ * Used by Vercel cron endpoints instead of setInterval.
+ */
+export async function processNextBatch(count: number): Promise<{
+  processed: number;
+  enriched: number;
+  skipped: number;
+  failed: number;
+}> {
+  const results = { processed: 0, enriched: 0, skipped: 0, failed: 0 };
+
+  for (let i = 0; i < count; i++) {
+    const before = { ...state };
+    await processNextUnenriched();
+    const after = state;
+
+    results.processed += after.processed - before.processed;
+    results.enriched += after.enriched - before.enriched;
+    results.skipped += after.skipped - before.skipped;
+    results.failed += after.failed - before.failed;
+  }
+
+  return results;
+}
+
+/**
  * Reset enrichment statistics
  */
 export function resetBackgroundEnrichmentStats(): void {

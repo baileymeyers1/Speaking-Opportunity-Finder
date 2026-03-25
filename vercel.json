@@ -1,0 +1,19 @@
+{
+  "buildCommand": "cp prisma/schema.production.prisma prisma/schema.prisma && npx prisma generate && npm run build",
+  "outputDirectory": "client/dist",
+  "framework": "vite",
+  "functions": {
+    "api/**/*.ts": {
+      "maxDuration": 60
+    }
+  },
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": "/api/index" },
+    { "source": "/((?!api/).*)", "destination": "/index.html" }
+  ],
+  "crons": [
+    { "path": "/api/cron/daily-sync", "schedule": "0 6 * * *" },
+    { "path": "/api/cron/weekly-sync", "schedule": "0 8 * * 1" },
+    { "path": "/api/cron/enrichment", "schedule": "*/5 * * * *" }
+  ]
+}
