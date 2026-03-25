@@ -17,6 +17,7 @@ model User {
   resetTokenExpires   DateTime?
   createdAt           DateTime           @default(now())
   savedOpportunities  SavedOpportunity[]
+  savedSearches       SavedSearch[]
 }
 
 model Opportunity {
@@ -67,4 +68,17 @@ model SavedOpportunity {
   opportunity   Opportunity @relation(fields: [opportunityId], references: [id])
 
   @@unique([userId, opportunityId])
+}
+
+model SavedSearch {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  name      String
+  query     String?
+  filters   String   // JSON: { industries: [], locations: [], types: [], sort: '', isRemote: bool, ... }
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
 }
