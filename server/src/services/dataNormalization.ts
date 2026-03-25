@@ -166,6 +166,37 @@ export function detectPlaceholderDescription(
   return false;
 }
 
+const JUNK_URL_EXTENSIONS = ['.mp4', '.mp3', '.pdf', '.zip', '.exe', '.doc', '.docx', '.ppt', '.pptx'];
+const JUNK_DESCRIPTION_PATTERNS = [
+  /please click the link/i,
+  /complete this form/i,
+  /we cannot provide a description/i,
+  /^(TBD|N\/A|None|null|undefined)$/i,
+];
+const GENERIC_TITLE_PATTERN = /^\d{4}\s+call\s+for\s+(speakers?|papers?|presenters?)\s*$/i;
+
+export function isJunkResult(result: { title: string; description?: string | null; applyUrl?: string }): boolean {
+  // Check URL extension
+  if (result.applyUrl) {
+    try {
+      const urlPath = new URL(result.applyUrl).pathname.toLowerCase();
+      if (JUNK_URL_EXTENSIONS.some(ext => urlPath.endsWith(ext))) return true;
+    } catch {
+      // Invalid URL — not necessarily junk
+    }
+  }
+
+  // Check description patterns
+  if (result.description) {
+    if (JUNK_DESCRIPTION_PATTERNS.some(p => p.test(result.description!))) return true;
+  }
+
+  // Check generic titles with no distinguishing info
+  if (GENERIC_TITLE_PATTERN.test(result.title.trim())) return true;
+
+  return false;
+}
+
 const GENERIC_TAGS = new Set([
   'events',
   'cross-industry',

@@ -6,6 +6,7 @@ import {
   detectPlaceholderDescription,
   normalizeIndustries,
   decodeHtmlEntities,
+  isJunkResult,
 } from './dataNormalization.js';
 
 describe('cleanTitle', () => {
@@ -280,6 +281,24 @@ describe('normalizeIndustries', () => {
     expect(normalizeIndustries(['', 'technology', '  '])).toEqual([
       'technology',
     ]);
+  });
+});
+
+describe('isJunkResult', () => {
+  it('rejects file extension URLs', () => {
+    expect(isJunkResult({ title: '2026 CFP (2).mp4', applyUrl: 'https://example.com/file.mp4' })).toBe(true);
+  });
+
+  it('rejects "click the link" descriptions', () => {
+    expect(isJunkResult({ title: 'CFP', description: 'Please click the link to complete this form.' })).toBe(true);
+  });
+
+  it('rejects titles that are just generic year + call for speakers', () => {
+    expect(isJunkResult({ title: '2026 Call for Speakers' })).toBe(true);
+  });
+
+  it('accepts legitimate entries', () => {
+    expect(isJunkResult({ title: 'ReactConf 2026 Call for Speakers', applyUrl: 'https://reactconf.com/cfp' })).toBe(false);
   });
 });
 

@@ -2,7 +2,7 @@ import { config } from '../config/index.js';
 import { randomUUID } from 'crypto';
 import { PrismaClient } from '@prisma/client';
 import { enrichOpportunitiesBatch } from './enrichmentService.js';
-import { cleanTitle, extractOrganization, normalizeIndustries, decodeHtmlEntities } from './dataNormalization.js';
+import { cleanTitle, extractOrganization, normalizeIndustries, decodeHtmlEntities, isJunkResult } from './dataNormalization.js';
 import type { ScraperResult } from '../scrapers/index.js';
 
 const prisma = new PrismaClient();
@@ -333,7 +333,8 @@ async function performLinkupSearch(
     console.error('Linkup search error:', error);
   }
 
-  return results.sort((a, b) => b.qualityScore - a.qualityScore);
+  const filtered = results.filter(r => !isJunkResult({ title: r.title, description: r.description, applyUrl: r.applyUrl }));
+  return filtered.sort((a, b) => b.qualityScore - a.qualityScore);
 }
 
 /**
