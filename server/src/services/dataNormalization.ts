@@ -1,3 +1,33 @@
+const NAMED_ENTITIES: Record<string, string> = {
+  '&amp;': '&', '&lt;': '<', '&gt;': '>', '&quot;': '"',
+  '&apos;': "'", '&nbsp;': ' ', '&ndash;': '\u2013', '&mdash;': '\u2014',
+  '&lsquo;': '\u2018', '&rsquo;': '\u2019',
+  '&ldquo;': '\u201C', '&rdquo;': '\u201D',
+};
+
+export function decodeHtmlEntities(text: string): string {
+  if (!text) return text;
+
+  let result = text;
+
+  // Named entities
+  for (const [entity, char] of Object.entries(NAMED_ENTITIES)) {
+    result = result.replaceAll(entity, char);
+  }
+
+  // Hex numeric entities: &#x27; &#xA9;
+  result = result.replace(/&#x([0-9a-fA-F]+);/g, (_, hex) =>
+    String.fromCodePoint(parseInt(hex, 16))
+  );
+
+  // Decimal numeric entities: &#39; &#169;
+  result = result.replace(/&#(\d+);/g, (_, dec) =>
+    String.fromCodePoint(parseInt(dec, 10))
+  );
+
+  return result;
+}
+
 const CFP_SUFFIXES = [
   / - Call for Speakers$/i,
   / - Call for Papers$/i,

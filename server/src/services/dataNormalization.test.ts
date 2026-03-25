@@ -5,6 +5,7 @@ import {
   parseDate,
   detectPlaceholderDescription,
   normalizeIndustries,
+  decodeHtmlEntities,
 } from './dataNormalization.js';
 
 describe('cleanTitle', () => {
@@ -279,5 +280,23 @@ describe('normalizeIndustries', () => {
     expect(normalizeIndustries(['', 'technology', '  '])).toEqual([
       'technology',
     ]);
+  });
+});
+
+describe('decodeHtmlEntities', () => {
+  it('decodes named entities', () => {
+    expect(decodeHtmlEntities('&amp; &lt; &gt; &quot; &apos;')).toBe('& < > " \'');
+  });
+
+  it('decodes numeric entities', () => {
+    expect(decodeHtmlEntities('&#x27; &#39; &#8220; &#8221;')).toBe('\' \' \u201C \u201D');
+  });
+
+  it('returns plain text unchanged', () => {
+    expect(decodeHtmlEntities('Hello world')).toBe('Hello world');
+  });
+
+  it('handles mixed content', () => {
+    expect(decodeHtmlEntities('CALL &quot;YOUNG ENERGY&quot;')).toBe('CALL "YOUNG ENERGY"');
   });
 });
