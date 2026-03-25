@@ -71,6 +71,8 @@ export async function getOpportunities(
       { cfpDeadline: { gte: new Date() } },
       { cfpDeadline: null },
     ],
+    // Hide very low quality results (base score is 5; < 15 means almost no useful metadata)
+    qualityScore: { gte: 15 },
   };
   const andConditions: Prisma.OpportunityWhereInput[] = [];
 
@@ -142,7 +144,7 @@ export async function getOpportunities(
   }
 
   if (filters.qualityMin !== undefined) {
-    where.qualityScore = { gte: filters.qualityMin };
+    where.qualityScore = { gte: Math.max(filters.qualityMin, 15) };
   }
 
   // CFP deadline filters
