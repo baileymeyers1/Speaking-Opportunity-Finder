@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { FilterPanel } from '../components/FilterPanel';
 import { OpportunityList } from '../components/OpportunityList';
+import { SavedSearches } from '../components/SavedSearches';
 import { apiClient } from '../api/client';
 import type { Opportunity, OpportunityFilters, OpportunityFormat, PaginatedResponse } from '../types';
 import { useDebounce } from '../hooks/useDebounce';
@@ -220,6 +221,22 @@ export function Home() {
     fetchOpportunities(false);
   };
 
+  const handleApplySavedSearch = (query: string, savedFilters: Record<string, unknown>) => {
+    const applied: OpportunityFilters = {};
+    if (query) applied.search = query;
+    if (Array.isArray(savedFilters.industries)) applied.industries = savedFilters.industries as string[];
+    if (Array.isArray(savedFilters.locations)) applied.locations = savedFilters.locations as string[];
+    if (Array.isArray(savedFilters.format)) applied.format = savedFilters.format as OpportunityFormat[];
+    if (Array.isArray(savedFilters.compensationType)) applied.compensationType = savedFilters.compensationType as OpportunityFilters['compensationType'];
+    if (savedFilters.sortBy) applied.sortBy = savedFilters.sortBy as OpportunityFilters['sortBy'];
+    if (savedFilters.isRemote) applied.isRemote = savedFilters.isRemote as boolean;
+    if (typeof savedFilters.compensationMin === 'number') applied.compensationMin = savedFilters.compensationMin;
+    if (typeof savedFilters.compensationMax === 'number') applied.compensationMax = savedFilters.compensationMax;
+    if (typeof savedFilters.qualityMin === 'number') applied.qualityMin = savedFilters.qualityMin;
+    setFilters(applied);
+    setPage(1);
+  };
+
   return (
     <div className="space-y-6">
       {/* Page header */}
@@ -232,12 +249,23 @@ export function Home() {
         </p>
       </div>
 
-      <FilterPanel
-        filters={filters}
-        onFiltersChange={handleFiltersChange}
-        onLiveSearch={handleLiveSearch}
-        isSearching={isSearching}
-      />
+      <div className="flex items-start gap-3">
+        <div className="flex-1">
+          <FilterPanel
+            filters={filters}
+            onFiltersChange={handleFiltersChange}
+            onLiveSearch={handleLiveSearch}
+            isSearching={isSearching}
+          />
+        </div>
+        {isAuthenticated && (
+          <SavedSearches
+            currentQuery={filters.search || ''}
+            currentFilters={filters as Record<string, unknown>}
+            onApplySearch={handleApplySavedSearch}
+          />
+        )}
+      </div>
 
       {/* Stale cache indicator */}
       {isStale && (

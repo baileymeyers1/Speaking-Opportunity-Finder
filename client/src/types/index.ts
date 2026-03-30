@@ -80,6 +80,16 @@ export interface SavedOpportunity {
 
 export type SavedCategory = 'interested' | 'applied' | 'accepted' | 'rejected';
 
+// Saved search types
+export interface SavedSearch {
+  id: string;
+  name: string;
+  query: string | null;
+  filters: string; // JSON string
+  createdAt: string;
+  updatedAt: string;
+}
+
 // Auth types
 export interface AuthResponse {
   user: User;
