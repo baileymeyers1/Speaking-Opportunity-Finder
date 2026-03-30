@@ -215,8 +215,14 @@ export async function performLiveSearch(
   const currentYear = new Date().getFullYear();
 
   let searchQuery = '';
-  if (query) {
-    searchQuery = `${query} call for speakers OR CFP ${currentYear}`;
+  if (query && industries.length > 0) {
+    const industryTerms = industries.map((ind) => {
+      const templates = INDUSTRY_QUERIES[ind.toLowerCase()];
+      return templates ? templates[0] : `${ind} conference`;
+    });
+    searchQuery = `"${query}" ${industryTerms.join(' OR ')} speaking opportunity CFP ${currentYear}`;
+  } else if (query) {
+    searchQuery = `"${query}" speaking opportunity OR call for speakers OR CFP ${currentYear}`;
   } else if (industries.length > 0) {
     const industryTerms = industries.map((ind) => {
       const templates = INDUSTRY_QUERIES[ind.toLowerCase()];
