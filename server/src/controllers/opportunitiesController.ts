@@ -13,7 +13,7 @@ function buildFilters(query: Record<string, any>): opportunityService.Opportunit
     format,
     industries,
     isRemote,
-    location,
+    locations: location,
     compensationType,
     compensationMin,
     compensationMax,

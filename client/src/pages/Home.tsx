@@ -115,7 +115,7 @@ export function Home() {
       if (debouncedFilters.sortBy) params.set('sortBy', debouncedFilters.sortBy);
       if (debouncedFilters.qualityMin !== undefined) params.set('qualityMin', String(debouncedFilters.qualityMin));
 
-      debouncedFilters.locations?.forEach((loc) => params.append('location', loc));
+      debouncedFilters.locations?.forEach((loc) => params.append('locations', loc));
       debouncedFilters.format?.forEach((f) => params.append('format', f));
       debouncedFilters.industries?.forEach((i) => params.append('industries', i));
       debouncedFilters.compensationType?.forEach((c) => params.append('compensationType', c));

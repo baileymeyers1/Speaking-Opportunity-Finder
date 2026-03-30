@@ -377,7 +377,21 @@ export async function performLiveSearch(
     return [];
   }
 
-  return await performLinkupSearch(searchQuery, apiKey, industries);
+  const results = await performLinkupSearch(searchQuery, apiKey, industries);
+
+  // Post-fetch: soft-filter by location if locations were specified
+  // Keep results with matching locations at the top, but don't discard all non-matching
+  // (since many results have no location data)
+  if (locations.length > 0) {
+    const lowerLocations = locations.map(l => l.toLowerCase());
+    return results.sort((a, b) => {
+      const aMatch = a.location && lowerLocations.some(loc => a.location!.toLowerCase().includes(loc)) ? 1 : 0;
+      const bMatch = b.location && lowerLocations.some(loc => b.location!.toLowerCase().includes(loc)) ? 1 : 0;
+      return bMatch - aMatch;
+    });
+  }
+
+  return results;
 }
 
 interface LinkupSearchResult {
