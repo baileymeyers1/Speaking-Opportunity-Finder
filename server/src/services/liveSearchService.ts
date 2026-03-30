@@ -33,21 +33,153 @@ export interface EnrichedLiveResult {
 
 // Search query templates for different industries
 const INDUSTRY_QUERIES: Record<string, string[]> = {
+  // --- Technology ---
   technology: ['tech conference call for speakers', 'software developer CFP'],
-  healthcare: ['healthcare conference speakers wanted', 'medical summit CFP'],
-  finance: ['fintech conference call for speakers', 'finance summit CFP'],
-  energy: ['energy conference speakers', 'renewable energy CFP'],
-  environment: ['sustainability conference CFP', 'climate summit speakers'],
+  ai: ['AI machine learning conference CFP', 'artificial intelligence speakers wanted'],
+  'data science': ['data science analytics conference CFP', 'data engineering speakers wanted'],
+  cloud: ['cloud computing conference CFP', 'cloud infrastructure speakers wanted'],
+  devops: ['devops conference call for speakers', 'platform engineering CFP'],
   cybersecurity: ['security conference CFP', 'infosec speakers wanted'],
+  blockchain: ['blockchain web3 conference CFP', 'crypto conference speakers'],
+  iot: ['IoT internet of things conference CFP', 'connected devices speakers'],
+
+  // --- Business & Professional ---
+  sales: ['sales conference call for speakers', 'sales summit CFP'],
+  marketing: ['marketing conference speakers', 'digital marketing CFP'],
+  advertising: ['advertising conference call for speakers', 'ad industry summit CFP'],
+  'public relations': ['public relations PR conference CFP', 'communications summit speakers'],
+  hr: ['HR conference speakers', 'talent summit CFP', 'recruiting conference CFP'],
+  management: ['management leadership conference CFP', 'executive summit speakers'],
+  leadership: ['leadership conference call for speakers', 'leadership summit CFP'],
+  entrepreneurship: ['entrepreneurship startup conference CFP', 'founder summit speakers'],
+  startups: ['startup conference call for speakers', 'startup summit CFP'],
+  'venture capital': ['venture capital conference CFP', 'VC investor summit speakers'],
+  'business strategy': ['business strategy conference CFP', 'strategy summit speakers'],
+  operations: ['operations management conference CFP', 'business operations speakers'],
+  'supply chain': ['supply chain logistics conference CFP', 'supply chain summit speakers'],
+  consulting: ['consulting conference call for speakers', 'professional services CFP'],
+
+  // --- Creative & Media ---
   entertainment: ['entertainment conference speakers', 'media summit CFP'],
+  film: ['film industry conference CFP', 'filmmaking summit speakers'],
+  television: ['television media conference CFP', 'TV industry speakers wanted'],
+  music: ['music industry conference CFP', 'music summit speakers'],
+  gaming: ['gaming conference call for speakers', 'game industry CFP'],
+  media: ['media conference call for speakers', 'media industry summit CFP'],
+  journalism: ['journalism conference CFP', 'media journalism speakers wanted'],
+  publishing: ['publishing conference call for speakers', 'book publishing CFP'],
+  'content creation': ['content creation conference CFP', 'creator economy speakers'],
+  photography: ['photography conference call for speakers', 'photography summit CFP'],
+  animation: ['animation conference call for speakers', 'animation industry CFP'],
+  podcasting: ['podcasting conference CFP', 'podcast industry speakers wanted'],
+
+  // --- Design & Arts ---
+  'graphic design': ['graphic design conference CFP', 'design conference speakers'],
+  ux: ['UX design conference CFP', 'user experience speakers wanted'],
+  design: ['design conference call for speakers', 'design summit CFP'],
+  'industrial design': ['industrial design conference CFP', 'product design speakers'],
+  architecture: ['architecture conference call for speakers', 'architecture summit CFP'],
+  'interior design': ['interior design conference CFP', 'interior design speakers wanted'],
+  fashion: ['fashion industry conference CFP', 'fashion summit speakers'],
+  'fine arts': ['fine arts conference call for speakers', 'arts summit CFP'],
+
+  // --- Science & Research ---
+  biology: ['biology life sciences conference CFP', 'biology summit speakers'],
+  chemistry: ['chemistry conference call for speakers', 'chemistry summit CFP'],
+  physics: ['physics conference call for speakers', 'physics summit CFP'],
+  space: ['space astronomy conference CFP', 'space industry speakers wanted'],
+  'environmental science': ['environmental science conference CFP', 'environment summit speakers'],
+  climate: ['climate conference call for speakers', 'climate summit CFP'],
+  geology: ['geology earth science conference CFP', 'geoscience speakers wanted'],
+  'marine science': ['marine science oceanography conference CFP', 'ocean science speakers'],
+
+  // --- Healthcare & Wellness ---
+  healthcare: ['healthcare conference speakers wanted', 'medical summit CFP'],
+  nursing: ['nursing conference call for speakers', 'nursing summit CFP'],
+  'public health': ['public health conference CFP', 'public health speakers wanted'],
+  'mental health': ['mental health psychology conference CFP', 'mental health speakers'],
+  pharmacy: ['pharmacy pharmaceutical conference CFP', 'pharmacy summit speakers'],
+  dentistry: ['dentistry dental conference CFP', 'dental summit speakers'],
+  wellness: ['wellness conference call for speakers', 'wellness summit CFP'],
+  fitness: ['fitness industry conference CFP', 'fitness summit speakers'],
+  nutrition: ['nutrition conference call for speakers', 'nutrition summit CFP'],
+
+  // --- Finance & Economics ---
+  finance: ['fintech conference call for speakers', 'finance summit CFP'],
+  banking: ['banking conference call for speakers', 'banking summit CFP'],
+  insurance: ['insurance conference CFP', 'insurtech speakers wanted'],
+  accounting: ['accounting conference call for speakers', 'accounting summit CFP'],
+  investment: ['investment wealth management conference CFP', 'investment summit speakers'],
+  'real estate': ['proptech conference speakers', 'real estate summit CFP'],
+  economics: ['economics conference call for speakers', 'economics summit CFP'],
+
+  // --- Education ---
   education: ['education conference CFP', 'edtech speakers wanted'],
+  'k-12 education': ['K-12 education conference CFP', 'K-12 teachers summit speakers'],
+  'higher education': ['higher education university conference CFP', 'higher ed speakers'],
+  edtech: ['edtech conference call for speakers', 'education technology CFP'],
+  'online learning': ['online learning conference CFP', 'elearning summit speakers'],
+  'special education': ['special education conference CFP', 'special ed speakers wanted'],
+  'stem education': ['STEM education conference CFP', 'STEM teachers summit speakers'],
+
+  // --- Government & Policy ---
+  government: ['government conference call for speakers', 'govtech summit CFP'],
+  'public policy': ['public policy conference CFP', 'policy summit speakers wanted'],
+  nonprofit: ['nonprofit conference call for speakers', 'social impact summit CFP'],
+  'social impact': ['social impact conference CFP', 'social good summit speakers'],
+  'international relations': ['international relations conference CFP', 'foreign policy speakers'],
+  defense: ['defense military conference CFP', 'defense summit speakers wanted'],
+
+  // --- Engineering ---
+  'civil engineering': ['civil engineering conference CFP', 'civil engineering speakers'],
+  'mechanical engineering': ['mechanical engineering conference CFP', 'mechanical engineering speakers'],
+  'electrical engineering': ['electrical engineering conference CFP', 'EE summit speakers'],
+  aerospace: ['aerospace conference call for speakers', 'aerospace summit CFP'],
+  automotive: ['automotive conference call for speakers', 'automotive summit CFP'],
+
+  // --- Legal ---
+  legal: ['legal tech conference CFP', 'law conference speakers'],
+  compliance: ['compliance regulation conference CFP', 'compliance summit speakers'],
+  'intellectual property': ['intellectual property conference CFP', 'IP law speakers wanted'],
+  privacy: ['privacy data protection conference CFP', 'privacy summit speakers'],
+
+  // --- Agriculture & Food ---
+  agriculture: ['agtech conference CFP', 'agriculture summit speakers'],
+  'food science': ['food science conference CFP', 'food industry speakers wanted'],
+  sustainability: ['sustainability conference CFP', 'climate summit speakers'],
+  agtech: ['agtech agriculture technology conference CFP', 'agtech speakers wanted'],
+
+  // --- Transportation & Logistics ---
+  aviation: ['aviation conference call for speakers', 'aviation summit CFP'],
+  shipping: ['shipping logistics conference CFP', 'shipping industry speakers'],
+  logistics: ['logistics conference call for speakers', 'logistics summit CFP'],
+  'urban planning': ['urban planning conference CFP', 'smart cities speakers wanted'],
+  'smart cities': ['smart cities conference CFP', 'smart cities summit speakers'],
+
+  // --- Energy ---
+  energy: ['energy conference speakers', 'renewable energy CFP'],
+  'renewable energy': ['renewable energy clean tech conference CFP', 'renewables speakers'],
+  'oil and gas': ['oil gas energy conference CFP', 'oil gas summit speakers'],
+  'nuclear energy': ['nuclear energy conference CFP', 'nuclear summit speakers'],
+  'clean tech': ['clean tech conference call for speakers', 'cleantech summit CFP'],
+
+  // --- Sports & Recreation ---
+  'sports management': ['sports management conference CFP', 'sports business speakers'],
+  esports: ['esports conference call for speakers', 'esports summit CFP'],
+  'event management': ['event management conference CFP', 'events industry speakers'],
+
+  // --- Hospitality & Tourism ---
+  hospitality: ['hospitality hotel conference CFP', 'hospitality summit speakers'],
+  travel: ['travel tourism conference CFP', 'travel industry speakers wanted'],
+  tourism: ['tourism conference call for speakers', 'tourism summit CFP'],
+  restaurants: ['restaurant food service conference CFP', 'restaurant industry speakers'],
+  'event planning': ['event planning conference CFP', 'event planning speakers wanted'],
+
+  // --- Other ---
   retail: ['retail conference speakers', 'ecommerce summit CFP'],
   manufacturing: ['manufacturing conference CFP', 'industry 4.0 speakers'],
-  marketing: ['marketing conference speakers', 'digital marketing CFP'],
-  hr: ['HR conference speakers', 'talent summit CFP'],
-  legal: ['legal tech conference CFP', 'law conference speakers'],
-  'real estate': ['proptech conference speakers', 'real estate summit CFP'],
-  agriculture: ['agtech conference CFP', 'agriculture summit speakers'],
+  telecom: ['telecom 5G conference CFP', 'telecom summit speakers'],
+  environment: ['sustainability conference CFP', 'climate summit speakers'],
 };
 
 const FORMAT_KEYWORDS: Record<string, string> = {

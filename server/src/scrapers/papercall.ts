@@ -45,7 +45,7 @@ function mapToScraperResult(event: PaperCallEvent): ScraperResult | null {
 
   const industries = normalizeIndustries(event.tags);
   if (industries.length === 0) {
-    industries.push('technology');
+    industries.push('general');
   }
 
   return {

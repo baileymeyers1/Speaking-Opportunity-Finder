@@ -22,41 +22,127 @@ function withUsFocus(query: string) {
 
 // Industry-specific search queries for CFP discovery
 const INDUSTRY_CFP_QUERIES = [
-  // --- Technology ---
+  // --- Technology (normalized, not over-represented) ---
   { query: withUsFocus('AI artificial intelligence machine learning conference call for speakers CFP'), industries: ['ai', 'machine learning'] },
   { query: withUsFocus('data science analytics conference call for speakers CFP'), industries: ['data science'] },
   { query: withUsFocus('cloud computing devops conference call for speakers CFP'), industries: ['cloud', 'devops'] },
   { query: withUsFocus('cybersecurity infosec conference call for papers CFP'), industries: ['cybersecurity'] },
   { query: withUsFocus('software engineering developer conference call for speakers CFP'), industries: ['software development'] },
-  { query: withUsFocus('web development frontend backend conference call for speakers'), industries: ['web development'] },
-  // --- Healthcare & Life Sciences ---
-  { query: withUsFocus('healthcare medical conference call for speakers CFP'), industries: ['healthcare'] },
-  { query: withUsFocus('biotech pharmaceutical conference call for speakers CFP'), industries: ['biotech', 'pharmaceutical'] },
-  // --- Finance & Business ---
-  { query: withUsFocus('fintech finance banking conference call for speakers CFP'), industries: ['finance', 'fintech'] },
-  { query: withUsFocus('venture capital startup conference call for speakers CFP'), industries: ['startups', 'venture capital'] },
-  { query: withUsFocus('insurance insurtech conference call for speakers CFP'), industries: ['insurance'] },
-  // --- Professional Services ---
+  { query: withUsFocus('blockchain web3 conference call for speakers CFP'), industries: ['blockchain'] },
+  { query: withUsFocus('IoT internet of things conference call for speakers CFP'), industries: ['iot'] },
+
+  // --- Business & Professional ---
+  { query: withUsFocus('sales conference call for speakers CFP'), industries: ['sales'] },
   { query: withUsFocus('marketing digital marketing conference call for speakers CFP'), industries: ['marketing'] },
-  { query: withUsFocus('HR human resources talent conference call for speakers CFP'), industries: ['hr'] },
-  { query: withUsFocus('legal law conference call for speakers CFP'), industries: ['legal'] },
+  { query: withUsFocus('advertising conference call for speakers CFP'), industries: ['advertising'] },
+  { query: withUsFocus('public relations PR conference call for speakers CFP'), industries: ['public relations'] },
+  { query: withUsFocus('HR human resources recruiting conference call for speakers CFP'), industries: ['hr', 'recruiting'] },
+  { query: withUsFocus('management leadership conference call for speakers CFP'), industries: ['management', 'leadership'] },
+  { query: withUsFocus('entrepreneurship startup conference call for speakers CFP'), industries: ['entrepreneurship', 'startups'] },
+  { query: withUsFocus('venture capital conference call for speakers CFP'), industries: ['venture capital'] },
+  { query: withUsFocus('business strategy operations conference call for speakers CFP'), industries: ['business strategy', 'operations'] },
   { query: withUsFocus('supply chain logistics conference call for speakers CFP'), industries: ['supply chain', 'logistics'] },
-  // --- Industry & Infrastructure ---
-  { query: withUsFocus('manufacturing industry conference call for speakers CFP'), industries: ['manufacturing'] },
-  { query: withUsFocus('energy renewable conference call for speakers CFP'), industries: ['energy'] },
-  { query: withUsFocus('real estate proptech conference call for speakers CFP'), industries: ['real estate'] },
-  { query: withUsFocus('architecture construction conference call for speakers CFP'), industries: ['architecture', 'construction'] },
-  { query: withUsFocus('automotive mobility conference call for speakers CFP'), industries: ['automotive'] },
-  { query: withUsFocus('aerospace defense conference call for speakers CFP'), industries: ['aerospace', 'defense'] },
-  { query: withUsFocus('telecom 5G conference call for speakers CFP'), industries: ['telecom'] },
-  // --- Social Impact & Public Sector ---
-  { query: withUsFocus('sustainability climate environment conference call for speakers CFP'), industries: ['sustainability'] },
-  { query: withUsFocus('education edtech conference call for speakers CFP'), industries: ['education'] },
-  { query: withUsFocus('nonprofit social impact conference call for speakers CFP'), industries: ['nonprofit'] },
-  { query: withUsFocus('government public policy conference call for speakers CFP'), industries: ['government'] },
+  { query: withUsFocus('consulting professional services conference call for speakers CFP'), industries: ['consulting'] },
+
   // --- Creative & Media ---
-  { query: withUsFocus('entertainment media conference call for speakers CFP'), industries: ['entertainment', 'media'] },
-  { query: withUsFocus('design UX product conference call for speakers CFP'), industries: ['design', 'ux'] },
+  { query: withUsFocus('entertainment film television conference call for speakers CFP'), industries: ['entertainment', 'film'] },
+  { query: withUsFocus('music industry conference call for speakers CFP'), industries: ['music'] },
+  { query: withUsFocus('gaming esports conference call for speakers CFP'), industries: ['gaming', 'esports'] },
+  { query: withUsFocus('media journalism conference call for speakers CFP'), industries: ['media', 'journalism'] },
+  { query: withUsFocus('publishing content creation conference call for speakers CFP'), industries: ['publishing', 'content creation'] },
+  { query: withUsFocus('photography animation conference call for speakers CFP'), industries: ['photography', 'animation'] },
+  { query: withUsFocus('podcasting conference call for speakers CFP'), industries: ['podcasting'] },
+
+  // --- Design & Arts ---
+  { query: withUsFocus('graphic design conference call for speakers CFP'), industries: ['graphic design'] },
+  { query: withUsFocus('UX UI design conference call for speakers CFP'), industries: ['ux', 'design'] },
+  { query: withUsFocus('industrial design conference call for speakers CFP'), industries: ['industrial design'] },
+  { query: withUsFocus('architecture conference call for speakers CFP'), industries: ['architecture'] },
+  { query: withUsFocus('interior design conference call for speakers CFP'), industries: ['interior design'] },
+  { query: withUsFocus('fashion industry conference call for speakers CFP'), industries: ['fashion'] },
+  { query: withUsFocus('fine arts conference call for speakers CFP'), industries: ['fine arts'] },
+
+  // --- Science & Research ---
+  { query: withUsFocus('biology life sciences conference call for speakers CFP'), industries: ['biology'] },
+  { query: withUsFocus('chemistry conference call for speakers CFP'), industries: ['chemistry'] },
+  { query: withUsFocus('physics conference call for speakers CFP'), industries: ['physics'] },
+  { query: withUsFocus('space astronomy conference call for speakers CFP'), industries: ['space', 'astronomy'] },
+  { query: withUsFocus('environmental science climate conference call for speakers CFP'), industries: ['environmental science', 'climate'] },
+  { query: withUsFocus('geology earth science conference call for speakers CFP'), industries: ['geology'] },
+  { query: withUsFocus('marine science oceanography conference call for speakers CFP'), industries: ['marine science'] },
+
+  // --- Healthcare & Wellness ---
+  { query: withUsFocus('healthcare medical conference call for speakers CFP'), industries: ['healthcare'] },
+  { query: withUsFocus('nursing conference call for speakers CFP'), industries: ['nursing'] },
+  { query: withUsFocus('public health conference call for speakers CFP'), industries: ['public health'] },
+  { query: withUsFocus('mental health psychology conference call for speakers CFP'), industries: ['mental health'] },
+  { query: withUsFocus('pharmacy pharmaceutical conference call for speakers CFP'), industries: ['pharmacy', 'pharmaceutical'] },
+  { query: withUsFocus('dentistry dental conference call for speakers CFP'), industries: ['dentistry'] },
+  { query: withUsFocus('wellness fitness nutrition conference call for speakers CFP'), industries: ['wellness', 'fitness', 'nutrition'] },
+
+  // --- Finance & Economics ---
+  { query: withUsFocus('fintech finance banking conference call for speakers CFP'), industries: ['finance', 'fintech'] },
+  { query: withUsFocus('insurance insurtech conference call for speakers CFP'), industries: ['insurance'] },
+  { query: withUsFocus('accounting conference call for speakers CFP'), industries: ['accounting'] },
+  { query: withUsFocus('investment wealth management conference call for speakers CFP'), industries: ['investment'] },
+  { query: withUsFocus('real estate proptech conference call for speakers CFP'), industries: ['real estate'] },
+  { query: withUsFocus('economics conference call for speakers CFP'), industries: ['economics'] },
+
+  // --- Education ---
+  { query: withUsFocus('K-12 education conference call for speakers CFP'), industries: ['k-12 education'] },
+  { query: withUsFocus('higher education university conference call for speakers CFP'), industries: ['higher education'] },
+  { query: withUsFocus('edtech online learning conference call for speakers CFP'), industries: ['edtech'] },
+  { query: withUsFocus('special education conference call for speakers CFP'), industries: ['special education'] },
+  { query: withUsFocus('STEM education conference call for speakers CFP'), industries: ['stem education'] },
+
+  // --- Government & Policy ---
+  { query: withUsFocus('public policy government conference call for speakers CFP'), industries: ['public policy', 'government'] },
+  { query: withUsFocus('nonprofit social impact conference call for speakers CFP'), industries: ['nonprofit', 'social impact'] },
+  { query: withUsFocus('international relations conference call for speakers CFP'), industries: ['international relations'] },
+  { query: withUsFocus('defense military conference call for speakers CFP'), industries: ['defense'] },
+
+  // --- Engineering ---
+  { query: withUsFocus('civil engineering conference call for speakers CFP'), industries: ['civil engineering'] },
+  { query: withUsFocus('mechanical engineering conference call for speakers CFP'), industries: ['mechanical engineering'] },
+  { query: withUsFocus('electrical engineering conference call for speakers CFP'), industries: ['electrical engineering'] },
+  { query: withUsFocus('aerospace engineering conference call for speakers CFP'), industries: ['aerospace'] },
+  { query: withUsFocus('automotive engineering conference call for speakers CFP'), industries: ['automotive'] },
+
+  // --- Legal ---
+  { query: withUsFocus('legal law conference call for speakers CFP'), industries: ['legal'] },
+  { query: withUsFocus('compliance regulation conference call for speakers CFP'), industries: ['compliance', 'regulation'] },
+  { query: withUsFocus('intellectual property privacy conference call for speakers CFP'), industries: ['intellectual property', 'privacy'] },
+
+  // --- Agriculture & Food ---
+  { query: withUsFocus('agriculture farming conference call for speakers CFP'), industries: ['agriculture'] },
+  { query: withUsFocus('food science conference call for speakers CFP'), industries: ['food science'] },
+  { query: withUsFocus('sustainability agtech conference call for speakers CFP'), industries: ['sustainability', 'agtech'] },
+
+  // --- Transportation & Logistics ---
+  { query: withUsFocus('aviation conference call for speakers CFP'), industries: ['aviation'] },
+  { query: withUsFocus('shipping logistics conference call for speakers CFP'), industries: ['shipping', 'logistics'] },
+  { query: withUsFocus('urban planning smart cities conference call for speakers CFP'), industries: ['urban planning', 'smart cities'] },
+
+  // --- Energy ---
+  { query: withUsFocus('renewable energy clean tech conference call for speakers CFP'), industries: ['renewable energy', 'clean tech'] },
+  { query: withUsFocus('oil gas energy conference call for speakers CFP'), industries: ['oil and gas', 'energy'] },
+  { query: withUsFocus('nuclear energy utilities conference call for speakers CFP'), industries: ['nuclear energy'] },
+
+  // --- Sports & Recreation ---
+  { query: withUsFocus('sports management conference call for speakers CFP'), industries: ['sports management'] },
+  { query: withUsFocus('esports gaming industry conference call for speakers CFP'), industries: ['esports'] },
+  { query: withUsFocus('fitness industry event management conference call for speakers CFP'), industries: ['fitness', 'event management'] },
+
+  // --- Hospitality & Tourism ---
+  { query: withUsFocus('hospitality hotel conference call for speakers CFP'), industries: ['hospitality'] },
+  { query: withUsFocus('travel tourism conference call for speakers CFP'), industries: ['travel', 'tourism'] },
+  { query: withUsFocus('restaurant food service conference call for speakers CFP'), industries: ['restaurants'] },
+  { query: withUsFocus('event planning conference call for speakers CFP'), industries: ['event planning'] },
+
+  // --- Manufacturing ---
+  { query: withUsFocus('manufacturing industry 4.0 conference call for speakers CFP'), industries: ['manufacturing'] },
+  { query: withUsFocus('telecom 5G conference call for speakers CFP'), industries: ['telecom'] },
+
   // --- Format variety ---
   { query: withUsFocus('professional conference call for speakers open submissions'), industries: [] },
   { query: withUsFocus('podcast guest speaker application submit pitch'), industries: [] },
