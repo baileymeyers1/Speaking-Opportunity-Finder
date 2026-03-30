@@ -21,9 +21,12 @@
     "prisma:seed": "tsx prisma/seed.ts",
     "test": "npm run test:server && npm run test:client",
     "test:server": "cd server && npx vitest run --passWithNoTests",
-    "test:client": "cd client && npx vitest run --passWithNoTests"
+    "test:client": "cd client && npx vitest run --passWithNoTests",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui"
   },
   "devDependencies": {
+    "@playwright/test": "^1.58.2",
     "concurrently": "^8.2.2",
     "prisma": "^5.10.0",
     "tsx": "^4.7.0"
