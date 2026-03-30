@@ -341,10 +341,15 @@ function extractMetadata(content: string, title: string, searchIndustries: strin
  */
 export async function performLiveSearch(
   query: string,
-  industries: string[]
+  industries: string[],
+  locations: string[] = []
 ): Promise<EnrichedLiveResult[]> {
   const apiKey = config.scrapers?.webSearch;
   const currentYear = new Date().getFullYear();
+
+  const locationSuffix = locations.length > 0
+    ? ` ${locations.join(' OR ')}`
+    : '';
 
   let searchQuery = '';
   if (query && industries.length > 0) {
@@ -352,15 +357,15 @@ export async function performLiveSearch(
       const templates = INDUSTRY_QUERIES[ind.toLowerCase()];
       return templates ? templates[0] : `${ind} conference`;
     });
-    searchQuery = `"${query}" ${industryTerms.join(' OR ')} speaking opportunity CFP ${currentYear}`;
+    searchQuery = `"${query}" ${industryTerms.join(' OR ')} speaking opportunity CFP ${currentYear}${locationSuffix}`;
   } else if (query) {
-    searchQuery = `"${query}" speaking opportunity OR call for speakers OR CFP ${currentYear}`;
+    searchQuery = `"${query}" speaking opportunity OR call for speakers OR CFP ${currentYear}${locationSuffix}`;
   } else if (industries.length > 0) {
     const industryTerms = industries.map((ind) => {
       const templates = INDUSTRY_QUERIES[ind.toLowerCase()];
       return templates ? templates[0] : `${ind} conference`;
     });
-    searchQuery = `(${industryTerms.join(' OR ')}) call for speakers ${currentYear}`;
+    searchQuery = `(${industryTerms.join(' OR ')}) call for speakers ${currentYear}${locationSuffix}`;
   }
 
   if (!searchQuery) {

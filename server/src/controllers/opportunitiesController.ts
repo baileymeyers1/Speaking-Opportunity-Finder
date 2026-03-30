@@ -115,8 +115,13 @@ export async function getOpportunities(
           ? (queryParams.industries as string[]).map(String)
           : [String(queryParams.industries)]
         : [];
+      const locationList = queryParams.locations
+        ? Array.isArray(queryParams.locations)
+          ? (queryParams.locations as string[]).map(String)
+          : [String(queryParams.locations)]
+        : [];
 
-      liveResults = await liveSearchService.performLiveSearch(searchQuery, industryList);
+      liveResults = await liveSearchService.performLiveSearch(searchQuery, industryList, locationList);
 
       // Fire-and-forget auto-save
       if (liveResults.length > 0) {
@@ -251,7 +256,7 @@ export async function liveSearch(
   next: NextFunction
 ): Promise<void> {
   try {
-    const { query, industries } = req.query;
+    const { query, industries, locations } = req.query;
 
     const searchQuery = query ? String(query) : '';
     const industryList = industries
@@ -259,10 +264,16 @@ export async function liveSearch(
         ? industries.map(String)
         : [String(industries)]
       : [];
+    const locationList = locations
+      ? Array.isArray(locations)
+        ? locations.map(String)
+        : [String(locations)]
+      : [];
 
     const results = await liveSearchService.performLiveSearch(
       searchQuery,
-      industryList
+      industryList,
+      locationList
     );
 
     // Auto-save live results to database (async, don't wait for completion)
