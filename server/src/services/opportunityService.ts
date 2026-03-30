@@ -31,6 +31,36 @@ function parseJsonArray(value: string): string[] {
   }
 }
 
+function computeSearchRelevance(opportunity: any, query: string): number {
+  const q = query.toLowerCase();
+  let score = 0;
+
+  // Title match is strongest signal
+  const title = (opportunity.title || '').toLowerCase();
+  if (title === q) score += 100;
+  else if (title.startsWith(q)) score += 80;
+  else if (title.includes(q)) score += 50;
+
+  // Organization match
+  const org = (opportunity.organization || '').toLowerCase();
+  if (org.includes(q)) score += 30;
+
+  // Industry match
+  try {
+    const industries = JSON.parse(opportunity.industries || '[]');
+    if (industries.some((ind: string) => ind.toLowerCase().includes(q))) score += 40;
+  } catch {}
+
+  // Description match (weakest — any tech conf could mention "entertainment" in passing)
+  const desc = (opportunity.description || '').toLowerCase();
+  if (desc.includes(q)) score += 10;
+
+  // Bonus for quality
+  score += (opportunity.qualityScore || 0) * 0.1;
+
+  return score;
+}
+
 function transformOpportunity(opp: {
   id: string;
   title: string;
@@ -170,6 +200,36 @@ export async function getOpportunities(
             { cfpDeadline: Prisma.SortOrder.asc },
           ]
         : [{ cfpDeadline: Prisma.SortOrder.asc }];
+
+  // When a search query is active, fetch all matches so we can sort by relevance globally
+  // before paginating. Without this, we'd only re-sort within a single DB page.
+  if (filters.search) {
+    const [allMatches, total] = await Promise.all([
+      prisma.opportunity.findMany({
+        where,
+        orderBy,
+      }),
+      prisma.opportunity.count({ where }),
+    ]);
+
+    // Score and sort by relevance descending
+    const scored = allMatches
+      .map((item) => ({
+        item,
+        relevance: computeSearchRelevance(item, filters.search!),
+      }))
+      .sort((a, b) => b.relevance - a.relevance);
+
+    const paginatedItems = scored.slice(skip, skip + pageSize).map((s) => s.item);
+
+    return {
+      items: paginatedItems.map(transformOpportunity),
+      total,
+      page,
+      pageSize,
+      totalPages: Math.ceil(total / pageSize),
+    };
+  }
 
   const [items, total] = await Promise.all([
     prisma.opportunity.findMany({
