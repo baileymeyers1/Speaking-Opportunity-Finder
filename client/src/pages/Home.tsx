@@ -76,7 +76,10 @@ export function Home() {
   const [totalPages, setTotalPages] = useState(1);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [liveResultCount, setLiveResultCount] = useState(0);
+  // Store all live search results so we can re-sort/filter client-side
+  const allLiveResults = useRef<Opportunity[]>([]);
   const cacheLoaded = useRef(false);
+  const skipNextFetch = useRef(false);
   const filtersHydrated = useRef(true);
   const [bannerDismissed, setBannerDismissed] = useState(
     () => sessionStorage.getItem(BANNER_DISMISSED_KEY) === 'true'
@@ -99,12 +102,14 @@ export function Home() {
 
         if (Date.now() - liveCached.timestamp < 5 * 60 * 1000) {
           setOpportunities(liveCached.items);
+          allLiveResults.current = liveCached.items;
           setTotalPages(liveCached.totalPages);
           setLiveResultCount(liveCached.liveResultCount);
           setLastUpdated(new Date(liveCached.timestamp));
           setIsLoading(false);
           setIsStale(false);
           cacheLoaded.current = true;
+          skipNextFetch.current = true;
           return;
         }
       }
@@ -123,6 +128,28 @@ export function Home() {
 
   const fetchOpportunities = useCallback(async (liveSearch = false) => {
     if (!filtersHydrated.current) return;
+    // Skip the automatic re-fetch if we just restored from live cache
+    if (skipNextFetch.current && !liveSearch) {
+      skipNextFetch.current = false;
+      return;
+    }
+    // If we have active live results and this is a non-live fetch (sort/filter change),
+    // re-sort the existing results client-side instead of losing them
+    if (!liveSearch && allLiveResults.current.length > 0) {
+      const sortBy = debouncedFilters.sortBy || 'deadline';
+      const sorted = [...allLiveResults.current].sort((a, b) => {
+        const dateVal = (v: string | null) => {
+          if (!v) return Number.MAX_SAFE_INTEGER;
+          const d = new Date(v).getTime();
+          return isNaN(d) ? Number.MAX_SAFE_INTEGER : d;
+        };
+        if (sortBy === 'quality') return (b.qualityScore || 0) - (a.qualityScore || 0);
+        if (sortBy === 'eventDate') return dateVal(a.eventDate) - dateVal(b.eventDate);
+        return dateVal(a.cfpDeadline) - dateVal(b.cfpDeadline);
+      });
+      setOpportunities(sorted);
+      return;
+    }
     if (!cacheLoaded.current && !liveSearch) {
       setIsLoading(true);
     }
@@ -161,6 +188,11 @@ export function Home() {
         setLiveResultCount(response.data.liveResultCount || 0);
         setLastUpdated(new Date());
         setIsStale(false);
+
+        // Store all results when live search is active so we can re-sort client-side
+        if (liveSearch && (response.data.liveResultCount ?? 0) > 0) {
+          allLiveResults.current = response.data.items;
+        }
 
         // Cache live results so detail page can find them
         const liveItems = response.data.items.filter((item) => item.isLiveResult);
@@ -228,7 +260,10 @@ export function Home() {
   const handleFiltersChange = (newFilters: OpportunityFilters) => {
     setFilters(newFilters);
     setPage(1);
-    setLiveResultCount(0);
+    // Don't clear live results on filter/sort changes — we re-sort client-side
+    if (allLiveResults.current.length === 0) {
+      setLiveResultCount(0);
+    }
     setRateLimitWarning(null);
   };
 
@@ -248,6 +283,7 @@ export function Home() {
 
   const handleClearLiveResults = () => {
     setLiveResultCount(0);
+    allLiveResults.current = [];
     sessionStorage.removeItem(LIVE_SEARCH_CACHE_KEY);
     fetchOpportunities(false);
   };
