@@ -30,6 +30,7 @@ export interface Opportunity {
   updatedAt: string;
   isLiveResult?: boolean;
   liveSearchUrl?: string;
+  matchesLocationFilter?: boolean;
 }
 
 export type OpportunityFormat =

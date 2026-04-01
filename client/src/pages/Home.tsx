@@ -331,6 +331,11 @@ export function Home() {
             <div className="flex items-center justify-between" aria-live="polite">
               <p className="text-sm text-muted-foreground">
                 Showing {opportunities.length} result{opportunities.length !== 1 ? 's' : ''}
+                {filters.locations && filters.locations.length > 0 && (
+                  <span className="ml-1">
+                    ({opportunities.filter(o => o.matchesLocationFilter).length} in your area)
+                  </span>
+                )}
                 {liveResultCount > 0 && (
                   <span className="ml-1">
                     ({liveResultCount} from live search)
@@ -358,11 +363,42 @@ export function Home() {
             </div>
           )}
 
-          <OpportunityList
-            opportunities={opportunities}
-            isLoading={isLoading}
-            onClearFilters={handleClearFilters}
-          />
+          {(() => {
+            const hasLocationFilter = filters.locations && filters.locations.length > 0;
+            const locationMatched = hasLocationFilter
+              ? opportunities.filter(o => o.matchesLocationFilter)
+              : opportunities;
+            const otherResults = hasLocationFilter
+              ? opportunities.filter(o => !o.matchesLocationFilter)
+              : [];
+
+            return (
+              <>
+                <OpportunityList
+                  opportunities={locationMatched}
+                  isLoading={isLoading}
+                  onClearFilters={handleClearFilters}
+                />
+
+                {otherResults.length > 0 && !isLoading && (
+                  <>
+                    <div className="flex items-center gap-3 pt-6 pb-2">
+                      <div className="h-px flex-1 bg-border" />
+                      <p className="text-sm font-medium text-muted-foreground whitespace-nowrap">
+                        More Speaking Opportunities
+                      </p>
+                      <div className="h-px flex-1 bg-border" />
+                    </div>
+                    <OpportunityList
+                      opportunities={otherResults}
+                      isLoading={false}
+                      onClearFilters={handleClearFilters}
+                    />
+                  </>
+                )}
+              </>
+            );
+          })()}
 
           {/* Pagination */}
           {totalPages > 1 && !isLoading && liveResultCount === 0 && (
