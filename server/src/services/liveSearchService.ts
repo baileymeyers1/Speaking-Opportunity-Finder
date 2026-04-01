@@ -723,9 +723,10 @@ async function extractMetadataWithClaude(
 
   if (!config.claude.apiKey || items.length === 0) return resultMap;
 
-  // Build a compact prompt with all items
+  // Build a compact prompt with all items — limit text per item to keep within context
+  const charsPerItem = Math.min(800, Math.floor(6000 / items.length));
   const itemDescriptions = items.map(item =>
-    `[${item.index}] "${item.title}"\n${item.pageText.substring(0, 800)}`
+    `[${item.index}] "${item.title}"\n${item.pageText.substring(0, charsPerItem)}`
   ).join('\n---\n');
 
   const prompt = `Extract metadata from these speaking opportunity pages. Return ONLY a JSON array, no other text.
@@ -751,7 +752,7 @@ Return format: [{"index":0,"eventDate":"2026-05-04","cfpDeadline":"2025-09-21","
     const client = new Anthropic({ apiKey: config.claude.apiKey });
     const message = await client.messages.create({
       model: config.claude.model,
-      max_tokens: 2000,
+      max_tokens: 4096,
       messages: [{ role: 'user', content: prompt }],
     });
 
@@ -805,11 +806,12 @@ async function enrichResultsFromPages(
     }
   }
 
-  // Collect items that have page text for Claude extraction
+  // Collect ALL items for Claude — use page text if available, otherwise use snippet
   const itemsForClaude: { index: number; title: string; pageText: string }[] = [];
   for (let i = 0; i < results.length; i++) {
-    if (pageTexts[i]) {
-      itemsForClaude.push({ index: i, title: results[i].title, pageText: pageTexts[i]! });
+    const text = pageTexts[i] || results[i].description || '';
+    if (text.length > 20) {
+      itemsForClaude.push({ index: i, title: results[i].title, pageText: text });
     }
   }
 
