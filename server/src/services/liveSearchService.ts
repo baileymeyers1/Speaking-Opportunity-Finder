@@ -785,6 +785,55 @@ Return format: [{"index":0,"eventDate":"2026-05-04","cfpDeadline":"2025-09-21","
 }
 
 /**
+ * Merge Claude-extracted metadata into a live result.
+ * Claude data OVERWRITES regex-extracted data (not just fills gaps),
+ * because Claude reads the actual page content and is more accurate.
+ * Only skips overwrite when Claude returns undefined/null for a field.
+ */
+export function mergeClaudeMetadata(
+  result: EnrichedLiveResult,
+  claude: {
+    eventDate?: string;
+    cfpDeadline?: string;
+    location?: string;
+    isRemote?: boolean;
+    isClosed?: boolean;
+    compensationType?: string;
+    format?: string;
+    industries?: string[];
+  }
+): void {
+  if (claude.eventDate && claude.eventDate !== 'null') {
+    const d = new Date(claude.eventDate);
+    if (!isNaN(d.getTime())) result.eventDate = d.toISOString();
+  }
+  if (claude.cfpDeadline && claude.cfpDeadline !== 'null') {
+    const d = new Date(claude.cfpDeadline);
+    if (!isNaN(d.getTime())) result.cfpDeadline = d.toISOString();
+  }
+  if (claude.location && claude.location !== 'null') {
+    result.location = claude.location;
+  }
+  if (claude.isRemote !== undefined) {
+    result.isRemote = claude.isRemote;
+  }
+  if (claude.compensationType && claude.compensationType !== 'null') {
+    result.compensationType = claude.compensationType;
+  }
+  if (claude.format && claude.format !== 'null') {
+    result.format = claude.format;
+  }
+  if (claude.industries && claude.industries.length > 0) {
+    result.industries = normalizeIndustries(claude.industries);
+  }
+  if (claude.isClosed) {
+    if (!result.cfpDeadline) {
+      result.cfpDeadline = new Date('2020-01-01').toISOString();
+    }
+  }
+}
+
+/**
  * Scrape result pages in parallel, then use Claude to extract metadata.
  * Falls back to regex extraction if Claude is unavailable.
  */
@@ -841,38 +890,16 @@ async function enrichResultsFromPages(
     console.log(`[LiveSearch] Claude extracted metadata for ${claudeResults.size}/${itemsForClaude.length} results`);
   }
 
-  // Apply extracted metadata to results
+  // Apply extracted metadata to results — Claude overwrites regex data
   for (let i = 0; i < results.length; i++) {
     const r = results[i];
     const claudeMeta = claudeResults.get(i);
     const pageText = pageTexts[i];
 
     if (claudeMeta) {
-      // Apply Claude-extracted data (only fill missing fields)
-      if (!r.eventDate && claudeMeta.eventDate) {
-        const d = new Date(claudeMeta.eventDate);
-        if (!isNaN(d.getTime())) r.eventDate = d.toISOString();
-      }
-      if (!r.cfpDeadline && claudeMeta.cfpDeadline) {
-        const d = new Date(claudeMeta.cfpDeadline);
-        if (!isNaN(d.getTime())) r.cfpDeadline = d.toISOString();
-      }
-      if (!r.location && claudeMeta.location) r.location = claudeMeta.location;
-      if (!r.isRemote && claudeMeta.isRemote) r.isRemote = true;
-      if (!r.compensationType && claudeMeta.compensationType) r.compensationType = claudeMeta.compensationType;
-      if (claudeMeta.format && r.format === 'conference') r.format = claudeMeta.format;
-      if (claudeMeta.industries?.length > 0 && r.industries.length === 0) {
-        r.industries = normalizeIndustries(claudeMeta.industries);
-      }
-      // Mark closed results
-      if (claudeMeta.isClosed) {
-        // Set a past deadline to trigger "deadline passed" display
-        if (!r.cfpDeadline) {
-          r.cfpDeadline = new Date('2020-01-01').toISOString();
-        }
-      }
+      mergeClaudeMetadata(r, claudeMeta);
     } else if (pageText) {
-      // Fallback: regex extraction from page text
+      // Fallback: regex extraction from page text (only when Claude failed)
       const pageMeta = extractMetadata(pageText, r.title, searchIndustries);
       if (!r.location && pageMeta.location) r.location = pageMeta.location;
       if (!r.cfpDeadline && pageMeta.cfpDeadline) r.cfpDeadline = pageMeta.cfpDeadline;
