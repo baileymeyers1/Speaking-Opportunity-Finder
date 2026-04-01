@@ -557,6 +557,16 @@ export async function performLiveSearch(
     return new Date(r.eventDate) >= now;
   });
 
+  // 2. Relevance check — ensure search query appears in title, description, or industries
+  if (query) {
+    const queryLower = query.toLowerCase();
+    const queryTerms = queryLower.split(/\s+/).filter(t => t.length > 2);
+    results = results.filter(r => {
+      const text = `${r.title} ${r.description || ''} ${r.industries.join(' ')}`.toLowerCase();
+      return queryTerms.some(term => text.includes(term));
+    });
+  }
+
   // Location filtering is now handled client-side via matchesLocationFilter flag
 
   // Recalculate quality scores with location match context

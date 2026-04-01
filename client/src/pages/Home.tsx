@@ -13,6 +13,7 @@ import { AlertCircle, ChevronLeft, ChevronRight, Clock, Loader2, X } from 'lucid
 
 const CACHE_KEY = 'cachedOpportunities';
 const CACHE_MAX_AGE = 24 * 60 * 60 * 1000; // 24 hours
+const LIVE_SEARCH_CACHE_KEY = 'liveSearchCache';
 
 function loadCache(): { items: Opportunity[]; totalPages: number; timestamp: number } | null {
   try {
@@ -83,6 +84,32 @@ export function Home() {
 
   // Load cached results on first mount (before API call)
   useEffect(() => {
+    // Check if we have live search results cached for the current URL params
+    try {
+      const liveRaw = sessionStorage.getItem(LIVE_SEARCH_CACHE_KEY);
+      if (liveRaw) {
+        const liveCached = JSON.parse(liveRaw);
+        // Restore if cache is fresh (< 5 min) and params match current URL
+        const currentParams = new URLSearchParams();
+        if (filters.search) currentParams.set('search', filters.search);
+        filters.locations?.forEach((l) => currentParams.append('locations', l));
+        filters.industries?.forEach((i) => currentParams.append('industries', i));
+        currentParams.set('liveSearch', 'true');
+        currentParams.set('page', '1');
+
+        if (Date.now() - liveCached.timestamp < 5 * 60 * 1000) {
+          setOpportunities(liveCached.items);
+          setTotalPages(liveCached.totalPages);
+          setLiveResultCount(liveCached.liveResultCount);
+          setLastUpdated(new Date(liveCached.timestamp));
+          setIsLoading(false);
+          setIsStale(false);
+          cacheLoaded.current = true;
+          return;
+        }
+      }
+    } catch { /* ignore */ }
+
     const cached = loadCache();
     if (cached) {
       setOpportunities(cached.items);
@@ -139,6 +166,19 @@ export function Home() {
         const liveItems = response.data.items.filter((item) => item.isLiveResult);
         if (liveItems.length > 0) {
           upsertLiveResults(liveItems);
+        }
+
+        // Cache live search results for back-navigation restoration
+        if (liveSearch && response.data.liveResultCount > 0) {
+          try {
+            sessionStorage.setItem(LIVE_SEARCH_CACHE_KEY, JSON.stringify({
+              params: params.toString(),
+              items: response.data.items,
+              totalPages: response.data.totalPages,
+              liveResultCount: response.data.liveResultCount,
+              timestamp: Date.now(),
+            }));
+          } catch { /* ignore storage errors */ }
         }
 
         // Cache the default (unfiltered, page 1) response
@@ -208,6 +248,7 @@ export function Home() {
 
   const handleClearLiveResults = () => {
     setLiveResultCount(0);
+    sessionStorage.removeItem(LIVE_SEARCH_CACHE_KEY);
     fetchOpportunities(false);
   };
 
