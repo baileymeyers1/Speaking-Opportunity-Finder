@@ -15,6 +15,7 @@ export interface EnrichmentResult {
   cleanTitle?: string;
   cleanOrganization?: string;
   isRelevant?: boolean;
+  isClosed?: boolean;
   enrichmentStatus: 'enriched' | 'failed' | 'skipped';
   enrichmentError?: string;
 }
@@ -41,7 +42,7 @@ function getAnthropicClient(): Anthropic | null {
  */
 export async function enrichOpportunity(
   result: ScraperResult
-): Promise<ScraperResult & { enrichmentStatus?: string; enrichedAt?: Date; enrichmentError?: string; cleanTitle?: string; cleanOrganization?: string; isRelevant?: boolean }> {
+): Promise<ScraperResult & { enrichmentStatus?: string; enrichedAt?: Date; enrichmentError?: string; cleanTitle?: string; cleanOrganization?: string; isRelevant?: boolean; isClosed?: boolean }> {
   const client = getAnthropicClient();
 
   if (!client) {
@@ -119,6 +120,7 @@ export async function enrichOpportunity(
       cleanTitle: enriched.cleanTitle,
       cleanOrganization: enriched.cleanOrganization,
       isRelevant: enriched.isRelevant,
+      isClosed: enriched.isClosed,
       enrichmentStatus: 'enriched',
       enrichedAt: new Date()
     };
@@ -171,15 +173,22 @@ function buildEnrichmentPrompt(result: ScraperResult): string {
 
 Title: ${result.title}
 Organization: ${result.organization}
-Description: ${(result.description || '').substring(0, 800)}
+Description: ${(result.description || '').substring(0, 1200)}
 
 Tasks:
 1. Extract any missing fields: ${missing.join(', ')}
 2. Clean up the title: remove redundant suffixes like "Call for Speakers", "| Company Name" etc. Return the clean event name.
 3. Extract the organizing body (company, association, or group running this event). Not the event name itself.
 4. Determine if this is genuinely a speaking/presenting opportunity (true) or just a conference listing, job posting, or unrelated page (false).
+5. IMPORTANT — Date distinction:
+   - "cfpDeadline" = the date by which speaker proposals/abstracts must be SUBMITTED (submission deadline, proposal deadline, abstract due date). This is NOT the event date.
+   - "eventDate" = the date(s) when the actual conference/event takes place. If a date range is given (e.g., "May 4-6, 2026"), use the START date.
+   - Do NOT confuse these two. A "proposal deadline of September 21, 2025" for an event on "May 4-6, 2026" means cfpDeadline=2025-09-21 and eventDate=2026-05-04.
+6. IMPORTANT — Closed CFP detection:
+   - Set "isClosed" to true if the description indicates the call for speakers/papers/proposals is closed, expired, or no longer accepting submissions.
+   - Look for phrases like "call for speakers is now closed", "submissions closed", "no longer accepting proposals", etc.
 
-{"cfpDeadline":"YYYY-MM-DD or null","eventDate":"YYYY-MM-DD or null","industries":["topic1","topic2"],"location":"City, Country or Remote or null","compensationType":"paid|travel|honorarium|exposure or null","compensationAmount":null,"isRemote":false,"cleanTitle":"cleaned event name","cleanOrganization":"organizing body name","isRelevant":true}`;
+{"cfpDeadline":"YYYY-MM-DD or null","eventDate":"YYYY-MM-DD or null","industries":["topic1","topic2"],"location":"City, Country or Remote or null","compensationType":"paid|travel|honorarium|exposure or null","compensationAmount":null,"isRemote":false,"cleanTitle":"cleaned event name","cleanOrganization":"organizing body name","isRelevant":true,"isClosed":false}`;
 }
 
 export function parseEnrichmentResponse(responseText: string): EnrichmentResult {
@@ -228,6 +237,7 @@ export function parseEnrichmentResponse(responseText: string): EnrichmentResult 
         ? parsed.cleanOrganization
         : undefined,
       isRelevant: parsed.isRelevant !== undefined ? parsed.isRelevant : undefined,
+      isClosed: parsed.isClosed !== undefined ? parsed.isClosed : undefined,
       enrichmentStatus: 'enriched',
     };
   } catch (error) {

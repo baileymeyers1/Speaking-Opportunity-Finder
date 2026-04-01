@@ -121,7 +121,15 @@ export async function getOpportunities(
           : [String(queryParams.locations)]
         : [];
 
-      liveResults = await liveSearchService.performLiveSearch(searchQuery, industryList, locationList);
+      // Pass through all relevant filters for post-fetch filtering
+      const liveFilters: liveSearchService.LiveSearchFilters = {
+        locations: locationList.length > 0 ? locationList : undefined,
+        isRemote: filters.isRemote,
+        format: filters.format,
+        compensationType: filters.compensationType,
+      };
+
+      liveResults = await liveSearchService.performLiveSearch(searchQuery, industryList, locationList, liveFilters);
 
       // Fire-and-forget auto-save
       if (liveResults.length > 0) {
@@ -256,7 +264,7 @@ export async function liveSearch(
   next: NextFunction
 ): Promise<void> {
   try {
-    const { query, industries, locations } = req.query;
+    const { query, industries, locations, isRemote, format, compensationType } = req.query;
 
     const searchQuery = query ? String(query) : '';
     const industryList = industries
@@ -270,10 +278,22 @@ export async function liveSearch(
         : [String(locations)]
       : [];
 
+    const liveFilters: liveSearchService.LiveSearchFilters = {
+      locations: locationList.length > 0 ? locationList : undefined,
+      isRemote: isRemote === 'true' ? true : undefined,
+      format: format
+        ? Array.isArray(format) ? format.map(String) : [String(format)]
+        : undefined,
+      compensationType: compensationType
+        ? Array.isArray(compensationType) ? compensationType.map(String) : [String(compensationType)]
+        : undefined,
+    };
+
     const results = await liveSearchService.performLiveSearch(
       searchQuery,
       industryList,
-      locationList
+      locationList,
+      liveFilters
     );
 
     // Auto-save live results to database (async, don't wait for completion)

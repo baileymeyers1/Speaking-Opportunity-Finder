@@ -145,11 +145,14 @@ async function processNextUnenriched(): Promise<void> {
         data: { qualityScore: newScore },
       });
 
-      if (enriched.isRelevant === false) {
+      if (enriched.isRelevant === false || enriched.isClosed === true) {
         await prisma.opportunity.update({
           where: { id: opportunity.id },
           data: { qualityScore: 0 },
         });
+        if (enriched.isClosed) {
+          console.log(`Background enrichment: Marked "${opportunity.title}" as closed CFP (quality=0)`);
+        }
       }
 
       // Update state

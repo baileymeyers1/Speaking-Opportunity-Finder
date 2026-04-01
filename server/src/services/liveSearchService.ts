@@ -217,19 +217,47 @@ function extractCompensation(content: string) {
   return { compensationType, compensationAmount, compensationDetails };
 }
 
+/**
+ * Extract event date from content, being careful NOT to confuse
+ * submission/proposal deadlines with the actual event date.
+ * Deadline keywords: deadline, submit by, closes, due, proposals due
+ * Event keywords: event date, conference date, takes place, held on, happening
+ */
 function extractEventDate(content: string): string | null {
-  const patterns = [
-    /(?:event date|event dates|conference dates|takes place|held on|when)[:\s]*(\w+ \d{1,2},?\s*\d{4})/i,
-    /(?:event dates|conference dates)[:\s]*(\w+ \d{1,2})\s*[-–]\s*(\w+ \d{1,2},?\s*\d{4})/i,
-    /(\w+ \d{1,2})\s*[-–]\s*(\w+ \d{1,2},?\s*\d{4})/i,
-    /(\w+ \d{1,2},?\s*\d{4})/,
+  // Patterns that explicitly indicate the EVENT date (not a deadline)
+  const eventPatterns = [
+    /(?:event date|event dates|conference date|conference dates|takes place|held on|happening|will be held)[:\s]*(\w+ \d{1,2},?\s*\d{4})/i,
+    /(?:event date|conference date)[:\s]*(\w+ \d{1,2})\s*[-–]\s*(\w+ \d{1,2},?\s*\d{4})/i,
+    /(?:event|conference|summit|symposium) (?:is |will be )?(?:on |from )?(\w+ \d{1,2})\s*[-–]\s*(\w+ \d{1,2},?\s*\d{4})/i,
   ];
 
-  for (const pattern of patterns) {
+  for (const pattern of eventPatterns) {
     const match = content.match(pattern);
     if (match) {
       const dateStr = match[2] || match[1];
       const parsed = new Date(dateStr);
+      if (!isNaN(parsed.getTime())) {
+        return parsed.toISOString();
+      }
+    }
+  }
+
+  // If we find date ranges (e.g., "May 4-6, 2026"), these are almost always event dates
+  // But ONLY if not preceded by deadline-like keywords within 50 chars
+  const dateRangePattern = /(\w+ \d{1,2})\s*[-–]\s*(\d{1,2},?\s*\d{4})/g;
+  let rangeMatch;
+  while ((rangeMatch = dateRangePattern.exec(content)) !== null) {
+    const precedingText = content.substring(Math.max(0, rangeMatch.index - 60), rangeMatch.index).toLowerCase();
+    const isDeadlineContext = /(?:deadline|submit|due|closes?|proposal|abstract)/.test(precedingText);
+    if (!isDeadlineContext) {
+      const dateStr = rangeMatch[2] || rangeMatch[1];
+      const parsed = new Date(`${rangeMatch[1]}, ${rangeMatch[2].replace(/^(\d{1,2})/, '')}`);
+      // Try parsing the end date of the range
+      const fullStr = `${rangeMatch[1].replace(/\d+$/, '')}${rangeMatch[2]}`;
+      const parsed2 = new Date(fullStr);
+      if (!isNaN(parsed2.getTime())) {
+        return parsed2.toISOString();
+      }
       if (!isNaN(parsed.getTime())) {
         return parsed.toISOString();
       }
@@ -335,6 +363,66 @@ function extractMetadata(content: string, title: string, searchIndustries: strin
   return { format, isRemote, location, cfpDeadline, industries: normalizeIndustries(industries), eventDate, ...compensation };
 }
 
+export interface LiveSearchFilters {
+  locations?: string[];
+  isRemote?: boolean;
+  format?: string[];
+  compensationType?: string[];
+}
+
+/**
+ * Check if content indicates the CFP is closed/expired.
+ */
+function isCfpClosed(content: string, title: string): boolean {
+  const text = `${title} ${content}`.toLowerCase();
+  const closedPatterns = [
+    /\bcall for (speakers?|papers?|proposals?) is (now )?closed\b/,
+    /\bcfp (is )?(now )?closed\b/,
+    /\bsubmissions? (are|is) (now )?closed\b/,
+    /\bno longer accepting (submissions?|proposals?|speakers?)\b/,
+    /\bdeadline has passed\b/,
+    /\bclosed for submissions?\b/,
+    /\bapplication period has ended\b/,
+    /\bwe are no longer accepting\b/,
+  ];
+  return closedPatterns.some(p => p.test(text));
+}
+
+/**
+ * Check if a location string matches any of the user's requested locations.
+ * Handles city names, state abbreviations, and partial matches.
+ */
+function locationMatches(resultLocation: string | null, content: string, title: string, requestedLocations: string[]): boolean {
+  if (requestedLocations.length === 0) return true;
+
+  const searchText = `${title} ${content} ${resultLocation || ''}`.toLowerCase();
+  const lowerLocations = requestedLocations.map(l => l.toLowerCase());
+
+  // Common abbreviation expansions
+  const locationAliases: Record<string, string[]> = {
+    'ny': ['new york', 'nyc', 'manhattan', 'brooklyn', 'queens', 'bronx'],
+    'new york': ['ny', 'nyc', 'manhattan', 'brooklyn', 'queens', 'bronx'],
+    'la': ['los angeles', 'hollywood'],
+    'los angeles': ['la', 'hollywood'],
+    'sf': ['san francisco'],
+    'san francisco': ['sf'],
+    'dc': ['washington dc', 'washington d.c.', 'washington, dc'],
+    'chicago': ['chi'],
+    'boston': ['bos'],
+  };
+
+  for (const loc of lowerLocations) {
+    // Direct match
+    if (searchText.includes(loc)) return true;
+
+    // Check aliases
+    const aliases = locationAliases[loc] || [];
+    if (aliases.some(alias => searchText.includes(alias))) return true;
+  }
+
+  return false;
+}
+
 /**
  * Perform a live web search for speaking opportunities using Linkup API.
  * Returns enriched results that match the Opportunity shape.
@@ -342,7 +430,8 @@ function extractMetadata(content: string, title: string, searchIndustries: strin
 export async function performLiveSearch(
   query: string,
   industries: string[],
-  locations: string[] = []
+  locations: string[] = [],
+  filters: LiveSearchFilters = {}
 ): Promise<EnrichedLiveResult[]> {
   const apiKey = config.scrapers?.webSearch;
   const currentYear = new Date().getFullYear();
@@ -377,18 +466,57 @@ export async function performLiveSearch(
     return [];
   }
 
-  const results = await performLinkupSearch(searchQuery, apiKey, industries);
+  let results = await performLinkupSearch(searchQuery, apiKey, industries);
 
-  // Post-fetch: soft-filter by location if locations were specified
-  // Keep results with matching locations at the top, but don't discard all non-matching
-  // (since many results have no location data)
+  // --- Post-fetch filtering ---
+
+  // 1. Remove closed CFPs
+  results = results.filter(r => !isCfpClosed(r.description || '', r.title));
+
+  // 2. Filter by location — hard filter when locations specified
+  //    Check both extracted location field AND raw content/title for location mentions
   if (locations.length > 0) {
-    const lowerLocations = locations.map(l => l.toLowerCase());
-    return results.sort((a, b) => {
-      const aMatch = a.location && lowerLocations.some(loc => a.location!.toLowerCase().includes(loc)) ? 1 : 0;
-      const bMatch = b.location && lowerLocations.some(loc => b.location!.toLowerCase().includes(loc)) ? 1 : 0;
-      return bMatch - aMatch;
-    });
+    const matched = results.filter(r =>
+      locationMatches(r.location, r.description || '', r.title, locations)
+    );
+    // If hard filter removes everything, fall back to top results with location boost
+    if (matched.length >= 3) {
+      results = matched;
+    } else {
+      // Keep matched results first, then fill with remaining up to a reasonable count
+      const unmatched = results.filter(r =>
+        !locationMatches(r.location, r.description || '', r.title, locations)
+      );
+      results = [...matched, ...unmatched.slice(0, Math.max(5, 10 - matched.length))];
+    }
+  }
+
+  // 3. Filter by remote preference
+  if (filters.isRemote === true) {
+    const remoteResults = results.filter(r => r.isRemote);
+    if (remoteResults.length >= 3) {
+      results = remoteResults;
+    }
+  }
+
+  // 4. Filter by format
+  if (filters.format && filters.format.length > 0) {
+    const formatSet = new Set(filters.format.map(f => f.toLowerCase()));
+    const formatResults = results.filter(r => formatSet.has(r.format.toLowerCase()));
+    if (formatResults.length >= 2) {
+      results = formatResults;
+    }
+  }
+
+  // 5. Filter by compensation type
+  if (filters.compensationType && filters.compensationType.length > 0) {
+    const compSet = new Set(filters.compensationType.map(c => c.toLowerCase()));
+    const compResults = results.filter(r =>
+      r.compensationType && compSet.has(r.compensationType.toLowerCase())
+    );
+    if (compResults.length >= 2) {
+      results = compResults;
+    }
   }
 
   return results;
