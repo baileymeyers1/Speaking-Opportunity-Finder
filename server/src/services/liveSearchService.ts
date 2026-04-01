@@ -646,6 +646,129 @@ interface LinkupResponse {
   sources?: LinkupSearchResult[];
 }
 
+/**
+ * Fetch a page's text content with a short timeout.
+ * Returns just the visible text (strips HTML tags).
+ */
+async function fetchPageText(url: string, timeoutMs = 5000): Promise<string | null> {
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+    const response = await fetch(url, {
+      signal: controller.signal,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (compatible; SpeakingFinderBot/1.0)',
+        'Accept': 'text/html,application/xhtml+xml',
+      },
+    });
+    clearTimeout(timer);
+
+    if (!response.ok) return null;
+
+    const contentType = response.headers.get('content-type') || '';
+    if (!contentType.includes('text/html') && !contentType.includes('text/plain')) {
+      return null;
+    }
+
+    const html = await response.text();
+
+    // Strip HTML to get visible text — lightweight extraction
+    const text = html
+      .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, ' ')
+      .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, ' ')
+      .replace(/<nav[^>]*>[\s\S]*?<\/nav>/gi, ' ')
+      .replace(/<footer[^>]*>[\s\S]*?<\/footer>/gi, ' ')
+      .replace(/<header[^>]*>[\s\S]*?<\/header>/gi, ' ')
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/&nbsp;/g, ' ')
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&quot;/g, '"')
+      .replace(/&#?\w+;/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    // Return first 3000 chars — enough for metadata extraction
+    return text.substring(0, 3000);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Scrape result pages in parallel to enrich metadata beyond what snippets provide.
+ * Updates results in-place with better dates, locations, etc.
+ */
+async function enrichResultsFromPages(
+  results: EnrichedLiveResult[],
+  searchIndustries: string[]
+): Promise<void> {
+  // Fetch all pages in parallel with a concurrency limit
+  const CONCURRENCY = 6;
+  const pageTexts: (string | null)[] = new Array(results.length).fill(null);
+
+  for (let i = 0; i < results.length; i += CONCURRENCY) {
+    const batch = results.slice(i, i + CONCURRENCY);
+    const fetched = await Promise.all(
+      batch.map(r => fetchPageText(r.applyUrl))
+    );
+    for (let j = 0; j < fetched.length; j++) {
+      pageTexts[i + j] = fetched[j];
+    }
+  }
+
+  // Re-extract metadata from full page content and merge with existing
+  for (let i = 0; i < results.length; i++) {
+    const pageText = pageTexts[i];
+    if (!pageText) continue;
+
+    const r = results[i];
+    const pageMeta = extractMetadata(pageText, r.title, searchIndustries);
+
+    // Only overwrite fields that were previously missing (TBD/null)
+    if (!r.location && pageMeta.location) r.location = pageMeta.location;
+    if (!r.cfpDeadline && pageMeta.cfpDeadline) r.cfpDeadline = pageMeta.cfpDeadline;
+    if (!r.eventDate && pageMeta.eventDate) r.eventDate = pageMeta.eventDate;
+    if (!r.compensationType && pageMeta.compensationType) {
+      r.compensationType = pageMeta.compensationType;
+      r.compensationAmount = pageMeta.compensationAmount;
+      r.compensationDetails = pageMeta.compensationDetails;
+    }
+    if (!r.isRemote && pageMeta.isRemote) r.isRemote = true;
+    if (r.format === 'conference' && pageMeta.format !== 'conference') r.format = pageMeta.format;
+
+    // Merge industries
+    const existingIndustries = new Set(r.industries.map(i => i.toLowerCase()));
+    for (const ind of pageMeta.industries) {
+      if (!existingIndustries.has(ind.toLowerCase())) {
+        r.industries.push(ind);
+      }
+    }
+    if (r.industries.length > 5) r.industries = r.industries.slice(0, 5);
+
+    // Use page text for a better description if current one is short
+    if (!r.description || r.description.length < 100) {
+      // Extract a meaningful snippet from page text
+      const snippet = pageText.substring(0, 500).trim();
+      if (snippet.length > (r.description?.length || 0)) {
+        r.description = snippet;
+      }
+    }
+
+    // Recalculate quality score with enriched data
+    r.qualityScore = computeLiveQualityScore({
+      cfpDeadline: r.cfpDeadline,
+      eventDate: r.eventDate,
+      location: r.location,
+      industries: r.industries,
+      compensationType: r.compensationType,
+      description: r.description,
+    });
+  }
+}
+
 async function performLinkupSearch(
   query: string,
   apiKey: string,
@@ -731,6 +854,11 @@ async function performLinkupSearch(
   }
 
   const filtered = results.filter(r => !isJunkResult({ title: r.title, description: r.description, applyUrl: r.applyUrl }));
+
+  // Scrape actual pages to fill in missing metadata (dates, locations, etc.)
+  console.log(`[LiveSearch] Enriching ${filtered.length} results from page content...`);
+  await enrichResultsFromPages(filtered, searchIndustries);
+
   return filtered.sort((a, b) => b.qualityScore - a.qualityScore);
 }
 
