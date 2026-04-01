@@ -275,14 +275,16 @@ function computeLiveQualityScore(meta: {
   industries: string[];
   compensationType: string | null;
   description: string | null;
+  matchesLocationFilter?: boolean;
 }) {
-  let score = 20;
-  if (meta.cfpDeadline) score += 20;
-  if (meta.eventDate) score += 15;
+  let score = 10;
+  if (meta.cfpDeadline) score += 25;
+  if (meta.eventDate) score += 20;
   if (meta.location) score += 10;
   if (meta.industries && meta.industries.length > 0) score += 10;
   if (meta.compensationType) score += 10;
-  if (meta.description && meta.description.length > 120) score += 10;
+  if (meta.description && meta.description.length > 120) score += 5;
+  if (meta.matchesLocationFilter) score += 10;
   return Math.min(100, score);
 }
 
@@ -494,28 +496,6 @@ const locationAliasMap: Record<string, string[]> = {
 };
 
 /**
- * Check if a location string matches any of the user's requested locations.
- * Handles city names, state abbreviations, and partial matches.
- */
-function locationMatches(resultLocation: string | null, content: string, title: string, requestedLocations: string[]): boolean {
-  if (requestedLocations.length === 0) return true;
-
-  const searchText = `${title} ${content} ${resultLocation || ''}`.toLowerCase();
-  const lowerLocations = requestedLocations.map(l => l.toLowerCase());
-
-  for (const loc of lowerLocations) {
-    // Direct match
-    if (searchText.includes(loc)) return true;
-
-    // Check aliases
-    const aliases = locationAliasMap[loc] || [];
-    if (aliases.some(alias => searchText.includes(alias))) return true;
-  }
-
-  return false;
-}
-
-/**
  * Perform a live web search for speaking opportunities using Linkup API.
  * Returns enriched results that match the Opportunity shape.
  */
@@ -594,6 +574,29 @@ export async function performLiveSearch(
       const noLocation = results.filter(r => !r.location && !matched.includes(r));
       const unmatched = results.filter(r => r.location && !matched.includes(r));
       results = [...matched, ...noLocation.slice(0, 4), ...unmatched.slice(0, Math.max(0, 8 - matched.length - noLocation.length))];
+    }
+  }
+
+  // Recalculate quality scores with location match context
+  if (locations.length > 0) {
+    for (const r of results) {
+      const matchesLoc = r.location ? locations.some(loc => {
+        const lowerLoc = loc.toLowerCase();
+        const resultLoc = r.location!.toLowerCase();
+        if (resultLoc.includes(lowerLoc)) return true;
+        const aliases = locationAliasMap[lowerLoc] || [];
+        return aliases.some(alias => resultLoc.includes(alias));
+      }) : false;
+
+      r.qualityScore = computeLiveQualityScore({
+        cfpDeadline: r.cfpDeadline,
+        eventDate: r.eventDate,
+        location: r.location,
+        industries: r.industries,
+        compensationType: r.compensationType,
+        description: r.description,
+        matchesLocationFilter: matchesLoc,
+      });
     }
   }
 
