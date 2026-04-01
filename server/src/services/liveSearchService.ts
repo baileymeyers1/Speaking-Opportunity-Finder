@@ -858,15 +858,16 @@ async function enrichResultsFromPages(
 
   const fetchedCount = pageTexts.filter(t => t !== null).length;
   console.log(`[LiveSearch] Page fetch: ${fetchedCount}/${results.length} pages returned content`);
-  for (let i = 0; i < results.length; i++) {
+  for (let i = 0; i < Math.min(results.length, 15); i++) {
     const textLen = pageTexts[i]?.length || 0;
     const snippetLen = results[i].description?.length || 0;
     console.log(`[LiveSearch]   [${i}] "${results[i].title.substring(0, 50)}" fetched=${textLen > 0 ? textLen + 'ch' : 'FAIL'} snippet=${snippetLen}ch`);
   }
 
-  // Collect ALL items for Claude — use page text if available, otherwise use snippet
+  // Send top 15 results to Claude for enrichment, rest get regex-only
+  const CLAUDE_ENRICHMENT_LIMIT = 15;
   const itemsForClaude: { index: number; title: string; pageText: string }[] = [];
-  for (let i = 0; i < results.length; i++) {
+  for (let i = 0; i < Math.min(results.length, CLAUDE_ENRICHMENT_LIMIT); i++) {
     const text = pageTexts[i] || results[i].description || '';
     if (text.length > 20) {
       itemsForClaude.push({ index: i, title: results[i].title, pageText: text });
@@ -946,7 +947,7 @@ async function performLinkupSearch(
   const now = new Date().toISOString();
 
   const maxPerPage = 50;
-  const maxPages = 2;
+  const maxPages = 5;
 
   try {
     for (let page = 1; page <= maxPages; page++) {
@@ -958,7 +959,7 @@ async function performLinkupSearch(
         },
         body: JSON.stringify({
           q: query,
-          depth: 'deep',
+          depth: 'standard',
           outputType: 'searchResults',
           maxResults: maxPerPage,
           page,
@@ -1023,7 +1024,7 @@ async function performLinkupSearch(
   const filtered = results.filter(r => !isJunkResult({ title: r.title, description: r.description, applyUrl: r.applyUrl }));
 
   // Cap results before expensive enrichment — we only display ~10-15 anyway
-  const toEnrich = filtered.sort((a, b) => b.qualityScore - a.qualityScore).slice(0, 12);
+  const toEnrich = filtered.sort((a, b) => b.qualityScore - a.qualityScore).slice(0, 30);
 
   // Scrape actual pages to fill in missing metadata (dates, locations, etc.)
   console.log(`[LiveSearch] Enriching ${toEnrich.length} results from page content...`);
