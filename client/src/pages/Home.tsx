@@ -169,7 +169,7 @@ export function Home() {
         }
 
         // Cache live search results for back-navigation restoration
-        if (liveSearch && response.data.liveResultCount > 0) {
+        if (liveSearch && (response.data.liveResultCount ?? 0) > 0) {
           try {
             sessionStorage.setItem(LIVE_SEARCH_CACHE_KEY, JSON.stringify({
               params: params.toString(),
