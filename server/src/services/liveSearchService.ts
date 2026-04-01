@@ -717,24 +717,33 @@ async function extractMetadataWithClaude(
     `[${item.index}] "${item.title}"\n${item.pageText.substring(0, charsPerItem)}`
   ).join('\n---\n');
 
+  const currentYear = new Date().getFullYear();
+  const todayStr = new Date().toISOString().split('T')[0];
+
   const prompt = `Extract metadata from these speaking opportunity pages. Return ONLY a JSON array, no other text.
 
+Today's date is ${todayStr}.
+
 For EACH item, extract:
-- eventDate: when the event/conference takes place (YYYY-MM-DD). Use start date if range. This is NOT the submission deadline.
-- cfpDeadline: when speaker proposals/submissions are due (YYYY-MM-DD). This is NOT the event date.
-- location: "City, ST" or "City, Country". null if not found.
-- isRemote: true if virtual/online/remote option exists
-- isClosed: true if the call for speakers/proposals is closed or deadline has passed
+- eventDate: when the event/conference takes place (YYYY-MM-DD). Use start date if range. This is NOT the submission deadline. Must be a real date, not a guess. null if not found.
+- cfpDeadline: when speaker proposals/submissions are due (YYYY-MM-DD). This is NOT the event date. If the deadline text says "rolling" or "ongoing", return null. null if not found.
+- location: the physical city and state/country where the event takes place, as "City, ST" or "City, Country". Extract this from venue information, not from the organization's headquarters. null if purely online or not found.
+- isRemote: true if virtual/online/remote attendance option exists
+- isClosed: true if the call for speakers/proposals is explicitly closed, or if cfpDeadline is before ${todayStr}
 - compensationType: "paid"|"travel"|"honorarium"|"exposure" or null
 - format: "conference"|"podcast"|"webinar"|"workshop"|"meetup"|"panel"
-- industries: up to 3 relevant industry tags
+- industries: up to 3 relevant industry tags from the content
 
-IMPORTANT: Distinguish submission deadlines from event dates. "Proposals due Sept 21" is cfpDeadline, "Conference May 4-6" is eventDate.
+IMPORTANT RULES:
+1. Distinguish submission deadlines from event dates. "Proposals due Sept 21" is cfpDeadline. "Conference May 4-6" is eventDate.
+2. For location, extract WHERE THE EVENT PHYSICALLY HAPPENS, not where the organization is based or where speakers come from.
+3. If a date has no year, assume ${currentYear} if the month hasn't passed yet, otherwise ${currentYear + 1}.
+4. Return null for fields you cannot confidently determine. Do not guess.
 
 Items:
 ${itemDescriptions}
 
-Return format: [{"index":0,"eventDate":"2026-05-04","cfpDeadline":"2025-09-21","location":"Boston, MA","isRemote":false,"isClosed":false,"compensationType":"travel","format":"conference","industries":["healthcare","marketing"]}, ...]`;
+Return format: [{"index":0,"eventDate":"2026-05-04","cfpDeadline":"2025-09-21","location":"Boston, MA","isRemote":false,"isClosed":false,"compensationType":"travel","format":"conference","industries":["healthcare","ai"]}, ...]`;
 
   try {
     const client = new Anthropic({ apiKey: config.claude.apiKey });
