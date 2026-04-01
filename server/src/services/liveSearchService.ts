@@ -647,7 +647,7 @@ interface LinkupResponse {
  * Fetch a page's text content with a short timeout.
  * Returns just the visible text (strips HTML tags).
  */
-async function fetchPageText(url: string, timeoutMs = 5000): Promise<string | null> {
+async function fetchPageText(url: string, timeoutMs = 8000): Promise<string | null> {
   try {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -655,8 +655,9 @@ async function fetchPageText(url: string, timeoutMs = 5000): Promise<string | nu
     const response = await fetch(url, {
       signal: controller.signal,
       headers: {
-        'User-Agent': 'Mozilla/5.0 (compatible; SpeakingFinderBot/1.0)',
-        'Accept': 'text/html,application/xhtml+xml',
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.9',
       },
     });
     clearTimeout(timer);
@@ -854,6 +855,9 @@ async function enrichResultsFromPages(
       pageTexts[i + j] = fetched[j];
     }
   }
+
+  const fetchedCount = pageTexts.filter(t => t !== null).length;
+  console.log(`[LiveSearch] Page fetch: ${fetchedCount}/${results.length} pages returned content`);
 
   // Collect ALL items for Claude — use page text if available, otherwise use snippet
   const itemsForClaude: { index: number; title: string; pageText: string }[] = [];
