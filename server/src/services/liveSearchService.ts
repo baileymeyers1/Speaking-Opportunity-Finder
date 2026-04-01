@@ -696,8 +696,8 @@ async function fetchPageText(url: string, timeoutMs = 5000): Promise<string | nu
       .replace(/\s+/g, ' ')
       .trim();
 
-    // Return first 3000 chars — enough for metadata extraction
-    return text.substring(0, 3000);
+    // Return first 5000 chars — enough for metadata extraction
+    return text.substring(0, 5000);
   } catch {
     return null;
   }
@@ -724,7 +724,7 @@ async function extractMetadataWithClaude(
   if (!config.claude.apiKey || items.length === 0) return resultMap;
 
   // Build a compact prompt — with batches of ~5, each item gets plenty of text
-  const charsPerItem = Math.min(1200, Math.floor(8000 / items.length));
+  const charsPerItem = Math.min(2000, Math.floor(12000 / items.length));
   const itemDescriptions = items.map(item =>
     `[${item.index}] "${item.title}"\n${item.pageText.substring(0, charsPerItem)}`
   ).join('\n---\n');
