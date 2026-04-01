@@ -469,14 +469,16 @@ export interface LiveSearchFilters {
 function isCfpClosed(content: string, title: string): boolean {
   const text = `${title} ${content}`.toLowerCase();
   const closedPatterns = [
-    /\bcall for (speakers?|papers?|proposals?) is (now )?closed\b/,
-    /\bcfp (is )?(now )?closed\b/,
-    /\bsubmissions? (are|is) (now )?closed\b/,
+    /\bcall for (speakers?|papers?|proposals?) (is |has )(now )?closed\b/,
+    /\bcfp (is |has )?(now )?closed\b/,
+    /\bsubmissions? (are|is|have) (now )?closed\b/,
     /\bno longer accepting (submissions?|proposals?|speakers?)\b/,
     /\bdeadline has passed\b/,
     /\bclosed for submissions?\b/,
     /\bapplication period has ended\b/,
     /\bwe are no longer accepting\b/,
+    /\bhas closed\b/,
+    /\bspeakers?.{0,20}closed\b/,
   ];
   return closedPatterns.some(p => p.test(text));
 }
@@ -543,12 +545,16 @@ export async function performLiveSearch(
 
   // --- Post-fetch filtering ---
 
-  // 1. Remove closed CFPs and past deadlines
+  // 1. Remove closed CFPs, past deadlines, and past events
   const now = new Date();
   results = results.filter(r => !isCfpClosed(r.description || '', r.title));
   results = results.filter(r => {
     if (!r.cfpDeadline) return true; // Keep results with unknown deadlines
     return new Date(r.cfpDeadline) >= now;
+  });
+  results = results.filter(r => {
+    if (!r.eventDate) return true; // Keep results with unknown event dates
+    return new Date(r.eventDate) >= now;
   });
 
   // Location filtering is now handled client-side via matchesLocationFilter flag

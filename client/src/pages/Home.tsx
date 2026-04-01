@@ -374,11 +374,24 @@ export function Home() {
 
             return (
               <>
-                <OpportunityList
-                  opportunities={locationMatched}
-                  isLoading={isLoading}
-                  onClearFilters={handleClearFilters}
-                />
+                {/* Location-matched results (or all results when no location filter) */}
+                {locationMatched.length > 0 ? (
+                  <OpportunityList
+                    opportunities={locationMatched}
+                    isLoading={isLoading}
+                    onClearFilters={handleClearFilters}
+                  />
+                ) : hasLocationFilter && !isLoading ? (
+                  <p className="text-sm text-muted-foreground py-4">
+                    No results found in {filters.locations!.join(', ')}
+                  </p>
+                ) : (
+                  <OpportunityList
+                    opportunities={[]}
+                    isLoading={isLoading}
+                    onClearFilters={handleClearFilters}
+                  />
+                )}
 
                 {otherResults.length > 0 && !isLoading && (
                   <>
@@ -392,7 +405,6 @@ export function Home() {
                     <OpportunityList
                       opportunities={otherResults}
                       isLoading={false}
-                      onClearFilters={handleClearFilters}
                     />
                   </>
                 )}
