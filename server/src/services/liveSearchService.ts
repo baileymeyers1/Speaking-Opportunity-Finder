@@ -570,42 +570,30 @@ export async function performLiveSearch(
     return new Date(r.cfpDeadline) >= now;
   });
 
-  // 2. Filter by location — hard filter when locations specified
-  //    Check both extracted location field AND raw content/title for location mentions
+  // 2. Filter by location — use Claude-extracted location as source of truth
   if (locations.length > 0) {
-    const matched = results.filter(r =>
-      locationMatches(r.location, r.description || '', r.title, locations)
-    );
-    // If hard filter removes everything, fall back to top results with location boost
+    const matched = results.filter(r => {
+      // Only trust the structured location field (set by Claude or regex)
+      if (!r.location) return false;
+      const resultLoc = r.location.toLowerCase();
+      return locations.some(loc => {
+        const lowerLoc = loc.toLowerCase();
+        // Direct match
+        if (resultLoc.includes(lowerLoc)) return true;
+        // Check aliases
+        const aliases = locationAliasMap[lowerLoc] || [];
+        return aliases.some(alias => resultLoc.includes(alias));
+      });
+    });
+
     if (matched.length >= 3) {
       results = matched;
     } else {
-      // Keep matched results first, then fill with remaining up to a reasonable count
-      const unmatched = results.filter(r =>
-        !locationMatches(r.location, r.description || '', r.title, locations)
-      );
-      results = [...matched, ...unmatched.slice(0, Math.max(5, 10 - matched.length))];
-    }
-
-    // Backfill location on results that matched via content but have no extracted location
-    for (const r of results) {
-      if (!r.location && locationMatches(null, r.description || '', r.title, locations)) {
-        // Set location to the first matching user-requested location found in content
-        const searchText = `${r.title} ${r.description || ''}`.toLowerCase();
-        for (const loc of locations) {
-          const lowerLoc = loc.toLowerCase();
-          if (searchText.includes(lowerLoc)) {
-            r.location = loc;
-            break;
-          }
-          // Check aliases
-          const aliases = locationAliasMap[lowerLoc];
-          if (aliases?.some(alias => searchText.includes(alias))) {
-            r.location = loc;
-            break;
-          }
-        }
-      }
+      // Not enough location matches — keep matched first, then fill with
+      // results that have no location (benefit of the doubt), then others
+      const noLocation = results.filter(r => !r.location && !matched.includes(r));
+      const unmatched = results.filter(r => r.location && !matched.includes(r));
+      results = [...matched, ...noLocation.slice(0, 4), ...unmatched.slice(0, Math.max(0, 8 - matched.length - noLocation.length))];
     }
   }
 
