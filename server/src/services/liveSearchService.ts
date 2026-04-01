@@ -285,6 +285,107 @@ function computeLiveQualityScore(meta: {
   return Math.min(100, score);
 }
 
+// US state abbreviation to full name mapping for location extraction
+const US_STATES: Record<string, string> = {
+  AL: 'Alabama', AK: 'Alaska', AZ: 'Arizona', AR: 'Arkansas', CA: 'California',
+  CO: 'Colorado', CT: 'Connecticut', DE: 'Delaware', FL: 'Florida', GA: 'Georgia',
+  HI: 'Hawaii', ID: 'Idaho', IL: 'Illinois', IN: 'Indiana', IA: 'Iowa',
+  KS: 'Kansas', KY: 'Kentucky', LA: 'Louisiana', ME: 'Maine', MD: 'Maryland',
+  MA: 'Massachusetts', MI: 'Michigan', MN: 'Minnesota', MS: 'Mississippi',
+  MO: 'Missouri', MT: 'Montana', NE: 'Nebraska', NV: 'Nevada', NH: 'New Hampshire',
+  NJ: 'New Jersey', NM: 'New Mexico', NY: 'New York', NC: 'North Carolina',
+  ND: 'North Dakota', OH: 'Ohio', OK: 'Oklahoma', OR: 'Oregon', PA: 'Pennsylvania',
+  RI: 'Rhode Island', SC: 'South Carolina', SD: 'South Dakota', TN: 'Tennessee',
+  TX: 'Texas', UT: 'Utah', VT: 'Vermont', VA: 'Virginia', WA: 'Washington',
+  WV: 'West Virginia', WI: 'Wisconsin', WY: 'Wyoming', DC: 'Washington, DC',
+};
+
+// Well-known cities to help with extraction
+const KNOWN_CITIES = [
+  'New York', 'Los Angeles', 'Chicago', 'Houston', 'Phoenix', 'Philadelphia',
+  'San Antonio', 'San Diego', 'Dallas', 'San Jose', 'Austin', 'Jacksonville',
+  'San Francisco', 'Seattle', 'Denver', 'Nashville', 'Washington', 'Boston',
+  'Las Vegas', 'Portland', 'Atlanta', 'Miami', 'Minneapolis', 'Orlando',
+  'Tampa', 'Charlotte', 'St. Louis', 'Pittsburgh', 'Cincinnati', 'Cleveland',
+  'Kansas City', 'Indianapolis', 'Columbus', 'Salt Lake City', 'Raleigh',
+  'Milwaukee', 'New Orleans', 'Detroit', 'Baltimore', 'Memphis', 'Sacramento',
+  'London', 'Toronto', 'Vancouver', 'Berlin', 'Amsterdam', 'Paris', 'Sydney',
+  'Melbourne', 'Singapore', 'Dubai', 'Tokyo', 'Barcelona', 'Dublin',
+];
+
+function extractLocation(content: string, title: string): string | null {
+  const text = content + ' ' + title;
+
+  // 1. "City, ST" pattern (e.g., "Los Angeles, CA" or "Nashville, TN")
+  const cityStateMatch = text.match(/([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*),\s*([A-Z]{2})\b/);
+  if (cityStateMatch && US_STATES[cityStateMatch[2]]) {
+    return `${cityStateMatch[1]}, ${cityStateMatch[2]}`;
+  }
+
+  // 2. Explicit location labels
+  const labelPatterns = [
+    /(?:location|venue|where|held (?:in|at)|taking place (?:in|at))[:\s]+([A-Z][a-z]+(?:[\s,]+[A-Z][a-z]+){0,3}(?:,\s*[A-Z]{2})?)/,
+    /(?:join us (?:in|at))\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,2})/i,
+  ];
+  for (const pattern of labelPatterns) {
+    const match = text.match(pattern);
+    if (match) {
+      const loc = match[1].trim();
+      if (loc.length > 2 && loc.length < 60) return loc;
+    }
+  }
+
+  // 3. Known city names in content
+  for (const city of KNOWN_CITIES) {
+    if (text.includes(city)) {
+      // Try to get "City, ST" from nearby context
+      const cityIdx = text.indexOf(city);
+      const nearby = text.substring(cityIdx, cityIdx + city.length + 10);
+      const withState = nearby.match(new RegExp(`${city.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')},?\\s*([A-Z]{2})\\b`));
+      if (withState && US_STATES[withState[1]]) {
+        return `${city}, ${withState[1]}`;
+      }
+      return city;
+    }
+  }
+
+  // 4. Country mentions
+  const countryMatch = text.match(/\b(United States|United Kingdom|Canada|Australia|Germany|France|Singapore|Japan|India)\b/);
+  if (countryMatch) return countryMatch[1];
+
+  return null;
+}
+
+function extractDeadline(content: string): string | null {
+  // Patterns with explicit deadline context keywords
+  const deadlinePatterns = [
+    // "deadline: January 15, 2026" or "deadline January 15, 2026"
+    /(?:deadline|submit(?:ting)? by|closes?|due(?: date)?|proposals? due|abstracts? due|submissions? due|cfp closes?)[:\s]*(\w+ \d{1,2},?\s*\d{4})/i,
+    // "deadline: 2026-01-15"
+    /(?:deadline|submit by|closes?|due|proposals? due)[:\s]*(\d{4}-\d{2}-\d{2})/i,
+    // "deadline: 01/15/2026"
+    /(?:deadline|submit by|closes?|due|proposals? due)[:\s]*(\d{1,2}\/\d{1,2}\/\d{4})/i,
+    // "January 15, 2026 deadline" (date before keyword)
+    /(\w+ \d{1,2},?\s*\d{4})\s*(?:deadline|due date)/i,
+    // "CFP closes January 11, 2026" with time info
+    /(?:cfp|call for (?:speakers?|papers?|proposals?)) closes?[:\s]*\w+,?\s*(\w+ \d{1,2},?\s*\d{4})/i,
+    // "Closes: Sunday, January 11, 2026" with day name
+    /(?:deadline|closes?|due)[:\s]*(?:\w+day,?\s*)?(\w+ \d{1,2},?\s*\d{4})/i,
+  ];
+
+  for (const pattern of deadlinePatterns) {
+    const match = content.match(pattern);
+    if (match) {
+      const parsed = new Date(match[1]);
+      if (!isNaN(parsed.getTime()) && parsed.getFullYear() >= 2024 && parsed.getFullYear() <= 2030) {
+        return parsed.toISOString();
+      }
+    }
+  }
+
+  return null;
+}
+
 function extractMetadata(content: string, title: string, searchIndustries: string[]) {
   const lower = (content + ' ' + title).toLowerCase();
 
@@ -300,38 +401,11 @@ function extractMetadata(content: string, title: string, searchIndustries: strin
   // Remote detection
   const isRemote = /\b(online|virtual|remote)\b/.test(lower);
 
-  // Location extraction - look for common patterns
-  let location: string | null = null;
-  const locationPatterns = [
-    /(?:in|held in|location:\s*)([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*(?:,\s*[A-Z]{2})?)/,
-    /([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*,\s*[A-Z]{2})/, // City, ST
-    /\b(United States|USA|US)\b/,
-  ];
-  for (const pattern of locationPatterns) {
-    const match = content.match(pattern);
-    if (match) {
-      location = match[1].trim();
-      break;
-    }
-  }
+  // Location extraction — improved with known cities and multiple pattern strategies
+  const location = extractLocation(content, title);
 
-  // Date extraction - try common patterns
-  let cfpDeadline: string | null = null;
-  const datePatterns = [
-    /(?:deadline|submit by|closes?|due)[\s:]*(\w+ \d{1,2},?\s*\d{4})/i,
-    /(?:deadline|submit by|closes?|due)[\s:]*(\d{4}-\d{2}-\d{2})/i,
-    /(?:deadline|submit by|closes?|due)[\s:]*(\d{1,2}\/\d{1,2}\/\d{4})/i,
-  ];
-  for (const pattern of datePatterns) {
-    const match = content.match(pattern);
-    if (match) {
-      const parsed = new Date(match[1]);
-      if (!isNaN(parsed.getTime()) && parsed > new Date()) {
-        cfpDeadline = parsed.toISOString();
-      }
-      break;
-    }
-  }
+  // Date extraction — improved with broader patterns
+  const cfpDeadline = extractDeadline(content);
 
   // Industries - combine search context with content-inferred ones
   const industries = [...searchIndustries];
@@ -343,13 +417,28 @@ function extractMetadata(content: string, title: string, searchIndustries: strin
     'devops': 'devops',
     'security': 'cybersecurity',
     'healthcare': 'healthcare',
+    'health': 'healthcare',
+    'medical': 'healthcare',
+    'patient safety': 'healthcare',
+    'nursing': 'healthcare',
     'fintech': 'finance',
+    'financial': 'finance',
     'blockchain': 'blockchain',
     'sustainability': 'sustainability',
     'human resources': 'hr',
     'education': 'education',
     'marketing': 'marketing',
     'construction': 'construction',
+    'real estate': 'real estate',
+    'legal': 'legal',
+    'energy': 'energy',
+    'manufacturing': 'manufacturing',
+    'retail': 'retail',
+    'hospitality': 'hospitality',
+    'nonprofit': 'nonprofit',
+    'government': 'government',
+    'pharma': 'healthcare',
+    'biotech': 'healthcare',
   };
   for (const [keyword, tag] of Object.entries(industryKeywords)) {
     if (lower.includes(keyword) && !industries.includes(tag)) {
@@ -388,6 +477,21 @@ function isCfpClosed(content: string, title: string): boolean {
   return closedPatterns.some(p => p.test(text));
 }
 
+// Common abbreviation expansions for location matching
+const locationAliasMap: Record<string, string[]> = {
+  'ny': ['new york', 'nyc', 'manhattan', 'brooklyn', 'queens', 'bronx'],
+  'new york': ['ny', 'nyc', 'manhattan', 'brooklyn', 'queens', 'bronx'],
+  'la': ['los angeles', 'hollywood'],
+  'los angeles': ['la', 'hollywood'],
+  'sf': ['san francisco'],
+  'san francisco': ['sf'],
+  'dc': ['washington dc', 'washington d.c.', 'washington, dc'],
+  'chicago': ['chi'],
+  'boston': ['bos'],
+  'philly': ['philadelphia'],
+  'philadelphia': ['philly'],
+};
+
 /**
  * Check if a location string matches any of the user's requested locations.
  * Handles city names, state abbreviations, and partial matches.
@@ -398,25 +502,12 @@ function locationMatches(resultLocation: string | null, content: string, title: 
   const searchText = `${title} ${content} ${resultLocation || ''}`.toLowerCase();
   const lowerLocations = requestedLocations.map(l => l.toLowerCase());
 
-  // Common abbreviation expansions
-  const locationAliases: Record<string, string[]> = {
-    'ny': ['new york', 'nyc', 'manhattan', 'brooklyn', 'queens', 'bronx'],
-    'new york': ['ny', 'nyc', 'manhattan', 'brooklyn', 'queens', 'bronx'],
-    'la': ['los angeles', 'hollywood'],
-    'los angeles': ['la', 'hollywood'],
-    'sf': ['san francisco'],
-    'san francisco': ['sf'],
-    'dc': ['washington dc', 'washington d.c.', 'washington, dc'],
-    'chicago': ['chi'],
-    'boston': ['bos'],
-  };
-
   for (const loc of lowerLocations) {
     // Direct match
     if (searchText.includes(loc)) return true;
 
     // Check aliases
-    const aliases = locationAliases[loc] || [];
+    const aliases = locationAliasMap[loc] || [];
     if (aliases.some(alias => searchText.includes(alias))) return true;
   }
 
@@ -488,6 +579,27 @@ export async function performLiveSearch(
         !locationMatches(r.location, r.description || '', r.title, locations)
       );
       results = [...matched, ...unmatched.slice(0, Math.max(5, 10 - matched.length))];
+    }
+
+    // Backfill location on results that matched via content but have no extracted location
+    for (const r of results) {
+      if (!r.location && locationMatches(null, r.description || '', r.title, locations)) {
+        // Set location to the first matching user-requested location found in content
+        const searchText = `${r.title} ${r.description || ''}`.toLowerCase();
+        for (const loc of locations) {
+          const lowerLoc = loc.toLowerCase();
+          if (searchText.includes(lowerLoc)) {
+            r.location = loc;
+            break;
+          }
+          // Check aliases
+          const aliases = locationAliasMap[lowerLoc];
+          if (aliases?.some(alias => searchText.includes(alias))) {
+            r.location = loc;
+            break;
+          }
+        }
+      }
     }
   }
 
