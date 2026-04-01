@@ -835,11 +835,6 @@ async function enrichResultsFromPages(
 
   const fetchedCount = pageTexts.filter(t => t !== null).length;
   console.log(`[LiveSearch] Page fetch: ${fetchedCount}/${results.length} pages returned content`);
-  for (let i = 0; i < Math.min(results.length, 15); i++) {
-    const textLen = pageTexts[i]?.length || 0;
-    const snippetLen = results[i].description?.length || 0;
-    console.log(`[LiveSearch]   [${i}] "${results[i].title.substring(0, 50)}" fetched=${textLen > 0 ? textLen + 'ch' : 'FAIL'} snippet=${snippetLen}ch`);
-  }
 
   // Send top 15 results to Claude for enrichment, rest get regex-only
   const CLAUDE_ENRICHMENT_LIMIT = 15;
@@ -875,9 +870,6 @@ async function enrichResultsFromPages(
     }
 
     console.log(`[LiveSearch] Claude extracted metadata for ${claudeResults.size}/${itemsForClaude.length} results`);
-    for (const [idx, meta] of claudeResults) {
-      console.log(`[LiveSearch]   [${idx}] Claude: date=${meta.eventDate || 'null'} deadline=${meta.cfpDeadline || 'null'} loc=${meta.location || 'null'} closed=${meta.isClosed || false}`);
-    }
   }
 
   // Apply extracted metadata to results — Claude overwrites regex data

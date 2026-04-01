@@ -45,3 +45,4 @@ prisma/*.db-journal
 # Misc
 *.pem
 .cache/
+.vercel
