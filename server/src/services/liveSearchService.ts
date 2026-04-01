@@ -1,3 +1,4 @@
+import Anthropic from '@anthropic-ai/sdk';
 import { config } from '../config/index.js';
 import { randomUUID } from 'crypto';
 import { PrismaClient } from '@prisma/client';
@@ -561,8 +562,13 @@ export async function performLiveSearch(
 
   // --- Post-fetch filtering ---
 
-  // 1. Remove closed CFPs
+  // 1. Remove closed CFPs and past deadlines
+  const now = new Date();
   results = results.filter(r => !isCfpClosed(r.description || '', r.title));
+  results = results.filter(r => {
+    if (!r.cfpDeadline) return true; // Keep results with unknown deadlines
+    return new Date(r.cfpDeadline) >= now;
+  });
 
   // 2. Filter by location — hard filter when locations specified
   //    Check both extracted location field AND raw content/title for location mentions
@@ -698,8 +704,88 @@ async function fetchPageText(url: string, timeoutMs = 5000): Promise<string | nu
 }
 
 /**
- * Scrape result pages in parallel to enrich metadata beyond what snippets provide.
- * Updates results in-place with better dates, locations, etc.
+ * Use Claude to extract structured metadata from scraped page content in a single batch call.
+ * Much more accurate than regex for dates, locations, and deadline detection.
+ */
+async function extractMetadataWithClaude(
+  items: { index: number; title: string; pageText: string }[]
+): Promise<Map<number, {
+  eventDate?: string;
+  cfpDeadline?: string;
+  location?: string;
+  isRemote?: boolean;
+  isClosed?: boolean;
+  compensationType?: string;
+  format?: string;
+  industries?: string[];
+}>> {
+  const resultMap = new Map<number, any>();
+
+  if (!config.claude.apiKey || items.length === 0) return resultMap;
+
+  // Build a compact prompt with all items
+  const itemDescriptions = items.map(item =>
+    `[${item.index}] "${item.title}"\n${item.pageText.substring(0, 800)}`
+  ).join('\n---\n');
+
+  const prompt = `Extract metadata from these speaking opportunity pages. Return ONLY a JSON array, no other text.
+
+For EACH item, extract:
+- eventDate: when the event/conference takes place (YYYY-MM-DD). Use start date if range. This is NOT the submission deadline.
+- cfpDeadline: when speaker proposals/submissions are due (YYYY-MM-DD). This is NOT the event date.
+- location: "City, ST" or "City, Country". null if not found.
+- isRemote: true if virtual/online/remote option exists
+- isClosed: true if the call for speakers/proposals is closed or deadline has passed
+- compensationType: "paid"|"travel"|"honorarium"|"exposure" or null
+- format: "conference"|"podcast"|"webinar"|"workshop"|"meetup"|"panel"
+- industries: up to 3 relevant industry tags
+
+IMPORTANT: Distinguish submission deadlines from event dates. "Proposals due Sept 21" is cfpDeadline, "Conference May 4-6" is eventDate.
+
+Items:
+${itemDescriptions}
+
+Return format: [{"index":0,"eventDate":"2026-05-04","cfpDeadline":"2025-09-21","location":"Boston, MA","isRemote":false,"isClosed":false,"compensationType":"travel","format":"conference","industries":["healthcare","marketing"]}, ...]`;
+
+  try {
+    const client = new Anthropic({ apiKey: config.claude.apiKey });
+    const message = await client.messages.create({
+      model: config.claude.model,
+      max_tokens: 2000,
+      messages: [{ role: 'user', content: prompt }],
+    });
+
+    const responseText = message.content[0].type === 'text' ? message.content[0].text : '';
+    const jsonMatch = responseText.match(/\[[\s\S]*\]/);
+    if (!jsonMatch) return resultMap;
+
+    const parsed = JSON.parse(jsonMatch[0]);
+    if (!Array.isArray(parsed)) return resultMap;
+
+    for (const item of parsed) {
+      if (item.index !== undefined) {
+        resultMap.set(item.index, {
+          eventDate: item.eventDate && item.eventDate !== 'null' ? item.eventDate : undefined,
+          cfpDeadline: item.cfpDeadline && item.cfpDeadline !== 'null' ? item.cfpDeadline : undefined,
+          location: item.location && item.location !== 'null' ? item.location : undefined,
+          isRemote: item.isRemote,
+          isClosed: item.isClosed,
+          compensationType: item.compensationType && item.compensationType !== 'null' ? item.compensationType : undefined,
+          format: item.format,
+          industries: Array.isArray(item.industries) ? item.industries : undefined,
+        });
+      }
+    }
+  } catch (error) {
+    console.error('[LiveSearch] Claude metadata extraction failed:', error);
+  }
+
+  return resultMap;
+}
+
+/**
+ * Scrape result pages in parallel, then use Claude to extract metadata.
+ * Falls back to regex extraction if Claude is unavailable.
  */
 async function enrichResultsFromPages(
   results: EnrichedLiveResult[],
@@ -719,42 +805,64 @@ async function enrichResultsFromPages(
     }
   }
 
-  // Re-extract metadata from full page content and merge with existing
+  // Collect items that have page text for Claude extraction
+  const itemsForClaude: { index: number; title: string; pageText: string }[] = [];
   for (let i = 0; i < results.length; i++) {
-    const pageText = pageTexts[i];
-    if (!pageText) continue;
+    if (pageTexts[i]) {
+      itemsForClaude.push({ index: i, title: results[i].title, pageText: pageTexts[i]! });
+    }
+  }
 
+  // Try Claude extraction first (single batch call)
+  let claudeResults = new Map<number, any>();
+  if (config.claude.apiKey && itemsForClaude.length > 0) {
+    console.log(`[LiveSearch] Extracting metadata via Claude for ${itemsForClaude.length} results...`);
+    claudeResults = await extractMetadataWithClaude(itemsForClaude);
+    console.log(`[LiveSearch] Claude extracted metadata for ${claudeResults.size} results`);
+  }
+
+  // Apply extracted metadata to results
+  for (let i = 0; i < results.length; i++) {
     const r = results[i];
-    const pageMeta = extractMetadata(pageText, r.title, searchIndustries);
+    const claudeMeta = claudeResults.get(i);
+    const pageText = pageTexts[i];
 
-    // Only overwrite fields that were previously missing (TBD/null)
-    if (!r.location && pageMeta.location) r.location = pageMeta.location;
-    if (!r.cfpDeadline && pageMeta.cfpDeadline) r.cfpDeadline = pageMeta.cfpDeadline;
-    if (!r.eventDate && pageMeta.eventDate) r.eventDate = pageMeta.eventDate;
-    if (!r.compensationType && pageMeta.compensationType) {
-      r.compensationType = pageMeta.compensationType;
-      r.compensationAmount = pageMeta.compensationAmount;
-      r.compensationDetails = pageMeta.compensationDetails;
-    }
-    if (!r.isRemote && pageMeta.isRemote) r.isRemote = true;
-    if (r.format === 'conference' && pageMeta.format !== 'conference') r.format = pageMeta.format;
-
-    // Merge industries
-    const existingIndustries = new Set(r.industries.map(i => i.toLowerCase()));
-    for (const ind of pageMeta.industries) {
-      if (!existingIndustries.has(ind.toLowerCase())) {
-        r.industries.push(ind);
+    if (claudeMeta) {
+      // Apply Claude-extracted data (only fill missing fields)
+      if (!r.eventDate && claudeMeta.eventDate) {
+        const d = new Date(claudeMeta.eventDate);
+        if (!isNaN(d.getTime())) r.eventDate = d.toISOString();
       }
-    }
-    if (r.industries.length > 5) r.industries = r.industries.slice(0, 5);
-
-    // Use page text for a better description if current one is short
-    if (!r.description || r.description.length < 100) {
-      // Extract a meaningful snippet from page text
-      const snippet = pageText.substring(0, 500).trim();
-      if (snippet.length > (r.description?.length || 0)) {
-        r.description = snippet;
+      if (!r.cfpDeadline && claudeMeta.cfpDeadline) {
+        const d = new Date(claudeMeta.cfpDeadline);
+        if (!isNaN(d.getTime())) r.cfpDeadline = d.toISOString();
       }
+      if (!r.location && claudeMeta.location) r.location = claudeMeta.location;
+      if (!r.isRemote && claudeMeta.isRemote) r.isRemote = true;
+      if (!r.compensationType && claudeMeta.compensationType) r.compensationType = claudeMeta.compensationType;
+      if (claudeMeta.format && r.format === 'conference') r.format = claudeMeta.format;
+      if (claudeMeta.industries?.length > 0 && r.industries.length === 0) {
+        r.industries = normalizeIndustries(claudeMeta.industries);
+      }
+      // Mark closed results
+      if (claudeMeta.isClosed) {
+        // Set a past deadline to trigger "deadline passed" display
+        if (!r.cfpDeadline) {
+          r.cfpDeadline = new Date('2020-01-01').toISOString();
+        }
+      }
+    } else if (pageText) {
+      // Fallback: regex extraction from page text
+      const pageMeta = extractMetadata(pageText, r.title, searchIndustries);
+      if (!r.location && pageMeta.location) r.location = pageMeta.location;
+      if (!r.cfpDeadline && pageMeta.cfpDeadline) r.cfpDeadline = pageMeta.cfpDeadline;
+      if (!r.eventDate && pageMeta.eventDate) r.eventDate = pageMeta.eventDate;
+      if (!r.compensationType && pageMeta.compensationType) {
+        r.compensationType = pageMeta.compensationType;
+        r.compensationAmount = pageMeta.compensationAmount;
+        r.compensationDetails = pageMeta.compensationDetails;
+      }
+      if (!r.isRemote && pageMeta.isRemote) r.isRemote = true;
     }
 
     // Recalculate quality score with enriched data
