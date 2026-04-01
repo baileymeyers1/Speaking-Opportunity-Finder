@@ -938,7 +938,7 @@ async function performLinkupSearch(
   const now = new Date().toISOString();
 
   const maxPerPage = 50;
-  const maxPages = 5;
+  const maxPages = 2;
 
   try {
     for (let page = 1; page <= maxPages; page++) {
@@ -950,7 +950,7 @@ async function performLinkupSearch(
         },
         body: JSON.stringify({
           q: query,
-          depth: 'standard',
+          depth: 'deep',
           outputType: 'searchResults',
           maxResults: maxPerPage,
           page,
