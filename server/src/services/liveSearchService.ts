@@ -499,6 +499,48 @@ const locationAliasMap: Record<string, string[]> = {
 };
 
 /**
+ * Build multiple search queries for broader coverage.
+ * Returns 2-3 query variations to run in parallel.
+ */
+function buildSearchQueries(query: string, industries: string[], locations: string[]): string[] {
+  const currentYear = new Date().getFullYear();
+  const locationSuffix = locations.length > 0
+    ? ` ${locations.join(' OR ')}`
+    : '';
+
+  const queries: string[] = [];
+
+  if (query && industries.length > 0) {
+    const industryTerms = industries.map((ind) => {
+      const templates = INDUSTRY_QUERIES[ind.toLowerCase()];
+      return templates ? templates[0] : `${ind} conference`;
+    });
+    queries.push(`${query} ${industryTerms[0]} speaking opportunity ${currentYear}${locationSuffix}`);
+    queries.push(`${query} conference call for speakers ${currentYear}${locationSuffix}`);
+    if (industryTerms.length > 1) {
+      queries.push(`${query} ${industryTerms[1]} CFP ${currentYear}${locationSuffix}`);
+    }
+  } else if (query) {
+    // Multiple query angles for broad coverage
+    queries.push(`${query} conference call for speakers ${currentYear}${locationSuffix}`);
+    queries.push(`${query} speaking opportunity CFP ${currentYear}${locationSuffix}`);
+    queries.push(`${query} summit keynote speaker submissions ${currentYear}${locationSuffix}`);
+  } else if (industries.length > 0) {
+    const industryTerms = industries.map((ind) => {
+      const templates = INDUSTRY_QUERIES[ind.toLowerCase()];
+      return templates ? templates[0] : `${ind} conference`;
+    });
+    queries.push(`${industryTerms[0]} call for speakers ${currentYear}${locationSuffix}`);
+    if (industryTerms.length > 1) {
+      queries.push(`${industryTerms[1]} ${currentYear}${locationSuffix}`);
+    }
+    queries.push(`${industries[0]} conference CFP ${currentYear}${locationSuffix}`);
+  }
+
+  return queries;
+}
+
+/**
  * Perform a live web search for speaking opportunities using Linkup API.
  * Returns enriched results that match the Opportunity shape.
  */
@@ -509,30 +551,10 @@ export async function performLiveSearch(
   filters: LiveSearchFilters = {}
 ): Promise<EnrichedLiveResult[]> {
   const apiKey = config.scrapers?.webSearch;
-  const currentYear = new Date().getFullYear();
 
-  const locationSuffix = locations.length > 0
-    ? ` ${locations.join(' OR ')}`
-    : '';
+  const searchQueries = buildSearchQueries(query, industries, locations);
 
-  let searchQuery = '';
-  if (query && industries.length > 0) {
-    const industryTerms = industries.map((ind) => {
-      const templates = INDUSTRY_QUERIES[ind.toLowerCase()];
-      return templates ? templates[0] : `${ind} conference`;
-    });
-    searchQuery = `"${query}" ${industryTerms.join(' OR ')} speaking opportunity CFP ${currentYear}${locationSuffix}`;
-  } else if (query) {
-    searchQuery = `"${query}" speaking opportunity OR call for speakers OR CFP ${currentYear}${locationSuffix}`;
-  } else if (industries.length > 0) {
-    const industryTerms = industries.map((ind) => {
-      const templates = INDUSTRY_QUERIES[ind.toLowerCase()];
-      return templates ? templates[0] : `${ind} conference`;
-    });
-    searchQuery = `(${industryTerms.join(' OR ')}) call for speakers ${currentYear}${locationSuffix}`;
-  }
-
-  if (!searchQuery) {
+  if (searchQueries.length === 0) {
     return [];
   }
 
@@ -541,7 +563,24 @@ export async function performLiveSearch(
     return [];
   }
 
-  let results = await performLinkupSearch(searchQuery, apiKey, industries);
+  console.log(`[LiveSearch] Running ${searchQueries.length} parallel queries:`, searchQueries);
+
+  // Run all query variations in parallel, then deduplicate
+  const allResults = await Promise.all(
+    searchQueries.map(sq => performLinkupSearch(sq, apiKey, industries))
+  );
+
+  // Deduplicate by URL across all query results
+  const seenUrls = new Set<string>();
+  let results: EnrichedLiveResult[] = [];
+  for (const batch of allResults) {
+    for (const r of batch) {
+      if (!seenUrls.has(r.applyUrl)) {
+        seenUrls.add(r.applyUrl);
+        results.push(r);
+      }
+    }
+  }
 
   // --- Post-fetch filtering ---
 
@@ -557,13 +596,22 @@ export async function performLiveSearch(
     return new Date(r.eventDate) >= now;
   });
 
-  // 2. Relevance check — ensure search query appears in title, description, or industries
+  // 2. Relevance check — ensure result is actually about the search topic
   if (query) {
     const queryLower = query.toLowerCase();
     const queryTerms = queryLower.split(/\s+/).filter(t => t.length > 2);
     results = results.filter(r => {
-      const text = `${r.title} ${r.description || ''} ${r.industries.join(' ')}`.toLowerCase();
-      return queryTerms.some(term => text.includes(term));
+      const title = r.title.toLowerCase();
+      const industries = r.industries.join(' ').toLowerCase();
+      // Check title and industries first (strongest signal)
+      const inTitleOrIndustries = queryTerms.some(term => title.includes(term) || industries.includes(term));
+      if (inTitleOrIndustries) return true;
+      // Check description but require the term as a standalone word (not "high-energy" for "energy")
+      const desc = r.description || '';
+      return queryTerms.some(term => {
+        const wordBoundary = new RegExp(`\\b${term}\\b`, 'i');
+        return wordBoundary.test(desc);
+      });
     });
   }
 
@@ -852,8 +900,8 @@ async function enrichResultsFromPages(
   const fetchedCount = pageTexts.filter(t => t !== null).length;
   console.log(`[LiveSearch] Page fetch: ${fetchedCount}/${results.length} pages returned content`);
 
-  // Send top 15 results to Claude for enrichment, rest get regex-only
-  const CLAUDE_ENRICHMENT_LIMIT = 15;
+  // Send top results to Claude for enrichment, rest get regex-only
+  const CLAUDE_ENRICHMENT_LIMIT = 25;
   const itemsForClaude: { index: number; title: string; pageText: string }[] = [];
   for (let i = 0; i < Math.min(results.length, CLAUDE_ENRICHMENT_LIMIT); i++) {
     const text = pageTexts[i] || results[i].description || '';
@@ -932,7 +980,7 @@ async function performLinkupSearch(
   const now = new Date().toISOString();
 
   const maxPerPage = 50;
-  const maxPages = 5;
+  const maxPages = 3;
 
   try {
     for (let page = 1; page <= maxPages; page++) {
@@ -1008,8 +1056,8 @@ async function performLinkupSearch(
 
   const filtered = results.filter(r => !isJunkResult({ title: r.title, description: r.description, applyUrl: r.applyUrl }));
 
-  // Cap results before expensive enrichment — we only display ~10-15 anyway
-  const toEnrich = filtered.sort((a, b) => b.qualityScore - a.qualityScore).slice(0, 30);
+  // Cap results before expensive enrichment
+  const toEnrich = filtered.sort((a, b) => b.qualityScore - a.qualityScore).slice(0, 50);
 
   // Scrape actual pages to fill in missing metadata (dates, locations, etc.)
   console.log(`[LiveSearch] Enriching ${toEnrich.length} results from page content...`);
