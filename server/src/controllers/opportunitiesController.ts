@@ -172,6 +172,7 @@ export async function getOpportunities(
       updatedAt: r.updatedAt,
       isLiveResult: true,
       liveSearchUrl: r.liveSearchUrl,
+      matchesLocationFilter: r.matchesLocationFilter,
     }));
 
     // Combine and sort

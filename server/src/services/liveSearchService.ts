@@ -30,6 +30,7 @@ export interface EnrichedLiveResult {
   updatedAt: string;
   isLiveResult: boolean;
   liveSearchUrl: string;
+  matchesLocationFilter?: boolean;
 }
 
 // Search query templates for different industries
@@ -550,32 +551,7 @@ export async function performLiveSearch(
     return new Date(r.cfpDeadline) >= now;
   });
 
-  // 2. Filter by location — use Claude-extracted location as source of truth
-  if (locations.length > 0) {
-    const matched = results.filter(r => {
-      // Only trust the structured location field (set by Claude or regex)
-      if (!r.location) return false;
-      const resultLoc = r.location.toLowerCase();
-      return locations.some(loc => {
-        const lowerLoc = loc.toLowerCase();
-        // Direct match
-        if (resultLoc.includes(lowerLoc)) return true;
-        // Check aliases
-        const aliases = locationAliasMap[lowerLoc] || [];
-        return aliases.some(alias => resultLoc.includes(alias));
-      });
-    });
-
-    if (matched.length >= 3) {
-      results = matched;
-    } else {
-      // Not enough location matches — keep matched first, then fill with
-      // results that have no location (benefit of the doubt), then others
-      const noLocation = results.filter(r => !r.location && !matched.includes(r));
-      const unmatched = results.filter(r => r.location && !matched.includes(r));
-      results = [...matched, ...noLocation.slice(0, 4), ...unmatched.slice(0, Math.max(0, 8 - matched.length - noLocation.length))];
-    }
-  }
+  // Location filtering is now handled client-side via matchesLocationFilter flag
 
   // Recalculate quality scores with location match context
   if (locations.length > 0) {
@@ -588,6 +564,7 @@ export async function performLiveSearch(
         return aliases.some(alias => resultLoc.includes(alias));
       }) : false;
 
+      r.matchesLocationFilter = matchesLoc;
       r.qualityScore = computeLiveQualityScore({
         cfpDeadline: r.cfpDeadline,
         eventDate: r.eventDate,
