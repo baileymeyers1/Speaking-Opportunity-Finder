@@ -723,8 +723,8 @@ async function extractMetadataWithClaude(
 
   if (!config.claude.apiKey || items.length === 0) return resultMap;
 
-  // Build a compact prompt with all items — limit text per item to keep within context
-  const charsPerItem = Math.min(800, Math.floor(6000 / items.length));
+  // Build a compact prompt — with batches of ~5, each item gets plenty of text
+  const charsPerItem = Math.min(1200, Math.floor(8000 / items.length));
   const itemDescriptions = items.map(item =>
     `[${item.index}] "${item.title}"\n${item.pageText.substring(0, charsPerItem)}`
   ).join('\n---\n');
@@ -815,12 +815,30 @@ async function enrichResultsFromPages(
     }
   }
 
-  // Try Claude extraction first (single batch call)
+  // Split into batches of 5 and run in parallel — ensures enough text per item
+  const CLAUDE_BATCH_SIZE = 5;
   let claudeResults = new Map<number, any>();
   if (config.claude.apiKey && itemsForClaude.length > 0) {
-    console.log(`[LiveSearch] Extracting metadata via Claude for ${itemsForClaude.length} results...`);
-    claudeResults = await extractMetadataWithClaude(itemsForClaude);
-    console.log(`[LiveSearch] Claude extracted metadata for ${claudeResults.size} results`);
+    console.log(`[LiveSearch] Extracting metadata via Claude for ${itemsForClaude.length} results in batches of ${CLAUDE_BATCH_SIZE}...`);
+
+    const batches: { index: number; title: string; pageText: string }[][] = [];
+    for (let i = 0; i < itemsForClaude.length; i += CLAUDE_BATCH_SIZE) {
+      batches.push(itemsForClaude.slice(i, i + CLAUDE_BATCH_SIZE));
+    }
+
+    // Run all batches in parallel
+    const batchResults = await Promise.all(
+      batches.map(batch => extractMetadataWithClaude(batch))
+    );
+
+    // Merge all batch results into one map
+    for (const batchMap of batchResults) {
+      for (const [key, value] of batchMap) {
+        claudeResults.set(key, value);
+      }
+    }
+
+    console.log(`[LiveSearch] Claude extracted metadata for ${claudeResults.size}/${itemsForClaude.length} results`);
   }
 
   // Apply extracted metadata to results
@@ -965,11 +983,14 @@ async function performLinkupSearch(
 
   const filtered = results.filter(r => !isJunkResult({ title: r.title, description: r.description, applyUrl: r.applyUrl }));
 
-  // Scrape actual pages to fill in missing metadata (dates, locations, etc.)
-  console.log(`[LiveSearch] Enriching ${filtered.length} results from page content...`);
-  await enrichResultsFromPages(filtered, searchIndustries);
+  // Cap results before expensive enrichment — we only display ~10-15 anyway
+  const toEnrich = filtered.sort((a, b) => b.qualityScore - a.qualityScore).slice(0, 12);
 
-  return filtered.sort((a, b) => b.qualityScore - a.qualityScore);
+  // Scrape actual pages to fill in missing metadata (dates, locations, etc.)
+  console.log(`[LiveSearch] Enriching ${toEnrich.length} results from page content...`);
+  await enrichResultsFromPages(toEnrich, searchIndustries);
+
+  return toEnrich.sort((a, b) => b.qualityScore - a.qualityScore);
 }
 
 /**
