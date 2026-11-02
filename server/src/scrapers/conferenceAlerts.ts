@@ -1,144 +1,210 @@
-import type { ScraperResult } from './index.js';
+import type { ScraperResult } from './qualityScore.js';
+import {
+  fetchWithTimeout,
+  mapWithConcurrency,
+  monthIndex,
+  parseHumanDate,
+  startOfUtcDay,
+  stripTags,
+  utcDate,
+} from './lib/html.js';
 
-function normalizeText(text: string) {
-  return text
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/\s+/g, ' ')
-    .trim();
+/**
+ * conferencealerts.com lists academic/professional conferences by country.
+ * The listing page has no deadline information, so each upcoming event's
+ * detail page is fetched and only events with a real
+ * "Deadline for abstracts/proposals" that has not passed are kept.
+ * (Roughly half of the detail pages have no deadline at all.)
+ */
+
+const BASE_URL = 'https://conferencealerts.com/';
+const LISTING_URL = `${BASE_URL}country-listing.php?country=United+States+of+America&ipp=All&page=1`;
+const SOURCE = 'conferencealerts.com';
+const LISTING_TIMEOUT_MS = 20_000;
+const DETAIL_TIMEOUT_MS = 10_000;
+const DETAIL_CONCURRENCY = 4;
+
+export interface ConferenceAlertsListing {
+  eventId: string;
+  title: string;
+  detailUrl: string;
+  eventDate: Date;
+  location?: string;
+  isRemote: boolean;
 }
 
-function stripHtml(html: string) {
-  return normalizeText(html.replace(/<[^>]*>/g, '\n'));
+export interface ConferenceAlertsDetail {
+  title?: string;
+  cfpDeadline?: Date;
+  website?: string;
+  description?: string;
+  organiser?: string;
+  location?: string;
+  isRemote?: boolean;
 }
 
-function buildAnchorMap(html: string, baseUrl: string) {
-  const map = new Map<string, string>();
-  const regex = /<a[^>]+href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/gi;
-  let match: RegExpExecArray | null;
-  while ((match = regex.exec(html)) !== null) {
-    const href = match[1];
-    const text = normalizeText(match[2].replace(/<[^>]*>/g, ' '));
-    if (!text) continue;
-    try {
-      const absolute = new URL(href, baseUrl).toString();
-      if (!map.has(text)) {
-        map.set(text, absolute);
-      }
-    } catch {
-      // Ignore invalid URLs
+const LISTING_TOKEN =
+  /<strong>\s*([A-Za-z]+)\s+(\d{4})\s*<\/strong>|<tr>\s*<td class="textLeft bold"[^>]*>\s*(\d{1,2})(?:st|nd|rd|th)?\s*<\/td>([\s\S]*?)<\/tr>/g;
+
+function shortenCountry(place: string): string {
+  return place.replace(/,?\s*United States of America\s*$/i, ', United States').replace(/^,\s*/, '');
+}
+
+function badgeIsRemote(html: string): boolean {
+  return /class="(?:online-badge|online-in-person-badge)"/.test(html);
+}
+
+/** Parse the country listing into upcoming events (event date on or after today). */
+export function parseConferenceAlertsListing(html: string, now: Date): ConferenceAlertsListing[] {
+  const tableStart = html.indexOf('id="searchResultTable"');
+  if (tableStart === -1) return [];
+  const table = html.slice(tableStart);
+  const today = startOfUtcDay(now);
+
+  const listings: ConferenceAlertsListing[] = [];
+  const seenIds = new Set<string>();
+  let currentMonth: number | undefined;
+  let currentYear: number | undefined;
+
+  for (const match of table.matchAll(LISTING_TOKEN)) {
+    if (match[1]) {
+      currentMonth = monthIndex(match[1]);
+      currentYear = Number(match[2]);
+      continue;
     }
+    if (currentMonth === undefined || currentYear === undefined) continue;
+
+    const cell = match[4];
+    const anchor = cell.match(/<a\b[^>]*href="show-event\?id=(\d+)"[^>]*>([\s\S]*?)<\/a>/);
+    if (!anchor || anchor[1] === '0' || seenIds.has(anchor[1])) continue;
+
+    const eventDate = utcDate(currentYear, currentMonth, Number(match[3]));
+    if (!eventDate || eventDate < today) continue;
+
+    const title = stripTags(anchor[2]);
+    if (!title) continue;
+
+    const place = cell.match(/<span id="searchPlace"[^>]*>([\s\S]*?)<\/span>\s*<\/span>/);
+    seenIds.add(anchor[1]);
+    listings.push({
+      eventId: anchor[1],
+      title,
+      detailUrl: new URL(`show-event?id=${anchor[1]}`, BASE_URL).toString(),
+      eventDate,
+      location: place ? shortenCountry(stripTags(place[1])) || undefined : undefined,
+      isRemote: badgeIsRemote(cell),
+    });
   }
-  return map;
+
+  return listings;
 }
 
-function parseDateFromParts(monthYear: string, dayStr: string): Date | undefined {
-  const composed = `${dayStr} ${monthYear}`;
-  const parsed = new Date(composed);
-  if (isNaN(parsed.getTime())) return undefined;
-  return parsed;
+function spanText(html: string, id: string): string | undefined {
+  const match = html.match(new RegExp(`<span id="${id}"[^>]*>([\\s\\S]*?)</span>\\s*(?:<br|$)`));
+  if (!match) return undefined;
+  const text = stripTags(match[1]);
+  return text || undefined;
 }
 
-function extractDeadline(html: string): Date | undefined {
-  const patterns = [
-    /(?:abstract submission deadline|submission deadline|deadline)[:\s]*(\w+ \d{1,2},?\s*\d{4})/i,
-    /(?:abstract submission deadline|submission deadline|deadline)[:\s]*(\d{4}-\d{2}-\d{2})/i,
-  ];
+/** Parse a show-event detail page. */
+export function parseConferenceAlertsDetail(html: string): ConferenceAlertsDetail {
+  const deadlineText = spanText(html, 'eventDeadline');
+  const websiteMatch = html.match(/<span id="eventWebsite">[\s\S]*?<a\b[^>]*href="(https?:\/\/[^"]+)"/);
+  const organiser = spanText(html, 'eventOrganiser')?.replace(/^Organized by:\s*/i, '');
+  const location = spanText(html, 'eventCountry');
 
-  for (const pattern of patterns) {
-    const match = html.match(pattern);
-    if (match) {
-      const parsed = new Date(match[1]);
-      if (!isNaN(parsed.getTime())) return parsed;
-    }
+  return {
+    title: spanText(html, 'eventNameHeader'),
+    cfpDeadline: deadlineText ? parseHumanDate(deadlineText.replace(/^[^:]*:\s*/, '')) : undefined,
+    website: websiteMatch ? websiteMatch[1] : undefined,
+    description: spanText(html, 'eventDescription'),
+    organiser: organiser || undefined,
+    location: location ? shortenCountry(location) : undefined,
+    isRemote: badgeIsRemote(html),
+  };
+}
+
+/**
+ * Combine listing rows with their detail pages. Rows without a detail page,
+ * without a deadline, or whose deadline has passed are dropped. Each result
+ * gets its own applyUrl: the event website, unless several events share it,
+ * in which case the per-event detail page is used.
+ */
+export function buildConferenceAlertsResults(
+  listings: ConferenceAlertsListing[],
+  detailHtmlById: ReadonlyMap<string, string>,
+  now: Date,
+): ScraperResult[] {
+  const today = startOfUtcDay(now);
+  const candidates: Array<{ listing: ConferenceAlertsListing; detail: ConferenceAlertsDetail }> = [];
+
+  for (const listing of listings) {
+    const detailHtml = detailHtmlById.get(listing.eventId);
+    if (!detailHtml) continue;
+    const detail = parseConferenceAlertsDetail(detailHtml);
+    if (!detail.cfpDeadline || detail.cfpDeadline < today) continue;
+    candidates.push({ listing, detail });
   }
 
-  return undefined;
+  const websiteCounts = new Map<string, number>();
+  for (const { detail } of candidates) {
+    if (detail.website) websiteCounts.set(detail.website, (websiteCounts.get(detail.website) ?? 0) + 1);
+  }
+
+  return candidates.map(({ listing, detail }) => {
+    const ownWebsite = detail.website && websiteCounts.get(detail.website) === 1 ? detail.website : undefined;
+    return {
+      title: detail.title || listing.title,
+      organization: detail.organiser || detail.title || listing.title,
+      description: detail.description,
+      location: detail.location || listing.location || null,
+      isRemote: listing.isRemote || detail.isRemote === true,
+      eventDate: listing.eventDate,
+      cfpDeadline: detail.cfpDeadline,
+      format: 'conference',
+      industries: [],
+      applyUrl: ownWebsite || listing.detailUrl,
+      source: SOURCE,
+      sourceUrl: listing.detailUrl,
+    };
+  });
 }
 
 export async function scrapeConferenceAlertsUSA(): Promise<ScraperResult[]> {
-  const results: ScraperResult[] = [];
-  const url = 'https://conferencealerts.com/country-listing.php?country=United+States+of+America&ipp=All&page=1';
-
   console.log('Fetching conferences from conferencealerts.com...');
-
   try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 15000);
-    const response = await fetch(url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (compatible; SpeakingOpportunityFinder/1.0)',
-        Accept: 'text/html, */*',
-      },
-      signal: controller.signal,
+    const response = await fetchWithTimeout(LISTING_URL, {
+      timeoutMs: LISTING_TIMEOUT_MS,
+      headers: { Accept: 'text/html' },
     });
-    clearTimeout(timeout);
     if (!response.ok) {
       console.log(`conferencealerts.com returned ${response.status}, skipping...`);
-      return results;
+      return [];
     }
 
-    const html = await response.text();
-    const anchors = buildAnchorMap(html, url);
-    const text = stripHtml(html);
-    const lines = text.split('\n').map((l) => l.trim()).filter(Boolean);
+    const now = new Date();
+    const listings = parseConferenceAlertsListing(await response.text(), now);
 
-    let currentMonthYear = '';
-    for (const line of lines) {
-      if (line.match(/^\w+\s+\d{4}$/)) {
-        currentMonthYear = line;
-        continue;
-      }
-
-      if (!currentMonthYear) continue;
-
-      const dayMatch = line.match(/^(\d{1,2})(?:st|nd|rd|th)?\s+\|\s+(.+?)\s+([A-Za-z\s]+),\s+United States of America/i) ||
-        line.match(/^(\d{1,2})(?:st|nd|rd|th)?\s+(.+?)\s+([A-Za-z\s]+),\s+United States of America/i);
-      if (dayMatch) {
-        const day = dayMatch[1];
-        const title = dayMatch[2].trim();
-        const location = `${dayMatch[3].trim()}, United States`;
-        const eventDate = parseDateFromParts(currentMonthYear, day);
-        const applyUrl = anchors.get(title) || url;
-        let cfpDeadline: Date | undefined;
-
-        if (applyUrl !== url) {
-          try {
-            const detailResponse = await fetch(applyUrl, {
-              headers: { Accept: 'text/html', 'User-Agent': 'SpeakingOpportunityFinder/1.0' },
-            });
-            if (detailResponse.ok) {
-              const detailHtml = await detailResponse.text();
-              cfpDeadline = extractDeadline(detailHtml);
-            }
-          } catch {
-            // ignore detail fetch failures
-          }
-        }
-
-        results.push({
-          title: `${title} - Call for Speakers`,
-          organization: title,
-          description: `Conference listed on conferencealerts.com.`,
-          location,
-          isRemote: false,
-          eventDate,
-          cfpDeadline,
-          format: 'conference',
-          industries: ['conference'],
-          compensationType: undefined,
-          compensationDetails: undefined,
-          applyUrl,
-          source: 'conferencealerts.com',
-          sourceUrl: url,
+    const detailHtmlById = new Map<string, string>();
+    await mapWithConcurrency(listings, DETAIL_CONCURRENCY, async (listing) => {
+      try {
+        const detail = await fetchWithTimeout(listing.detailUrl, {
+          timeoutMs: DETAIL_TIMEOUT_MS,
+          headers: { Accept: 'text/html' },
         });
+        if (detail.ok) detailHtmlById.set(listing.eventId, await detail.text());
+      } catch {
+        // A slow or failing detail page only drops that one event.
       }
-    }
-    console.log(`Found ${results.length} conferences from conferencealerts.com`);
+    });
+
+    const results = buildConferenceAlertsResults(listings, detailHtmlById, now);
+    console.log(
+      `conferencealerts.com: ${listings.length} upcoming events, ${detailHtmlById.size} detail pages, ${results.length} with an open abstract deadline`,
+    );
+    return results;
   } catch (error) {
     console.error('Error scraping conferencealerts.com:', error instanceof Error ? error.message : error);
+    return [];
   }
-
-  return results;
 }

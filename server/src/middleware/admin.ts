@@ -1,8 +1,6 @@
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../lib/prisma.js';
 import { Response, NextFunction } from 'express';
 import { AppError } from './errorHandler.js';
-
-const prisma = new PrismaClient();
 
 export async function adminMiddleware(req: any, res: Response, next: NextFunction) {
   if (!req.user) {

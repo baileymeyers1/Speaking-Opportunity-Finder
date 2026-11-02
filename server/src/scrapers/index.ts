@@ -1,25 +1,17 @@
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../lib/prisma.js';
+import { Prisma } from '@prisma/client';
 import { scrapeConfsTech } from './confstech.js';
 import { scrapeJavaConferences } from './javaconferences.js';
 import { scrapeCallingAllPapers } from './callingallpapers.js';
-import { scrapeLinkupCFPs } from './linkupcfp.js';
-import { scrapePaperCall } from './papercall.js';
+import { scrapeLinkupCFPs, LINKUP_QUERY_COUNT } from './linkupcfp.js';
 import { scrapeWikiCFP } from './wikicfp.js';
-import { scrapeUsMegaEvents } from './usMegaEvents.js';
 import { scrapeConferenceAlertsUSA } from './conferenceAlerts.js';
 import { scrapeDevelopersEvents } from './developersEvents.js';
-import { scrapeAirtableEvents } from './airtableEvents.js';
-import { scrapeEventbrite } from './eventbrite.js';
-import { scrapeLinkedInEvents } from './linkedinEvents.js';
-import { scrapePacEvents } from './pacEvents.js';
-import { scrapePrNewsOnline } from './prNewsOnline.js';
 import { config } from '../config/index.js';
 import { generateDeduplicationKey } from '../services/deduplicationService.js';
 import { decodeHtmlEntities, isJunkResult } from '../services/dataNormalization.js';
 import { computeQualityScore, type ScraperResult } from './qualityScore.js';
 import { buildCreateData, buildUpdateData } from './persistData.js';
-
-const prisma = new PrismaClient();
 
 export { computeQualityScore } from './qualityScore.js';
 export type { ScraperResult } from './qualityScore.js';
@@ -72,13 +64,19 @@ async function backfillQualityScores(): Promise<number> {
   return updated;
 }
 
-export async function recalculateAllQualityScores(): Promise<number> {
+/**
+ * Recompute quality scores. Pass a `where` to limit the pass (e.g. rows
+ * touched by this sync) instead of scanning the whole table every run.
+ */
+export async function recalculateQualityScores(where: Prisma.OpportunityWhereInput = {}): Promise<number> {
   const batchSize = 200;
   let updated = 0;
   let skip = 0;
 
   while (true) {
     const batch = await prisma.opportunity.findMany({
+      where,
+      orderBy: { id: 'asc' },
       take: batchSize,
       skip,
     });
@@ -117,18 +115,36 @@ export async function recalculateAllQualityScores(): Promise<number> {
     skip += batchSize;
   }
 
+  return updated;
+}
+
+/** Full-table recalculation (admin/maintenance use). */
+export async function recalculateAllQualityScores(): Promise<number> {
+  const updated = await recalculateQualityScores();
   console.log(`Recalculated quality scores: ${updated} records updated`);
   return updated;
 }
 
+const TRACKING_PARAM_PATTERN = /^(utm_\w+|ref|ref_src|fbclid|gclid|msclkid|mc_cid|mc_eid|igshid|_hsenc|_hsmi|source)$/i;
+
+/**
+ * Canonical form of a URL for de-duplication. Drops www, trailing slash, hash
+ * and tracking parameters, lowercases the host, and sorts the remaining query
+ * parameters. Identifying parameters are kept: WikiCFP, for example, addresses
+ * every event through `event.showcfp?eventid=…`.
+ */
 export function normalizeUrl(url: string): string {
   try {
     const u = new URL(url);
-    // Strip trailing slash, www prefix, and common tracking params
-    let normalized = `${u.protocol}//${u.host.replace(/^www\./, '')}${u.pathname.replace(/\/$/, '')}`;
-    return normalized.toLowerCase();
+    const host = u.host.replace(/^www\./, '').toLowerCase();
+    const pathname = u.pathname.replace(/\/$/, '');
+    const params = [...u.searchParams.entries()]
+      .filter(([key]) => !TRACKING_PARAM_PATTERN.test(key))
+      .sort(([a], [b]) => a.localeCompare(b));
+    const query = params.length > 0 ? `?${new URLSearchParams(params).toString()}` : '';
+    return `${u.protocol}//${host}${pathname}${query}`;
   } catch {
-    return url.toLowerCase().replace(/\/$/, '');
+    return url.trim().replace(/\/$/, '');
   }
 }
 
@@ -147,89 +163,115 @@ function deduplicateResults(results: ScraperResult[]): ScraperResult[] {
   return deduped;
 }
 
+export type ScraperCadence = 'daily' | 'weekly';
+
+export interface ScraperDefinition {
+  /** Stable name recorded in ScraperRun. Prefer the source domain. */
+  name: string;
+  cadence: ScraperCadence;
+  run: () => Promise<ScraperResult[]>;
+}
+
+const LINKUP_QUERIES_PER_RUN = 6;
+
 /**
- * Daily scrapers: fast, structured data sources.
- * Runs every 24 hours.
+ * Linkup has ~90 paid queries that take a few seconds each. Each run takes a
+ * deterministic, date-rotating slice so that successive daily runs cover the
+ * whole list without exceeding the serverless time budget.
  */
-export async function runDailyScrapers(): Promise<ScraperResult[]> {
-  console.log('Running daily scrapers...');
+export function rotatingLinkupSlice(now: Date = new Date()) {
+  const day = Math.floor(now.getTime() / 86_400_000);
+  return {
+    offset: (day * LINKUP_QUERIES_PER_RUN) % LINKUP_QUERY_COUNT,
+    maxQueries: LINKUP_QUERIES_PER_RUN,
+  };
+}
 
-  const [confsTechResults, javaResults, callingAllPapersResults] = await Promise.all([
-    scrapeConfsTech(),
-    scrapeJavaConferences(),
-    scrapeCallingAllPapers(),
-  ]);
+export const SCRAPERS: ScraperDefinition[] = [
+  { name: 'confs.tech', cadence: 'daily', run: scrapeConfsTech },
+  { name: 'javaconferences.org', cadence: 'daily', run: scrapeJavaConferences },
+  { name: 'callingallpapers.com', cadence: 'daily', run: scrapeCallingAllPapers },
+  { name: 'developers.events', cadence: 'daily', run: scrapeDevelopersEvents },
+  { name: 'linkup', cadence: 'daily', run: () => scrapeLinkupCFPs(config.scrapers?.webSearch, rotatingLinkupSlice()) },
+  { name: 'wikicfp.com', cadence: 'weekly', run: scrapeWikiCFP },
+  { name: 'conferencealerts.com', cadence: 'weekly', run: scrapeConferenceAlertsUSA },
+];
 
-  const results = deduplicateResults([
-    ...confsTechResults,
-    ...javaResults,
-    ...callingAllPapersResults,
-  ]);
+export interface ScraperRunSummary {
+  scraper: string;
+  status: 'ok' | 'error';
+  found: number;
+  added: number;
+  updated: number;
+  durationMs: number;
+  error?: string;
+}
 
-  console.log(`Daily scrapers found ${results.length} opportunities`);
-  return results;
+class ScraperTimeoutError extends Error {
+  constructor(name: string, timeoutMs: number) {
+    super(`${name} timed out after ${Math.round(timeoutMs / 1000)}s`);
+    this.name = 'ScraperTimeoutError';
+  }
+}
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, name: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new ScraperTimeoutError(name, timeoutMs)), timeoutMs);
+    promise.then(
+      (value) => { clearTimeout(timer); resolve(value); },
+      (error) => { clearTimeout(timer); reject(error); }
+    );
+  });
 }
 
 /**
- * Weekly scrapers: slower web searches and scraping sources.
- * Runs once per week to expand the database with cross-industry data.
+ * Run one scraper, persist its results immediately, and record the run.
+ * A failure or timeout in one scraper never loses another scraper's rows.
  */
-export async function runWeeklyScrapers(): Promise<ScraperResult[]> {
-  console.log('Running weekly deep scrapers...');
+export async function runScraper(def: ScraperDefinition, timeoutMs: number): Promise<ScraperRunSummary> {
+  const startedAt = new Date();
+  const run = await prisma.scraperRun.create({
+    data: { scraper: def.name, cadence: def.cadence, status: 'running', startedAt },
+  });
 
-  // Run API-based scrapers in parallel
-  const [paperCallResults, wikiCFPResults] = await Promise.all([
-    scrapePaperCall(),
-    scrapeWikiCFP(),
-  ]);
-
-  // Run Linkup sequentially (rate limited)
-  const linkupResults = await scrapeLinkupCFPs(config.scrapers?.webSearch);
-  const megaEventResults = await scrapeUsMegaEvents();
-
-  const [
-    conferenceAlertsResults,
-    developersEventsResults,
-    airtableResults,
-    eventbriteResults,
-    linkedinResults,
-    pacResults,
-    prNewsResults,
-  ] = await Promise.all([
-    scrapeConferenceAlertsUSA(),
-    scrapeDevelopersEvents(),
-    scrapeAirtableEvents(),
-    scrapeEventbrite(),
-    scrapeLinkedInEvents(),
-    scrapePacEvents(),
-    scrapePrNewsOnline(),
-  ]);
-
-  const results = deduplicateResults([
-    ...paperCallResults,
-    ...wikiCFPResults,
-    ...linkupResults,
-    ...megaEventResults,
-    ...conferenceAlertsResults,
-    ...developersEventsResults,
-    ...airtableResults,
-    ...eventbriteResults,
-    ...linkedinResults,
-    ...pacResults,
-    ...prNewsResults,
-  ]);
-
-  console.log(`Weekly scrapers found ${results.length} opportunities`);
-  return results;
+  try {
+    const results = deduplicateResults(await withTimeout(def.run(), timeoutMs, def.name));
+    const { added, updated } = await persistResults(results);
+    const finishedAt = new Date();
+    await prisma.scraperRun.update({
+      where: { id: run.id },
+      data: { status: 'ok', finishedAt, found: results.length, added, updated },
+    });
+    const summary: ScraperRunSummary = {
+      scraper: def.name, status: 'ok', found: results.length, added, updated,
+      durationMs: finishedAt.getTime() - startedAt.getTime(),
+    };
+    console.log(`[Sync] ${def.name}: ${results.length} found, ${added} added, ${updated} updated (${summary.durationMs}ms)`);
+    return summary;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    const finishedAt = new Date();
+    await prisma.scraperRun.update({
+      where: { id: run.id },
+      data: { status: 'error', finishedAt, error: message.slice(0, 1000) },
+    });
+    console.error(`[Sync] ${def.name} failed: ${message}`);
+    return {
+      scraper: def.name, status: 'error', found: 0, added: 0, updated: 0,
+      durationMs: finishedAt.getTime() - startedAt.getTime(), error: message,
+    };
+  }
 }
 
-/**
- * Run all scrapers (used for full sync or initial population).
- */
-export async function runAllScrapers(): Promise<ScraperResult[]> {
-  const dailyResults = await runDailyScrapers();
-  const weeklyResults = await runWeeklyScrapers();
-  return deduplicateResults([...dailyResults, ...weeklyResults]);
+/** Least recently run first, never-run scrapers before all others. */
+async function orderByLeastRecentlyRun(defs: ScraperDefinition[]): Promise<ScraperDefinition[]> {
+  const lastRuns = await prisma.scraperRun.groupBy({
+    by: ['scraper'],
+    _max: { startedAt: true },
+    where: { scraper: { in: defs.map((d) => d.name) } },
+  });
+  const lastRunAt = new Map(lastRuns.map((r) => [r.scraper, r._max.startedAt?.getTime() ?? 0]));
+  return [...defs].sort((a, b) => (lastRunAt.get(a.name) ?? 0) - (lastRunAt.get(b.name) ?? 0));
 }
 
 async function persistResults(results: ScraperResult[]): Promise<{ added: number; updated: number }> {
@@ -356,49 +398,75 @@ async function cleanupPlaceholderData(): Promise<number> {
   return deleted.count;
 }
 
-/**
- * Sync opportunities to the database.
- * @param mode - 'daily' runs fast scrapers only, 'weekly' runs deep scrapers, 'full' runs all
- */
-export async function syncOpportunities(
-  mode: 'daily' | 'weekly' | 'full' = 'full'
-): Promise<{
+export interface SyncOptions {
+  /** Wall-clock budget for the whole run. Scrapers that don't fit are skipped (and run first next time). */
+  timeBudgetMs?: number;
+  /** Restrict to these scraper names. */
+  only?: string[];
+}
+
+export interface SyncSummary {
   added: number;
   updated: number;
   total: number;
   mode: string;
-}> {
-  console.log(`Starting ${mode} opportunity sync...`);
+  runs: ScraperRunSummary[];
+  skipped: string[];
+  deleted: number;
+  recalculated: number;
+  durationMs: number;
+}
 
-  // Clean up placeholder data with example.com URLs
+const PER_SCRAPER_TIMEOUT_MS = 45_000;
+/** Don't start a scraper with less than this left; leave room for cleanup. */
+const MIN_REMAINING_MS = 8_000;
+
+/**
+ * Sync opportunities to the database.
+ * @param mode - 'daily' runs the fast structured sources, 'weekly' the slow ones, 'full' everything
+ */
+export async function syncOpportunities(
+  mode: 'daily' | 'weekly' | 'full' = 'full',
+  options: SyncOptions = {}
+): Promise<SyncSummary> {
+  const startedAt = new Date();
+  const budget = options.timeBudgetMs ?? Number.POSITIVE_INFINITY;
+  console.log(`Starting ${mode} opportunity sync${Number.isFinite(budget) ? ` (budget ${Math.round(budget / 1000)}s)` : ''}...`);
+
   await cleanupPlaceholderData();
 
-  let results: ScraperResult[];
-  switch (mode) {
-    case 'daily':
-      results = await runDailyScrapers();
-      break;
-    case 'weekly':
-      results = await runWeeklyScrapers();
-      break;
-    case 'full':
-    default:
-      results = await runAllScrapers();
-      break;
+  let defs = mode === 'full' ? SCRAPERS : SCRAPERS.filter((d) => d.cadence === mode);
+  if (options.only?.length) {
+    const wanted = new Set(options.only);
+    defs = defs.filter((d) => wanted.has(d.name));
+  }
+  defs = await orderByLeastRecentlyRun(defs);
+
+  const runs: ScraperRunSummary[] = [];
+  const skipped: string[] = [];
+  for (const def of defs) {
+    const remaining = budget - (Date.now() - startedAt.getTime());
+    if (remaining < MIN_REMAINING_MS) {
+      skipped.push(def.name);
+      continue;
+    }
+    runs.push(await runScraper(def, Math.min(PER_SCRAPER_TIMEOUT_MS, remaining - MIN_REMAINING_MS / 2)));
   }
 
-  // Enrichment is handled by the background enrichment service
-  // to avoid expensive batch API calls during sync
-
-  const { added, updated } = await persistResults(results);
-  const deletedCount = await cleanupExpired();
+  const deleted = await cleanupExpired();
   const backfilled = await backfillQualityScores();
-  const recalculated = await recalculateAllQualityScores();
+  // Only rows this run touched; the full-table pass is an admin operation.
+  const recalculated = backfilled + (await recalculateQualityScores({ updatedAt: { gte: startedAt } }));
+
+  const added = runs.reduce((n, r) => n + r.added, 0);
+  const updated = runs.reduce((n, r) => n + r.updated, 0);
+  const total = await prisma.opportunity.count();
+  const durationMs = Date.now() - startedAt.getTime();
 
   console.log(
-    `Sync complete (${mode}): ${added} added, ${updated} updated, ${deletedCount} expired removed, ${backfilled} quality backfilled, ${recalculated} quality recalculated`
+    `Sync complete (${mode}): ${runs.length} scrapers ran, ${skipped.length} skipped, ${added} added, ${updated} updated, ${deleted} expired removed, ${recalculated} rescored, ${durationMs}ms`
   );
+  if (skipped.length) console.log(`[Sync] Skipped for time budget: ${skipped.join(', ')}`);
 
-  const total = await prisma.opportunity.count();
-  return { added, updated, total, mode };
+  return { added, updated, total, mode, runs, skipped, deleted, recalculated, durationMs };
 }

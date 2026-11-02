@@ -97,3 +97,20 @@ model EnrichmentUsage {
   count     Int      @default(0)
   updatedAt DateTime @updatedAt
 }
+
+// One row per scraper execution, for observability and for rotating
+// coverage when a sync runs under a time budget (least recently run first).
+model ScraperRun {
+  id         String    @id @default(uuid())
+  scraper    String
+  cadence    String
+  status     String // running | ok | error
+  startedAt  DateTime  @default(now())
+  finishedAt DateTime?
+  found      Int       @default(0)
+  added      Int       @default(0)
+  updated    Int       @default(0)
+  error      String?
+
+  @@index([scraper, startedAt])
+}

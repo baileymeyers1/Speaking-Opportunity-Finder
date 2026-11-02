@@ -1,7 +1,6 @@
-import { PrismaClient, Prisma } from '@prisma/client';
+import { prisma } from '../lib/prisma.js';
+import { Prisma } from '@prisma/client';
 import { AppError } from '../middleware/errorHandler.js';
-
-const prisma = new PrismaClient();
 
 export interface OpportunityFilters {
   search?: string;
@@ -21,6 +20,18 @@ export interface OpportunityFilters {
 export interface PaginationParams {
   page?: number;
   pageSize?: number;
+}
+
+/**
+ * Case-insensitive `contains`. SQLite's LIKE is case-insensitive by default,
+ * Postgres's is not, so production needs `mode: 'insensitive'`. The dev client
+ * is generated from the SQLite schema and has no `mode` in its types, hence
+ * the cast.
+ */
+const isPostgres = (process.env.DATABASE_URL || '').startsWith('postgres');
+type ContainsFilter = Prisma.StringFilter & Prisma.StringNullableFilter;
+function containsInsensitive(value: string): ContainsFilter {
+  return (isPostgres ? { contains: value, mode: 'insensitive' } : { contains: value }) as ContainsFilter;
 }
 
 function parseJsonArray(value: string): string[] {
@@ -113,9 +124,9 @@ export async function getOpportunities(
   if (filters.search) {
     andConditions.push({
       OR: [
-        { title: { contains: filters.search } },
-        { organization: { contains: filters.search } },
-        { description: { contains: filters.search } },
+        { title: containsInsensitive(filters.search) },
+        { organization: containsInsensitive(filters.search) },
+        { description: containsInsensitive(filters.search) },
       ],
     });
   }
@@ -128,8 +139,10 @@ export async function getOpportunities(
   // Industry filter (OR logic - match ANY selected industry)
   if (filters.industries && filters.industries.length > 0) {
     andConditions.push({
+      // industries is a JSON-encoded array; match the quoted token so "ai"
+      // does not match "retail".
       OR: filters.industries.map((industry) => ({
-        industries: { contains: industry },
+        industries: containsInsensitive(`"${industry}"`),
       })),
     });
   }
@@ -149,12 +162,12 @@ export async function getOpportunities(
     const locations = filters.location.split('|').map((l) => l.trim()).filter(Boolean);
     if (locations.length === 1) {
       andConditions.push({
-        location: { contains: locations[0] },
+        location: containsInsensitive(locations[0]),
       });
     } else if (locations.length > 1) {
       andConditions.push({
         OR: locations.map((loc) => ({
-          location: { contains: loc },
+          location: containsInsensitive(loc),
         })),
       });
     }

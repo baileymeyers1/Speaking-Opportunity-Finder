@@ -4,6 +4,9 @@ import { processNextBatch } from '../services/backgroundEnrichment.js';
 
 const router = Router();
 
+// vercel.json caps functions at 60s; leave headroom for the response.
+const CRON_TIME_BUDGET_MS = 50_000;
+
 /**
  * Verify Vercel cron secret to prevent unauthorized access.
  * Vercel sends: Authorization: Bearer <CRON_SECRET>
@@ -37,8 +40,8 @@ router.get('/daily-sync', async (req: Request, res: Response) => {
 
   try {
     console.log('[Cron] Running daily sync...');
-    const result = await syncOpportunities('daily');
-    console.log(`[Cron] Daily sync complete: ${result.added} added, ${result.updated} updated`);
+    const result = await syncOpportunities('daily', { timeBudgetMs: CRON_TIME_BUDGET_MS });
+    console.log(`[Cron] Daily sync complete: ${result.added} added, ${result.updated} updated, ${result.skipped.length} skipped`);
     res.json({ success: true, ...result });
   } catch (error) {
     console.error('[Cron] Daily sync failed:', error);
@@ -58,8 +61,8 @@ router.get('/weekly-sync', async (req: Request, res: Response) => {
 
   try {
     console.log('[Cron] Running weekly deep sync...');
-    const result = await syncOpportunities('weekly');
-    console.log(`[Cron] Weekly sync complete: ${result.added} added, ${result.updated} updated`);
+    const result = await syncOpportunities('weekly', { timeBudgetMs: CRON_TIME_BUDGET_MS });
+    console.log(`[Cron] Weekly sync complete: ${result.added} added, ${result.updated} updated, ${result.skipped.length} skipped`);
     res.json({ success: true, ...result });
   } catch (error) {
     console.error('[Cron] Weekly sync failed:', error);

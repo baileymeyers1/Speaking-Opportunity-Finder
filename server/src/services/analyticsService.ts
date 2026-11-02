@@ -1,6 +1,4 @@
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import { prisma } from '../lib/prisma.js';
 
 export interface ScraperHealth {
   name: string;
@@ -550,4 +548,38 @@ export async function getAllAnalytics() {
     enrichmentStats,
     timestamp: new Date().toISOString(),
   };
+}
+
+export interface ScraperRunRecord {
+  id: string;
+  scraper: string;
+  cadence: string;
+  status: string;
+  startedAt: Date;
+  finishedAt: Date | null;
+  found: number;
+  added: number;
+  updated: number;
+  error: string | null;
+}
+
+/**
+ * Recent scraper runs plus the latest run per scraper, so the dashboard can
+ * show which sources are actually producing rows and which are failing.
+ */
+export async function getScraperRuns(limit = 100): Promise<{
+  recent: ScraperRunRecord[];
+  latestByScraper: ScraperRunRecord[];
+}> {
+  const recent = await prisma.scraperRun.findMany({
+    orderBy: { startedAt: 'desc' },
+    take: limit,
+  });
+  const seen = new Set<string>();
+  const latestByScraper = recent.filter((run) => {
+    if (seen.has(run.scraper)) return false;
+    seen.add(run.scraper);
+    return true;
+  });
+  return { recent, latestByScraper };
 }

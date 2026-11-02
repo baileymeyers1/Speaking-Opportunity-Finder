@@ -11,10 +11,11 @@ interface LinkupResponse {
   results?: LinkupSearchResult[];
 }
 
-const CURRENT_YEAR = new Date().getFullYear();
-const NEXT_YEAR = CURRENT_YEAR + 1;
+function currentYear(): number {
+  return new Date().getFullYear();
+}
 
-const US_FOCUS_SUFFIX = `USA United States ${CURRENT_YEAR} ${NEXT_YEAR}`;
+const US_FOCUS_SUFFIX = `USA United States ${currentYear()} ${(currentYear() + 1)}`;
 
 function withUsFocus(query: string) {
   return `${query} ${US_FOCUS_SUFFIX}`;
@@ -336,18 +337,37 @@ function mapToScraperResult(
   };
 }
 
-export async function scrapeLinkupCFPs(apiKey?: string): Promise<ScraperResult[]> {
+export const LINKUP_QUERY_COUNT = INDUSTRY_CFP_QUERIES.length;
+
+export interface LinkupRunOptions {
+  /** Index of the first query to run (wraps around). */
+  offset?: number;
+  /** How many queries to run this invocation. Defaults to all of them. */
+  maxQueries?: number;
+}
+
+/**
+ * Discover CFPs via Linkup. Each query is a paid API call and takes a few
+ * seconds, so a serverless run should pass a rotating slice via `options`
+ * rather than running all ~90 queries at once.
+ */
+export async function scrapeLinkupCFPs(apiKey?: string, options: LinkupRunOptions = {}): Promise<ScraperResult[]> {
   if (!apiKey) {
     console.log('Linkup API key not configured, skipping CFP discovery...');
     return [];
   }
 
-  console.log('Discovering CFPs via Linkup search...');
+  const total = INDUSTRY_CFP_QUERIES.length;
+  const offset = (((options.offset ?? 0) % total) + total) % total;
+  const count = Math.max(0, Math.min(options.maxQueries ?? total, total));
+  const slice = Array.from({ length: count }, (_, i) => INDUSTRY_CFP_QUERIES[(offset + i) % total]);
+
+  console.log(`Discovering CFPs via Linkup search (${count} of ${total} queries, offset ${offset})...`);
 
   const results: ScraperResult[] = [];
   const seenUrls = new Set<string>();
 
-  for (const { query, industries } of INDUSTRY_CFP_QUERIES) {
+  for (const { query, industries } of slice) {
     const searchResults = await searchWithLinkup(query, apiKey);
 
     for (const result of searchResults) {

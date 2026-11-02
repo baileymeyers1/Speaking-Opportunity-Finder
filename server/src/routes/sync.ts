@@ -1,5 +1,5 @@
 import { Router, Request, Response, NextFunction } from 'express';
-import { syncOpportunities } from '../scrapers/index.js';
+import { syncOpportunities, SCRAPERS, type SyncSummary } from '../scrapers/index.js';
 import { authMiddleware } from '../middleware/auth.js';
 import { adminMiddleware } from '../middleware/admin.js';
 
@@ -10,7 +10,7 @@ router.use(authMiddleware);
 router.use(adminMiddleware);
 
 let isSyncing = false;
-let lastSyncResult: { added: number; updated: number; total: number; mode: string } | null = null;
+let lastSyncResult: SyncSummary | null = null;
 let lastSyncTime: Date | null = null;
 
 router.post('/', async (req: Request, res: Response, next: NextFunction) => {
@@ -32,7 +32,19 @@ router.post('/', async (req: Request, res: Response, next: NextFunction) => {
       ? (mode as 'daily' | 'weekly' | 'full')
       : 'full';
 
-    const result = await syncOpportunities(syncMode);
+    // Optional ?scraper=name (repeatable) to run a subset, e.g. to test one source.
+    const onlyParam = req.query.scraper;
+    const only = onlyParam
+      ? (Array.isArray(onlyParam) ? onlyParam.map(String) : [String(onlyParam)]).filter((n) =>
+          SCRAPERS.some((s) => s.name === n)
+        )
+      : undefined;
+
+    const result = await syncOpportunities(syncMode, {
+      only,
+      // Serverless functions are capped at 60s; a long-running server has no limit.
+      timeBudgetMs: process.env.VERCEL ? 50_000 : undefined,
+    });
     lastSyncResult = result;
     lastSyncTime = new Date();
 
@@ -56,6 +68,7 @@ router.get('/status', (_req: Request, res: Response) => {
     success: true,
     data: {
       isSyncing,
+      scrapers: SCRAPERS.map((s) => ({ name: s.name, cadence: s.cadence })),
       lastSync: lastSyncResult
         ? {
             ...lastSyncResult,

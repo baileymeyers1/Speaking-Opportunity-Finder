@@ -1,12 +1,10 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { config } from '../config/index.js';
 import { randomUUID } from 'crypto';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../lib/prisma.js';
 import { enrichOpportunitiesBatch } from './enrichmentService.js';
 import { cleanTitle, extractOrganization, normalizeIndustries, decodeHtmlEntities, isJunkResult } from './dataNormalization.js';
 import type { ScraperResult } from '../scrapers/index.js';
-
-const prisma = new PrismaClient();
 
 export interface EnrichedLiveResult {
   id: string;
@@ -381,7 +379,8 @@ function extractDeadline(content: string): string | null {
     const match = content.match(pattern);
     if (match) {
       const parsed = new Date(match[1]);
-      if (!isNaN(parsed.getTime()) && parsed.getFullYear() >= 2024 && parsed.getFullYear() <= 2030) {
+      const thisYear = new Date().getFullYear();
+      if (!isNaN(parsed.getTime()) && parsed.getFullYear() >= thisYear - 1 && parsed.getFullYear() <= thisYear + 4) {
         return parsed.toISOString();
       }
     }

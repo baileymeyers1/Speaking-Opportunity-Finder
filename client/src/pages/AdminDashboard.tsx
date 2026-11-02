@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { apiClient } from '../api/client';
+import { ScraperRunsPanel } from '../components/admin/ScraperRunsPanel';
 import { useAuth } from '../hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
 
@@ -792,6 +793,9 @@ export function AdminDashboard() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Per-run scraper history (ScraperRun table) */}
+      <ScraperRunsPanel />
     </div>
   );
 }
