@@ -6,6 +6,7 @@ import {
   type DateConfidence,
   type ExtractionInput,
 } from './extraction.js';
+import type { PageFetchResult } from './pageText.js';
 
 /**
  * Enrichment of a scraped row: one Claude extraction (see extraction.ts)
@@ -48,6 +49,26 @@ export function shouldSkipEnrichment(result: ScraperResult, pageText?: string | 
   if (text.length < 30) return 'description too short';
 
   return null;
+}
+
+export type EnrichmentPlan =
+  | { action: 'closed'; reason: string }
+  | { action: 'skip'; reason: string }
+  | { action: 'extract'; pageText: string | null; pageError: string | null };
+
+/**
+ * Decide what to do with a row given the outcome of fetching its apply page.
+ * A page that is gone (404/410) closes the listing without spending Claude
+ * budget. Other fetch failures fall back to the scraped description.
+ */
+export function planEnrichment(result: ScraperResult, page: PageFetchResult): EnrichmentPlan {
+  if (!page.ok && page.reason === 'gone') {
+    return { action: 'closed', reason: page.message };
+  }
+  const pageText = page.ok ? page.text : null;
+  const skipReason = shouldSkipEnrichment(result, pageText);
+  if (skipReason) return { action: 'skip', reason: skipReason };
+  return { action: 'extract', pageText, pageError: page.ok ? null : page.message };
 }
 
 export function toExtractionInput(result: ScraperResult, pageText?: string | null): ExtractionInput {

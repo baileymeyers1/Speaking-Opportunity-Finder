@@ -1,5 +1,6 @@
 import { prisma } from '../lib/prisma.js';
-import { enrichOpportunity, shouldSkipEnrichment } from './enrichmentService.js';
+import { enrichOpportunity, planEnrichment } from './enrichmentService.js';
+import { fetchPageText } from './pageText.js';
 import { config } from '../config/index.js';
 import { computeQualityScore, type ScraperResult } from '../scrapers/qualityScore.js';
 import {
@@ -80,6 +81,21 @@ async function markSkipped(id: string, reason: string): Promise<void> {
   });
 }
 
+/** The apply page is gone (404/410): the call is over, whatever the scraped data says. */
+async function markClosedByPage(opportunity: OpportunityRow, reason: string): Promise<void> {
+  await prisma.opportunity.update({
+    where: { id: opportunity.id },
+    data: {
+      isClosed: true,
+      qualityScore: 0,
+      enrichmentStatus: 'enriched',
+      enrichedAt: new Date(),
+      enrichmentError: `Page unavailable: ${reason}`,
+      enrichmentClaimedAt: null,
+    },
+  });
+}
+
 /**
  * A failed attempt is retried on a later run until MAX_ENRICHMENT_ATTEMPTS,
  * then marked failed for good. Transient errors (rate limits, truncation,
@@ -99,10 +115,17 @@ async function recordFailure(opportunity: OpportunityRow, message: string): Prom
   return exhausted ? 'failed' : 'retry';
 }
 
-async function processNextUnenriched(): Promise<void> {
+export type WorkerOutcome = 'processed' | 'none' | 'budget_exhausted';
+
+/**
+ * Fetch the apply page and enrich the row from its text (the scraped
+ * description is often 50-80 chars of boilerplate). A 404/410 closes the
+ * listing without a Claude call.
+ */
+async function processNextUnenriched(): Promise<WorkerOutcome> {
   if (!config.claude.apiKey) {
     console.log('Background enrichment: No Claude API key configured, skipping');
-    return;
+    return 'none';
   }
 
   let opportunity: OpportunityRow | null = null;
@@ -110,37 +133,43 @@ async function processNextUnenriched(): Promise<void> {
     opportunity = await claimNextUnenriched(prisma);
     if (!opportunity) {
       console.log('Background enrichment: No unenriched opportunities found');
-      return;
+      return 'none';
     }
 
     const scraperResult = toScraperResult(opportunity);
+    const page = await fetchPageText(opportunity.applyUrl);
+    const plan = planEnrichment(scraperResult, page);
+    state.processed++;
+    state.lastRunTime = new Date();
 
-    // Cheap pre-checks that don't need Claude and shouldn't consume budget.
-    const skipReason = shouldSkipEnrichment(scraperResult);
-    if (skipReason) {
-      await markSkipped(opportunity.id, skipReason);
-      state.processed++;
+    // Decisions that don't need Claude and shouldn't consume budget.
+    if (plan.action === 'closed') {
+      await markClosedByPage(opportunity, plan.reason);
+      state.enriched++;
+      console.log(`Background enrichment: Closed "${opportunity.title}" (${plan.reason})`);
+      return 'processed';
+    }
+    if (plan.action === 'skip') {
+      await markSkipped(opportunity.id, plan.reason);
       state.skipped++;
-      state.lastRunTime = new Date();
-      console.log(`Background enrichment: Skipped "${opportunity.title}" (${skipReason})`);
-      return;
+      console.log(`Background enrichment: Skipped "${opportunity.title}" (${plan.reason})`);
+      return 'processed';
     }
 
     const budget = await reserveEnrichmentSlot(prisma);
     state.dailyEnrichmentCount = budget.count;
     if (!budget.reserved) {
+      state.processed--;
       await releaseClaim(prisma, opportunity.id);
       console.log(`[BackgroundEnrichment] Daily budget reached (${budget.count}). Pausing until tomorrow (UTC).`);
-      return;
+      return 'budget_exhausted';
     }
 
     console.log(
-      `Background enrichment: Processing "${opportunity.title}" (attempt ${opportunity.enrichmentAttempts}/${MAX_ENRICHMENT_ATTEMPTS})`
+      `Background enrichment: Processing "${opportunity.title}" (attempt ${opportunity.enrichmentAttempts}/${MAX_ENRICHMENT_ATTEMPTS}, page ${plan.pageText ? `${plan.pageText.length} chars` : `unavailable: ${plan.pageError}`})`
     );
 
-    const enriched = await enrichOpportunity(scraperResult);
-    state.processed++;
-    state.lastRunTime = new Date();
+    const enriched = await enrichOpportunity(scraperResult, { pageText: plan.pageText });
 
     if (enriched.enrichmentStatus === 'enriched') {
       const isClosed = enriched.isClosed === true;
@@ -177,7 +206,7 @@ async function processNextUnenriched(): Promise<void> {
       if (isClosed) console.log(`Background enrichment: Marked "${opportunity.title}" as closed CFP`);
       if (!isRelevant) console.log(`Background enrichment: Marked "${opportunity.title}" as not a speaking opportunity`);
       console.log(`Background enrichment: Successfully enriched "${opportunity.title}"`);
-      return;
+      return 'processed';
     }
 
     if (enriched.enrichmentStatus === 'skipped') {
@@ -185,7 +214,7 @@ async function processNextUnenriched(): Promise<void> {
       await releaseEnrichmentSlot(prisma);
       await markSkipped(opportunity.id, enriched.enrichmentError || 'skipped');
       state.skipped++;
-      return;
+      return 'processed';
     }
 
     const outcome = await recordFailure(opportunity, enriched.enrichmentError || 'Unknown enrichment error');
@@ -196,6 +225,7 @@ async function processNextUnenriched(): Promise<void> {
       state.failed++;
       console.log(`Background enrichment: Failed "${opportunity.title}" after ${MAX_ENRICHMENT_ATTEMPTS} attempts: ${enriched.enrichmentError}`);
     }
+    return 'processed';
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
     console.error('Background enrichment error:', error);
@@ -210,6 +240,7 @@ async function processNextUnenriched(): Promise<void> {
     } else {
       state.failed++;
     }
+    return 'processed';
   }
 }
 
@@ -251,11 +282,18 @@ export async function getBackgroundEnrichmentStateWithBudget(): Promise<Backgrou
   return { ...state };
 }
 
+export interface BatchOptions {
+  /** Stop starting new rows once this much wall-clock time has passed. */
+  timeBudgetMs?: number;
+  now?: () => number;
+}
+
 /**
- * Process a batch of N unenriched opportunities synchronously.
+ * Process a batch of up to N unenriched opportunities synchronously, within
+ * a time budget (each row now costs a page fetch plus a Claude call).
  * Used by the Vercel cron endpoint instead of setInterval.
  */
-export async function processNextBatch(count: number): Promise<{
+export async function processNextBatch(count: number, options: BatchOptions = {}): Promise<{
   processed: number;
   enriched: number;
   skipped: number;
@@ -263,8 +301,13 @@ export async function processNextBatch(count: number): Promise<{
   retried: number;
 }> {
   const before = { ...state };
-  for (let i = 0; i < count; i++) {
-    await processNextUnenriched();
+  const now = options.now ?? Date.now;
+  const startedAt = now();
+  const withinBudget = () => options.timeBudgetMs === undefined || now() - startedAt < options.timeBudgetMs;
+
+  for (let i = 0; i < count && withinBudget(); i++) {
+    const outcome = await processNextUnenriched();
+    if (outcome !== 'processed') break;
   }
   return {
     processed: state.processed - before.processed,
