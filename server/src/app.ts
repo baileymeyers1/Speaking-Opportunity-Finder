@@ -7,7 +7,7 @@ import type { IncomingMessage } from 'http';
 import { config } from './config/index.js';
 import routes from './routes/index.js';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
-import { generalLimiter, authLimiter, searchLimiter } from './middleware/rateLimit.js';
+import { generalLimiter, searchLimiter } from './middleware/rateLimit.js';
 
 const app = express();
 
@@ -44,7 +44,6 @@ app.use(logger);
 
 // Rate limiting
 app.use('/api', generalLimiter);
-app.use('/api/auth', authLimiter);
 app.use('/api/opportunities/live-search', searchLimiter);
 
 // API routes
