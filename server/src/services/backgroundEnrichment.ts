@@ -1,15 +1,20 @@
 import { prisma } from '../lib/prisma.js';
-import { enrichOpportunity, shouldSkipEnrichment } from './enrichmentService.js';
+import { enrichOpportunity, planEnrichment, toExtractionInput } from './enrichmentService.js';
+import { extractOpportunity, mergeExtraction, serializeDateConfidence } from './extraction.js';
+import { fetchPageText } from './pageText.js';
 import { config } from '../config/index.js';
 import { computeQualityScore, type ScraperResult } from '../scrapers/qualityScore.js';
 import {
+  claimNextForVerification,
   claimNextUnenriched,
   getTodayEnrichmentCount,
   MAX_ENRICHMENT_ATTEMPTS,
   releaseClaim,
   releaseEnrichmentSlot,
+  releaseVerificationClaim,
   reserveEnrichmentSlot,
 } from './enrichmentBudget.js';
+import { buildGoneUpdate, buildVerificationErrorUpdate, buildVerificationUpdate } from './verification.js';
 
 /**
  * In-process counters for the admin dashboard. These are informational only;
@@ -23,6 +28,8 @@ interface BackgroundEnrichmentState {
   skipped: number;
   failed: number;
   retried: number;
+  verified: number;
+  verifyFailed: number;
   lastRunTime: Date | null;
   dailyEnrichmentCount: number;
 }
@@ -34,6 +41,8 @@ let state: BackgroundEnrichmentState = {
   skipped: 0,
   failed: 0,
   retried: 0,
+  verified: 0,
+  verifyFailed: 0,
   lastRunTime: null,
   dailyEnrichmentCount: 0,
 };
@@ -41,6 +50,7 @@ let state: BackgroundEnrichmentState = {
 let enrichmentTimer: NodeJS.Timeout | null = null;
 
 type OpportunityRow = NonNullable<Awaited<ReturnType<typeof claimNextUnenriched>>>;
+type VerificationRow = NonNullable<Awaited<ReturnType<typeof claimNextForVerification>>>;
 
 function toScraperResult(opportunity: OpportunityRow): ScraperResult {
   return {
@@ -80,6 +90,20 @@ async function markSkipped(id: string, reason: string): Promise<void> {
   });
 }
 
+/** The apply page is gone (404/410): the call is over, whatever the scraped data says. */
+async function markClosedByPage(opportunity: OpportunityRow, reason: string): Promise<void> {
+  const now = new Date();
+  await prisma.opportunity.update({
+    where: { id: opportunity.id },
+    data: {
+      ...buildGoneUpdate(reason, now),
+      enrichmentStatus: 'enriched',
+      enrichedAt: now,
+      enrichmentError: null,
+    },
+  });
+}
+
 /**
  * A failed attempt is retried on a later run until MAX_ENRICHMENT_ATTEMPTS,
  * then marked failed for good. Transient errors (rate limits, truncation,
@@ -99,10 +123,17 @@ async function recordFailure(opportunity: OpportunityRow, message: string): Prom
   return exhausted ? 'failed' : 'retry';
 }
 
-async function processNextUnenriched(): Promise<void> {
+export type WorkerOutcome = 'processed' | 'none' | 'budget_exhausted';
+
+/**
+ * Fetch the apply page and enrich the row from its text (the scraped
+ * description is often 50-80 chars of boilerplate). A 404/410 closes the
+ * listing without a Claude call.
+ */
+async function processNextUnenriched(): Promise<WorkerOutcome> {
   if (!config.claude.apiKey) {
     console.log('Background enrichment: No Claude API key configured, skipping');
-    return;
+    return 'none';
   }
 
   let opportunity: OpportunityRow | null = null;
@@ -110,57 +141,50 @@ async function processNextUnenriched(): Promise<void> {
     opportunity = await claimNextUnenriched(prisma);
     if (!opportunity) {
       console.log('Background enrichment: No unenriched opportunities found');
-      return;
+      return 'none';
     }
 
     const scraperResult = toScraperResult(opportunity);
+    const page = await fetchPageText(opportunity.applyUrl);
+    const plan = planEnrichment(scraperResult, page);
+    state.processed++;
+    state.lastRunTime = new Date();
 
-    // Cheap pre-checks that don't need Claude and shouldn't consume budget.
-    const skipReason = shouldSkipEnrichment(scraperResult);
-    if (skipReason) {
-      await markSkipped(opportunity.id, skipReason);
-      state.processed++;
+    // Decisions that don't need Claude and shouldn't consume budget.
+    if (plan.action === 'closed') {
+      await markClosedByPage(opportunity, plan.reason);
+      state.enriched++;
+      console.log(`Background enrichment: Closed "${opportunity.title}" (${plan.reason})`);
+      return 'processed';
+    }
+    if (plan.action === 'skip') {
+      await markSkipped(opportunity.id, plan.reason);
       state.skipped++;
-      state.lastRunTime = new Date();
-      console.log(`Background enrichment: Skipped "${opportunity.title}" (${skipReason})`);
-      return;
+      console.log(`Background enrichment: Skipped "${opportunity.title}" (${plan.reason})`);
+      return 'processed';
     }
 
     const budget = await reserveEnrichmentSlot(prisma);
     state.dailyEnrichmentCount = budget.count;
     if (!budget.reserved) {
+      state.processed--;
       await releaseClaim(prisma, opportunity.id);
       console.log(`[BackgroundEnrichment] Daily budget reached (${budget.count}). Pausing until tomorrow (UTC).`);
-      return;
+      return 'budget_exhausted';
     }
 
     console.log(
-      `Background enrichment: Processing "${opportunity.title}" (attempt ${opportunity.enrichmentAttempts}/${MAX_ENRICHMENT_ATTEMPTS})`
+      `Background enrichment: Processing "${opportunity.title}" (attempt ${opportunity.enrichmentAttempts}/${MAX_ENRICHMENT_ATTEMPTS}, page ${plan.pageText ? `${plan.pageText.length} chars` : `unavailable: ${plan.pageError}`})`
     );
 
-    const enriched = await enrichOpportunity(scraperResult);
-    state.processed++;
-    state.lastRunTime = new Date();
+    const enriched = await enrichOpportunity(scraperResult, { pageText: plan.pageText });
 
     if (enriched.enrichmentStatus === 'enriched') {
       const isClosed = enriched.isClosed === true;
       const isRelevant = enriched.isRelevant !== false;
 
-      const mergedResult: ScraperResult = {
-        ...scraperResult,
-        title: enriched.cleanTitle || scraperResult.title,
-        organization: enriched.cleanOrganization || scraperResult.organization,
-        location: enriched.location || scraperResult.location,
-        isRemote: enriched.isRemote ?? scraperResult.isRemote,
-        eventDate: enriched.eventDate || scraperResult.eventDate,
-        cfpDeadline: enriched.cfpDeadline || scraperResult.cfpDeadline,
-        industries: enriched.industries?.length ? enriched.industries : scraperResult.industries,
-        compensationType: enriched.compensationType || scraperResult.compensationType,
-        compensationAmount: enriched.compensationAmount || scraperResult.compensationAmount,
-        compensationDetails: enriched.compensationDetails || scraperResult.compensationDetails,
-        isClosed,
-        isRelevant,
-      };
+      // enrichOpportunity already merged the extraction into the row (extraction.ts rules).
+      const mergedResult: ScraperResult = { ...enriched, isClosed, isRelevant };
 
       await prisma.opportunity.update({
         where: { id: opportunity.id },
@@ -179,10 +203,13 @@ async function processNextUnenriched(): Promise<void> {
           isRelevant,
           // Stored as columns so recalculateAllQualityScores keeps the score at 0.
           qualityScore: computeQualityScore(mergedResult),
+          dateConfidence: serializeDateConfidence(enriched.dateConfidence),
           enrichmentStatus: 'enriched',
           enrichedAt: enriched.enrichedAt || new Date(),
           enrichmentError: null,
           enrichmentClaimedAt: null,
+          // Extracting from the live page is a verification; from the description alone it is not.
+          ...(plan.pageText !== null ? { verifiedAt: enriched.enrichedAt || new Date(), verificationError: null } : {}),
         },
       });
 
@@ -190,7 +217,7 @@ async function processNextUnenriched(): Promise<void> {
       if (isClosed) console.log(`Background enrichment: Marked "${opportunity.title}" as closed CFP`);
       if (!isRelevant) console.log(`Background enrichment: Marked "${opportunity.title}" as not a speaking opportunity`);
       console.log(`Background enrichment: Successfully enriched "${opportunity.title}"`);
-      return;
+      return 'processed';
     }
 
     if (enriched.enrichmentStatus === 'skipped') {
@@ -198,7 +225,7 @@ async function processNextUnenriched(): Promise<void> {
       await releaseEnrichmentSlot(prisma);
       await markSkipped(opportunity.id, enriched.enrichmentError || 'skipped');
       state.skipped++;
-      return;
+      return 'processed';
     }
 
     const outcome = await recordFailure(opportunity, enriched.enrichmentError || 'Unknown enrichment error');
@@ -209,6 +236,7 @@ async function processNextUnenriched(): Promise<void> {
       state.failed++;
       console.log(`Background enrichment: Failed "${opportunity.title}" after ${MAX_ENRICHMENT_ATTEMPTS} attempts: ${enriched.enrichmentError}`);
     }
+    return 'processed';
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
     console.error('Background enrichment error:', error);
@@ -223,6 +251,84 @@ async function processNextUnenriched(): Promise<void> {
     } else {
       state.failed++;
     }
+    return 'processed';
+  }
+}
+
+/**
+ * Re-verify one stored listing against its own page (see verification.ts for
+ * which rows are due). Dates, location and the closed flag follow the page;
+ * a gone page closes the listing without a Claude call.
+ */
+async function verifyNext(): Promise<WorkerOutcome> {
+  if (!config.claude.apiKey) return 'none';
+
+  let row: VerificationRow | null = null;
+  try {
+    row = await claimNextForVerification(prisma);
+    if (!row) {
+      console.log('Verification: nothing due');
+      return 'none';
+    }
+
+    const now = new Date();
+    const page = await fetchPageText(row.applyUrl);
+    state.processed++;
+    state.lastRunTime = now;
+
+    if (!page.ok) {
+      if (page.reason === 'gone') {
+        await prisma.opportunity.update({ where: { id: row.id }, data: buildGoneUpdate(page.message, now) });
+        state.verified++;
+        console.log(`Verification: Closed "${row.title}" (${page.message})`);
+      } else {
+        await prisma.opportunity.update({ where: { id: row.id }, data: buildVerificationErrorUpdate(page.message, now) });
+        state.verifyFailed++;
+        console.log(`Verification: Could not fetch "${row.title}" (${page.message})`);
+      }
+      return 'processed';
+    }
+
+    const budget = await reserveEnrichmentSlot(prisma);
+    state.dailyEnrichmentCount = budget.count;
+    if (!budget.reserved) {
+      state.processed--;
+      await releaseVerificationClaim(prisma, row.id);
+      console.log(`[Verification] Daily budget reached (${budget.count}). Pausing until tomorrow (UTC).`);
+      return 'budget_exhausted';
+    }
+
+    const scraperResult = toScraperResult(row);
+    const outcome = await extractOpportunity(toExtractionInput(scraperResult, page.text), { now });
+    if (outcome.status !== 'ok') {
+      if (outcome.status === 'skipped') await releaseEnrichmentSlot(prisma);
+      const error = outcome.status === 'failed' ? outcome.error : outcome.reason;
+      await prisma.opportunity.update({ where: { id: row.id }, data: buildVerificationErrorUpdate(error, now) });
+      state.verifyFailed++;
+      console.log(`Verification: Extraction failed for "${row.title}": ${error}`);
+      return 'processed';
+    }
+
+    const merged = mergeExtraction(scraperResult, outcome.result, now);
+    await prisma.opportunity.update({ where: { id: row.id }, data: buildVerificationUpdate(row, merged, now) });
+    state.verified++;
+    const deadlineChanged = (merged.cfpDeadline?.getTime() ?? null) !== (row.cfpDeadline?.getTime() ?? null);
+    console.log(
+      `Verification: Verified "${row.title}" [${row.verificationReason}]${merged.isClosed ? ' now closed' : ''}${deadlineChanged ? ' deadline changed' : ''}`
+    );
+    return 'processed';
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    console.error('Verification error:', error);
+    state.verifyFailed++;
+    if (row) {
+      try {
+        await prisma.opportunity.update({ where: { id: row.id }, data: buildVerificationErrorUpdate(message) });
+      } catch (writeError) {
+        console.error('[Verification] Could not record failure:', writeError);
+      }
+    }
+    return 'processed';
   }
 }
 
@@ -264,27 +370,52 @@ export async function getBackgroundEnrichmentStateWithBudget(): Promise<Backgrou
   return { ...state };
 }
 
+export interface BatchOptions {
+  /** Stop starting new rows once this much wall-clock time has passed. */
+  timeBudgetMs?: number;
+  now?: () => number;
+}
+
 /**
- * Process a batch of N unenriched opportunities synchronously.
+ * Process a batch of up to N rows synchronously, within a time budget (each
+ * row costs a page fetch plus a Claude call). Unenriched rows come first;
+ * once none remain, the remaining slots re-verify stored listings.
  * Used by the Vercel cron endpoint instead of setInterval.
  */
-export async function processNextBatch(count: number): Promise<{
+export async function processNextBatch(count: number, options: BatchOptions = {}): Promise<{
   processed: number;
   enriched: number;
   skipped: number;
   failed: number;
   retried: number;
+  verified: number;
+  verifyFailed: number;
 }> {
   const before = { ...state };
-  for (let i = 0; i < count; i++) {
-    await processNextUnenriched();
+  const now = options.now ?? Date.now;
+  const startedAt = now();
+  const withinBudget = () => options.timeBudgetMs === undefined || now() - startedAt < options.timeBudgetMs;
+
+  let phase: 'enrich' | 'verify' = 'enrich';
+  for (let i = 0; i < count && withinBudget(); i++) {
+    if (phase === 'enrich') {
+      const outcome = await processNextUnenriched();
+      if (outcome === 'processed') continue;
+      if (outcome === 'budget_exhausted') break;
+      phase = 'verify';
+    }
+    const outcome = await verifyNext();
+    if (outcome !== 'processed') break;
   }
+
   return {
     processed: state.processed - before.processed,
     enriched: state.enriched - before.enriched,
     skipped: state.skipped - before.skipped,
     failed: state.failed - before.failed,
     retried: state.retried - before.retried,
+    verified: state.verified - before.verified,
+    verifyFailed: state.verifyFailed - before.verifyFailed,
   };
 }
 
@@ -294,4 +425,6 @@ export function resetBackgroundEnrichmentStats(): void {
   state.skipped = 0;
   state.failed = 0;
   state.retried = 0;
+  state.verified = 0;
+  state.verifyFailed = 0;
 }

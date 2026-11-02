@@ -1,166 +1,70 @@
 import { describe, it, expect } from 'vitest';
-import { parseEnrichmentResponse } from './enrichmentService.js';
+import { planEnrichment, shouldSkipEnrichment } from './enrichmentService.js';
+import type { ScraperResult } from '../scrapers/qualityScore.js';
 
-describe('parseEnrichmentResponse', () => {
-  it('parses valid JSON response with all fields', () => {
-    const input = JSON.stringify({
-      cfpDeadline: '2026-06-01',
-      eventDate: '2026-09-15',
-      industries: ['Technology', 'AI'],
-      location: 'San Francisco, CA',
-      compensationType: 'paid',
-      compensationAmount: 500,
-      isRemote: false,
+function row(overrides: Partial<ScraperResult> = {}): ScraperResult {
+  return {
+    title: 'Conf',
+    organization: 'Org',
+    description: 'Call for speakers',
+    isRemote: false,
+    format: 'conference',
+    industries: [],
+    applyUrl: 'https://example.test/cfp',
+    source: 'confs.tech',
+    ...overrides,
+  };
+}
+
+describe('shouldSkipEnrichment', () => {
+  it('skips rows that already have every field', () => {
+    const complete = row({
+      cfpDeadline: new Date(),
+      eventDate: new Date(),
+      industries: ['ai'],
+      location: 'Denver, CO',
+      compensationType: 'travel',
     });
-
-    const result = parseEnrichmentResponse(input);
-
-    expect(result.enrichmentStatus).toBe('enriched');
-    expect(result.cfpDeadline).toBeInstanceOf(Date);
-    expect(result.cfpDeadline!.toISOString()).toContain('2026-06-01');
-    expect(result.eventDate).toBeInstanceOf(Date);
-    expect(result.eventDate!.toISOString()).toContain('2026-09-15');
-    expect(result.industries).toEqual(['Technology', 'AI']);
-    expect(result.location).toBe('San Francisco, CA');
-    expect(result.compensationType).toBe('paid');
-    expect(result.compensationAmount).toBe(500);
-    expect(result.isRemote).toBe(false);
+    expect(shouldSkipEnrichment(complete)).toBe('already complete');
   });
 
-  it('handles markdown-wrapped JSON', () => {
-    const input = '```json\n{"cfpDeadline": "2026-06-01", "industries": ["Technology"]}\n```';
-
-    const result = parseEnrichmentResponse(input);
-
-    expect(result.enrichmentStatus).toBe('enriched');
-    expect(result.cfpDeadline).toBeInstanceOf(Date);
-    expect(result.cfpDeadline!.toISOString()).toContain('2026-06-01');
-    expect(result.industries).toEqual(['Technology']);
+  it('skips a short description when there is no page text', () => {
+    expect(shouldSkipEnrichment(row({ description: 'Submit' }))).toBe('description too short');
   });
 
-  it('handles JSON with surrounding text', () => {
-    const input = 'Here is the result: {"cfpDeadline": "2026-06-01", "location": "Remote"} hope this helps!';
-
-    const result = parseEnrichmentResponse(input);
-
-    expect(result.enrichmentStatus).toBe('enriched');
-    expect(result.cfpDeadline).toBeInstanceOf(Date);
-    expect(result.location).toBe('Remote');
+  it('does not skip a short description when the page was fetched', () => {
+    expect(shouldSkipEnrichment(row({ description: 'Submit' }), 'a'.repeat(200))).toBeNull();
   });
+});
 
-  it('validates dates in 1900-2100 range and rejects year 3000', () => {
-    const input = JSON.stringify({
-      cfpDeadline: '3000-01-01',
-      eventDate: '2026-09-15',
+describe('planEnrichment', () => {
+  it('closes the listing when the page is gone, without extracting', () => {
+    expect(planEnrichment(row(), { ok: false, reason: 'gone', status: 404, message: 'HTTP 404' })).toEqual({
+      action: 'closed',
+      reason: 'HTTP 404',
     });
-
-    const result = parseEnrichmentResponse(input);
-
-    expect(result.enrichmentStatus).toBe('enriched');
-    expect(result.cfpDeadline).toBeUndefined();
-    expect(result.eventDate).toBeInstanceOf(Date);
   });
 
-  it('validates dates in 1900-2100 range and rejects year 1800', () => {
-    const input = JSON.stringify({
-      cfpDeadline: '1800-01-01',
+  it('extracts from the page text when the fetch succeeded', () => {
+    expect(planEnrichment(row(), { ok: true, text: 'Deadline Dec 1 '.repeat(5), status: 200 })).toEqual({
+      action: 'extract',
+      pageText: 'Deadline Dec 1 '.repeat(5),
+      pageError: null,
     });
-
-    const result = parseEnrichmentResponse(input);
-
-    expect(result.enrichmentStatus).toBe('enriched');
-    expect(result.cfpDeadline).toBeUndefined();
   });
 
-  it('returns failed for unparseable response', () => {
-    const input = 'This is not JSON at all';
-
-    const result = parseEnrichmentResponse(input);
-
-    expect(result.enrichmentStatus).toBe('failed');
-    expect(result.enrichmentError).toBe('No JSON found in response');
+  it('falls back to the description when the fetch failed for another reason', () => {
+    expect(planEnrichment(row({ description: 'Long enough description of the call for speakers' }), {
+      ok: false,
+      reason: 'timeout',
+      message: 'Timed out after 8000ms',
+    })).toEqual({ action: 'extract', pageText: null, pageError: 'Timed out after 8000ms' });
   });
 
-  it('returns failed for empty string', () => {
-    const result = parseEnrichmentResponse('');
-
-    expect(result.enrichmentStatus).toBe('failed');
-    expect(result.enrichmentError).toBe('No JSON found in response');
-  });
-
-  it('treats "null" string as undefined for dates', () => {
-    const input = JSON.stringify({
-      cfpDeadline: 'null',
-      eventDate: null,
+  it('skips when the fetch failed and the description is too short', () => {
+    expect(planEnrichment(row({ description: 'Submit' }), { ok: false, reason: 'network', message: 'fetch failed' })).toEqual({
+      action: 'skip',
+      reason: 'description too short',
     });
-
-    const result = parseEnrichmentResponse(input);
-
-    expect(result.enrichmentStatus).toBe('enriched');
-    expect(result.cfpDeadline).toBeUndefined();
-    expect(result.eventDate).toBeUndefined();
-  });
-
-  it('treats "null" string as undefined for location', () => {
-    const input = JSON.stringify({
-      location: 'null',
-    });
-
-    const result = parseEnrichmentResponse(input);
-
-    expect(result.enrichmentStatus).toBe('enriched');
-    expect(result.location).toBeUndefined();
-  });
-
-  it('treats "null" string as undefined for compensationType', () => {
-    const input = JSON.stringify({
-      compensationType: 'null',
-    });
-
-    const result = parseEnrichmentResponse(input);
-
-    expect(result.enrichmentStatus).toBe('enriched');
-    expect(result.compensationType).toBeUndefined();
-  });
-
-  it('handles non-array industries gracefully', () => {
-    const input = JSON.stringify({
-      industries: 'Technology',
-    });
-
-    const result = parseEnrichmentResponse(input);
-
-    expect(result.enrichmentStatus).toBe('enriched');
-    expect(result.industries).toBeUndefined();
-  });
-
-  it('handles isRemote boolean correctly', () => {
-    const input = JSON.stringify({ isRemote: true });
-
-    const result = parseEnrichmentResponse(input);
-
-    expect(result.enrichmentStatus).toBe('enriched');
-    expect(result.isRemote).toBe(true);
-  });
-
-  it('returns failed for malformed JSON', () => {
-    const input = '{"cfpDeadline": "2026-06-01"';
-
-    const result = parseEnrichmentResponse(input);
-
-    expect(result.enrichmentStatus).toBe('failed');
-    expect(result.enrichmentError).toBeDefined();
-  });
-
-  it('parses cleanTitle and cleanOrganization fields', () => {
-    const result = parseEnrichmentResponse('{"cleanTitle":"KubeCon","cleanOrganization":"CNCF","isRelevant":true}');
-    expect(result.cleanTitle).toBe('KubeCon');
-    expect(result.cleanOrganization).toBe('CNCF');
-    expect(result.isRelevant).toBe(true);
-  });
-
-  it('flags irrelevant results', () => {
-    const result = parseEnrichmentResponse('{"isRelevant":false,"cleanTitle":"Random Job Post"}');
-    expect(result.isRelevant).toBe(false);
   });
 });

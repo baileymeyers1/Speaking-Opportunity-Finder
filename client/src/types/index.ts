@@ -31,6 +31,21 @@ export interface Opportunity {
   isLiveResult?: boolean;
   liveSearchUrl?: string;
   matchesLocationFilter?: boolean;
+  isClosed?: boolean;
+  /** When the listing was last checked against its own page. */
+  verifiedAt?: string | null;
+  /** Why the last check could not complete, if it could not. */
+  verificationError?: string | null;
+  /** How sure the extraction was about each date; low-confidence dates render as approximate. */
+  dateConfidence?: DateConfidence | null;
+}
+
+export type Confidence = 'high' | 'medium' | 'low';
+
+export interface DateConfidence {
+  eventDate: Confidence;
+  cfpDeadline: Confidence;
+  location: Confidence;
 }
 
 export type OpportunityFormat =

@@ -82,8 +82,8 @@ router.get('/enrichment', async (req: Request, res: Response) => {
 
   try {
     console.log('[Cron] Running enrichment batch...');
-    const result = await processNextBatch(5);
-    console.log(`[Cron] Enrichment batch complete: ${result.processed} processed, ${result.enriched} enriched`);
+    const result = await processNextBatch(5, { timeBudgetMs: CRON_TIME_BUDGET_MS });
+    console.log(`[Cron] Enrichment batch complete: ${result.processed} processed, ${result.enriched} enriched, ${result.verified} verified`);
     res.json({ success: true, ...result });
   } catch (error) {
     console.error('[Cron] Enrichment batch failed:', error);

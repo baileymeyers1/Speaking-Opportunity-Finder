@@ -4,6 +4,7 @@ import type { Opportunity } from '../types';
 import { useAuth } from '../hooks/useAuth';
 import { apiClient } from '../api/client';
 import { removeLiveResult } from '../utils/liveResultsCache';
+import { approximate, formatVerifiedAgo, isLowConfidence, LOW_CONFIDENCE_HINT } from '../utils/verification';
 import { cn } from '@/lib/utils';
 
 import { Card, CardHeader, CardContent, CardFooter } from '@/components/ui/card';
@@ -34,6 +35,7 @@ import {
   ExternalLink,
   Zap,
   Star,
+  ShieldCheck,
 } from 'lucide-react';
 
 interface OpportunityCardProps {
@@ -115,6 +117,9 @@ export function OpportunityCard({ opportunity, showSave = true, isPast }: Opport
   }, [opportunity]);
 
   const deadlineBadge = getDeadlineBadge(current.cfpDeadline);
+  const deadlineIsApproximate = isLowConfidence(current, 'cfpDeadline');
+  const eventDateIsApproximate = isLowConfidence(current, 'eventDate');
+  const verifiedLabel = formatVerifiedAgo(current);
   const isLive = current.isLiveResult;
   const isPastDeadline = isPast ?? (!!current.cfpDeadline && new Date(current.cfpDeadline) < new Date());
   const hasCompensation = !!current.compensationType;
@@ -233,20 +238,49 @@ export function OpportunityCard({ opportunity, showSave = true, isPast }: Opport
           {/* Event date */}
           <div className="flex items-center gap-1.5 text-muted-foreground">
             <Calendar className="h-3.5 w-3.5 flex-shrink-0" aria-hidden="true" />
-            <span className="truncate">
-              {current.eventDate ? formatDate(current.eventDate) : 'Date TBD'}
-            </span>
+            {current.eventDate && eventDateIsApproximate ? (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="truncate cursor-help underline decoration-dotted underline-offset-2">
+                    {approximate(formatDate(current.eventDate)!, true)}
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>{LOW_CONFIDENCE_HINT}</p>
+                </TooltipContent>
+              </Tooltip>
+            ) : (
+              <span className="truncate">
+                {current.eventDate ? formatDate(current.eventDate) : 'Date TBD'}
+              </span>
+            )}
           </div>
 
           {/* Deadline */}
           <div className="flex items-center gap-1.5">
             <Clock className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" aria-hidden="true" />
-            <Badge
-              variant={deadlineBadge.variant}
-              className={cn('text-[11px] px-1.5 py-0', deadlineBadge.className)}
-            >
-              {deadlineBadge.label}
-            </Badge>
+            {current.cfpDeadline && deadlineIsApproximate ? (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Badge
+                    variant={deadlineBadge.variant}
+                    className={cn('text-[11px] px-1.5 py-0 cursor-help', deadlineBadge.className)}
+                  >
+                    {approximate(deadlineBadge.label, true)}
+                  </Badge>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>{LOW_CONFIDENCE_HINT}</p>
+                </TooltipContent>
+              </Tooltip>
+            ) : (
+              <Badge
+                variant={deadlineBadge.variant}
+                className={cn('text-[11px] px-1.5 py-0', deadlineBadge.className)}
+              >
+                {deadlineBadge.label}
+              </Badge>
+            )}
           </div>
 
           {/* Location / Remote */}
@@ -277,6 +311,21 @@ export function OpportunityCard({ opportunity, showSave = true, isPast }: Opport
               <DollarSign className="h-3.5 w-3.5 flex-shrink-0 text-amber-600 dark:text-amber-400" />
               <span className="truncate capitalize">{compensationLabel}</span>
             </div>
+          )}
+
+          {/* Last checked against the event page */}
+          {verifiedLabel && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div className="flex items-center gap-1.5 text-muted-foreground cursor-default">
+                  <ShieldCheck className="h-3.5 w-3.5 flex-shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
+                  <span className="truncate">{verifiedLabel}</span>
+                </div>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Dates and status were checked against the event page on {formatDate(current.verifiedAt!)}.</p>
+              </TooltipContent>
+            </Tooltip>
           )}
         </div>
 

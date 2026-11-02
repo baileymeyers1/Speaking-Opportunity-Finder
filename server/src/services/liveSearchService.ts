@@ -1,10 +1,22 @@
-import Anthropic from '@anthropic-ai/sdk';
 import { config } from '../config/index.js';
 import { randomUUID } from 'crypto';
+import { Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma.js';
-import { enrichOpportunitiesBatch } from './enrichmentService.js';
 import { cleanTitle, extractOrganization, normalizeIndustries, decodeHtmlEntities, isJunkResult } from './dataNormalization.js';
-import type { ScraperResult } from '../scrapers/index.js';
+import {
+  extractOpportunitiesBatch,
+  mergeExtraction,
+  serializeDateConfidence,
+  type DateConfidence,
+  type ExtractionResult,
+} from './extraction.js';
+import { fetchPageText } from './pageText.js';
+import { mapWithConcurrency } from '../scrapers/lib/html.js';
+import { buildCreateData } from '../scrapers/persistData.js';
+import type { ScraperResult } from '../scrapers/qualityScore.js';
+
+/** Live hits enriched synchronously per request; the enrichment cron finishes the rest. */
+export const SYNC_ENRICH_LIMIT = 8;
 
 export interface EnrichedLiveResult {
   id: string;
@@ -29,6 +41,15 @@ export interface EnrichedLiveResult {
   isLiveResult: boolean;
   liveSearchUrl: string;
   matchesLocationFilter?: boolean;
+  /** Set by Claude extraction: the call is closed. Dropped before results are returned. */
+  isClosed?: boolean;
+  /** Set by Claude extraction: false when the page is not a speaking opportunity. */
+  isRelevant?: boolean;
+  dateConfidence?: DateConfidence | null;
+  /** True once a Claude extraction was applied to this result. */
+  extracted?: boolean;
+  /** True when the apply page itself was fetched (so the extraction counts as a verification). */
+  pageFetched?: boolean;
 }
 
 // Search query templates for different industries
@@ -564,7 +585,8 @@ export async function performLiveSearch(
 
   console.log(`[LiveSearch] Running ${searchQueries.length} parallel queries:`, searchQueries);
 
-  // Run all query variations in parallel, then deduplicate
+  // Run all query variations in parallel. Each returns regex-tagged hits only;
+  // no page is fetched and no Claude call is made before deduplication.
   const allResults = await Promise.all(
     searchQueries.map(sq => performLinkupSearch(sq, apiKey, industries))
   );
@@ -581,7 +603,7 @@ export async function performLiveSearch(
     }
   }
 
-  // --- Post-fetch filtering ---
+  // --- Cheap filtering before any enrichment ---
 
   // 1. Remove closed CFPs, past deadlines, and past events
   const now = new Date();
@@ -613,6 +635,25 @@ export async function performLiveSearch(
       });
     });
   }
+
+  // --- Synchronous enrichment of the top hits only ---
+  results.sort((a, b) => b.qualityScore - a.qualityScore);
+  const toEnrich = results.slice(0, SYNC_ENRICH_LIMIT);
+  if (toEnrich.length > 0) {
+    console.log(`[LiveSearch] Enriching top ${toEnrich.length} of ${results.length} results from page content...`);
+    await enrichResultsFromPages(toEnrich, industries);
+  }
+
+  // Persist every hit now; the enrichment cron finishes the ones not enriched here.
+  try {
+    const persisted = await persistLiveResults(results, now);
+    console.log(`[LiveSearch] Persisted ${persisted.created} new results (${persisted.existing} already stored)`);
+  } catch (error) {
+    console.error('[LiveSearch] Failed to persist live results:', error);
+  }
+
+  // Enrichment may have found a closed call or a page that is not an opportunity.
+  results = results.filter(r => !r.isClosed && r.isRelevant !== false);
 
   // Location filtering is now handled client-side via matchesLocationFilter flag
 
@@ -668,7 +709,7 @@ export async function performLiveSearch(
     }
   }
 
-  return results;
+  return results.sort((a, b) => b.qualityScore - a.qualityScore);
 }
 
 interface LinkupSearchResult {
@@ -684,267 +725,84 @@ interface LinkupResponse {
 }
 
 /**
- * Fetch a page's text content with a short timeout.
- * Returns just the visible text (strips HTML tags).
+ * Apply a Claude extraction to a live result. Claude read the actual page,
+ * so its values overwrite the regex guesses; nulls keep what we had.
+ * See mergeExtraction for the rules.
  */
-async function fetchPageText(url: string, timeoutMs = 8000): Promise<string | null> {
-  try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeoutMs);
-
-    const response = await fetch(url, {
-      signal: controller.signal,
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        'Accept-Language': 'en-US,en;q=0.9',
-      },
-    });
-    clearTimeout(timer);
-
-    if (!response.ok) return null;
-
-    const contentType = response.headers.get('content-type') || '';
-    if (!contentType.includes('text/html') && !contentType.includes('text/plain')) {
-      return null;
-    }
-
-    const html = await response.text();
-
-    // Strip HTML to get visible text — lightweight extraction
-    const text = html
-      .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, ' ')
-      .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, ' ')
-      .replace(/<nav[^>]*>[\s\S]*?<\/nav>/gi, ' ')
-      .replace(/<footer[^>]*>[\s\S]*?<\/footer>/gi, ' ')
-      .replace(/<header[^>]*>[\s\S]*?<\/header>/gi, ' ')
-      .replace(/<[^>]+>/g, ' ')
-      .replace(/&nbsp;/g, ' ')
-      .replace(/&amp;/g, '&')
-      .replace(/&lt;/g, '<')
-      .replace(/&gt;/g, '>')
-      .replace(/&quot;/g, '"')
-      .replace(/&#?\w+;/g, ' ')
-      .replace(/\s+/g, ' ')
-      .trim();
-
-    // Return first 5000 chars — enough for metadata extraction
-    return text.substring(0, 5000);
-  } catch {
-    return null;
-  }
+export function applyExtractionToLiveResult(result: EnrichedLiveResult, extraction: ExtractionResult, now: Date = new Date()): void {
+  const merged = mergeExtraction(liveResultToScraperResult(result), extraction, now);
+  result.title = merged.title;
+  result.organization = merged.organization;
+  result.location = merged.location ?? null;
+  result.isRemote = merged.isRemote;
+  result.eventDate = merged.eventDate ? merged.eventDate.toISOString() : null;
+  result.cfpDeadline = merged.cfpDeadline ? merged.cfpDeadline.toISOString() : null;
+  result.format = merged.format;
+  result.industries = merged.industries;
+  result.compensationType = merged.compensationType ?? null;
+  result.compensationAmount = merged.compensationAmount ?? null;
+  result.isClosed = merged.isClosed;
+  result.isRelevant = merged.isRelevant;
+  result.dateConfidence = merged.dateConfidence;
 }
 
 /**
- * Use Claude to extract structured metadata from scraped page content in a single batch call.
- * Much more accurate than regex for dates, locations, and deadline detection.
- */
-async function extractMetadataWithClaude(
-  items: { index: number; title: string; pageText: string }[]
-): Promise<Map<number, {
-  eventDate?: string;
-  cfpDeadline?: string;
-  location?: string;
-  isRemote?: boolean;
-  isClosed?: boolean;
-  compensationType?: string;
-  format?: string;
-  industries?: string[];
-}>> {
-  const resultMap = new Map<number, any>();
-
-  if (!config.claude.apiKey || items.length === 0) return resultMap;
-
-  // Build a compact prompt — with batches of ~5, each item gets plenty of text
-  const charsPerItem = Math.min(2000, Math.floor(12000 / items.length));
-  const itemDescriptions = items.map(item =>
-    `[${item.index}] "${item.title}"\n${item.pageText.substring(0, charsPerItem)}`
-  ).join('\n---\n');
-
-  const currentYear = new Date().getFullYear();
-  const todayStr = new Date().toISOString().split('T')[0];
-
-  const prompt = `Extract metadata from these speaking opportunity pages. Return ONLY a JSON array, no other text.
-
-Today's date is ${todayStr}.
-
-For EACH item, extract:
-- eventDate: when the event/conference takes place (YYYY-MM-DD). Use start date if range. This is NOT the submission deadline. Must be a real date, not a guess. null if not found.
-- cfpDeadline: when speaker proposals/submissions are due (YYYY-MM-DD). This is NOT the event date. If the deadline text says "rolling" or "ongoing", return null. null if not found.
-- location: the physical city and state/country where the event takes place, as "City, ST" or "City, Country". Extract this from venue information, not from the organization's headquarters. null if purely online or not found.
-- isRemote: true if virtual/online/remote attendance option exists
-- isClosed: true if the call for speakers/proposals is explicitly closed, or if cfpDeadline is before ${todayStr}
-- compensationType: "paid"|"travel"|"honorarium"|"exposure" or null
-- format: "conference"|"podcast"|"webinar"|"workshop"|"meetup"|"panel"
-- industries: up to 3 relevant industry tags from the content
-
-IMPORTANT RULES:
-1. Distinguish submission deadlines from event dates. "Proposals due Sept 21" is cfpDeadline. "Conference May 4-6" is eventDate.
-2. For location, extract WHERE THE EVENT PHYSICALLY HAPPENS, not where the organization is based or where speakers come from.
-3. If a date has no year, assume ${currentYear} if the month hasn't passed yet, otherwise ${currentYear + 1}.
-4. Return null for fields you cannot confidently determine. Do not guess.
-
-Items:
-${itemDescriptions}
-
-Return format: [{"index":0,"eventDate":"2026-05-04","cfpDeadline":"2025-09-21","location":"Boston, MA","isRemote":false,"isClosed":false,"compensationType":"travel","format":"conference","industries":["healthcare","ai"]}, ...]`;
-
-  try {
-    const client = new Anthropic({ apiKey: config.claude.apiKey });
-    const message = await client.messages.create({
-      model: config.claude.model,
-      max_tokens: 4096,
-      messages: [{ role: 'user', content: prompt }],
-    });
-
-    const responseText = message.content[0].type === 'text' ? message.content[0].text : '';
-    const jsonMatch = responseText.match(/\[[\s\S]*\]/);
-    if (!jsonMatch) return resultMap;
-
-    const parsed = JSON.parse(jsonMatch[0]);
-    if (!Array.isArray(parsed)) return resultMap;
-
-    for (const item of parsed) {
-      if (item.index !== undefined) {
-        resultMap.set(item.index, {
-          eventDate: item.eventDate && item.eventDate !== 'null' ? item.eventDate : undefined,
-          cfpDeadline: item.cfpDeadline && item.cfpDeadline !== 'null' ? item.cfpDeadline : undefined,
-          location: item.location && item.location !== 'null' ? item.location : undefined,
-          isRemote: item.isRemote,
-          isClosed: item.isClosed,
-          compensationType: item.compensationType && item.compensationType !== 'null' ? item.compensationType : undefined,
-          format: item.format,
-          industries: Array.isArray(item.industries) ? item.industries : undefined,
-        });
-      }
-    }
-  } catch (error) {
-    console.error('[LiveSearch] Claude metadata extraction failed:', error);
-  }
-
-  return resultMap;
-}
-
-/**
- * Merge Claude-extracted metadata into a live result.
- * Claude data OVERWRITES regex-extracted data (not just fills gaps),
- * because Claude reads the actual page content and is more accurate.
- * Only skips overwrite when Claude returns undefined/null for a field.
- */
-export function mergeClaudeMetadata(
-  result: EnrichedLiveResult,
-  claude: {
-    eventDate?: string;
-    cfpDeadline?: string;
-    location?: string;
-    isRemote?: boolean;
-    isClosed?: boolean;
-    compensationType?: string;
-    format?: string;
-    industries?: string[];
-  }
-): void {
-  if (claude.eventDate && claude.eventDate !== 'null') {
-    const d = new Date(claude.eventDate);
-    if (!isNaN(d.getTime())) result.eventDate = d.toISOString();
-  }
-  if (claude.cfpDeadline && claude.cfpDeadline !== 'null') {
-    const d = new Date(claude.cfpDeadline);
-    if (!isNaN(d.getTime())) result.cfpDeadline = d.toISOString();
-  }
-  if (claude.location && claude.location !== 'null') {
-    result.location = claude.location;
-  }
-  if (claude.isRemote !== undefined) {
-    result.isRemote = claude.isRemote;
-  }
-  if (claude.compensationType && claude.compensationType !== 'null') {
-    result.compensationType = claude.compensationType;
-  }
-  if (claude.format && claude.format !== 'null') {
-    result.format = claude.format;
-  }
-  if (claude.industries && claude.industries.length > 0) {
-    result.industries = normalizeIndustries(claude.industries);
-  }
-  if (claude.isClosed) {
-    if (!result.cfpDeadline) {
-      result.cfpDeadline = new Date('2020-01-01').toISOString();
-    }
-  }
-}
-
-/**
- * Scrape result pages in parallel, then use Claude to extract metadata.
- * Falls back to regex extraction if Claude is unavailable.
+ * Fetch result pages in parallel, then run one Claude extraction per result.
+ * Falls back to regex extraction over the page text when Claude is unavailable.
  */
 async function enrichResultsFromPages(
   results: EnrichedLiveResult[],
   searchIndustries: string[]
 ): Promise<void> {
-  // Fetch all pages in parallel with a concurrency limit
-  const CONCURRENCY = 6;
-  const pageTexts: (string | null)[] = new Array(results.length).fill(null);
-
-  for (let i = 0; i < results.length; i += CONCURRENCY) {
-    const batch = results.slice(i, i + CONCURRENCY);
-    const fetched = await Promise.all(
-      batch.map(r => fetchPageText(r.applyUrl))
-    );
-    for (let j = 0; j < fetched.length; j++) {
-      pageTexts[i + j] = fetched[j];
-    }
-  }
+  const FETCH_CONCURRENCY = SYNC_ENRICH_LIMIT;
+  const pageTexts = await mapWithConcurrency(results, FETCH_CONCURRENCY, async (r) => {
+    const page = await fetchPageText(r.applyUrl);
+    if (!page.ok && page.reason === 'gone') r.isClosed = true;
+    r.pageFetched = page.ok;
+    return page.ok ? page.text : null;
+  });
 
   const fetchedCount = pageTexts.filter(t => t !== null).length;
   console.log(`[LiveSearch] Page fetch: ${fetchedCount}/${results.length} pages returned content`);
 
-  // Send top results to Claude for enrichment, rest get regex-only
-  const CLAUDE_ENRICHMENT_LIMIT = 25;
-  const itemsForClaude: { index: number; title: string; pageText: string }[] = [];
-  for (let i = 0; i < Math.min(results.length, CLAUDE_ENRICHMENT_LIMIT); i++) {
+  const indexesForClaude: number[] = [];
+  for (let i = 0; i < results.length; i++) {
     const text = pageTexts[i] || results[i].description || '';
-    if (text.length > 20) {
-      itemsForClaude.push({ index: i, title: results[i].title, pageText: text });
-    }
+    if (text.length > 20 && !results[i].isClosed) indexesForClaude.push(i);
   }
 
-  // Split into batches of 5 and run in parallel — ensures enough text per item
-  const CLAUDE_BATCH_SIZE = 5;
-  let claudeResults = new Map<number, any>();
-  if (config.claude.apiKey && itemsForClaude.length > 0) {
-    console.log(`[LiveSearch] Extracting metadata via Claude for ${itemsForClaude.length} results in batches of ${CLAUDE_BATCH_SIZE}...`);
-
-    const batches: { index: number; title: string; pageText: string }[][] = [];
-    for (let i = 0; i < itemsForClaude.length; i += CLAUDE_BATCH_SIZE) {
-      batches.push(itemsForClaude.slice(i, i + CLAUDE_BATCH_SIZE));
-    }
-
-    // Run all batches in parallel
-    const batchResults = await Promise.all(
-      batches.map(batch => extractMetadataWithClaude(batch))
+  const extracted = new Set<number>();
+  if (config.claude.apiKey && indexesForClaude.length > 0) {
+    console.log(`[LiveSearch] Extracting metadata via Claude for ${indexesForClaude.length} results...`);
+    const outcomes = await extractOpportunitiesBatch(
+      indexesForClaude.map((i) => ({
+        title: results[i].title,
+        organization: results[i].organization,
+        description: results[i].description,
+        pageText: pageTexts[i],
+        applyUrl: results[i].applyUrl,
+      })),
+      SYNC_ENRICH_LIMIT
     );
-
-    // Merge all batch results into one map
-    for (const batchMap of batchResults) {
-      for (const [key, value] of batchMap) {
-        claudeResults.set(key, value);
+    outcomes.forEach((outcome, position) => {
+      const index = indexesForClaude[position];
+      if (outcome.status === 'ok') {
+        applyExtractionToLiveResult(results[index], outcome.result);
+        results[index].extracted = true;
+        extracted.add(index);
+      } else if (outcome.status === 'failed') {
+        console.warn(`[LiveSearch] Extraction failed for ${results[index].applyUrl}: ${outcome.error}`);
       }
-    }
-
-    console.log(`[LiveSearch] Claude extracted metadata for ${claudeResults.size}/${itemsForClaude.length} results`);
+    });
+    console.log(`[LiveSearch] Claude extracted metadata for ${extracted.size}/${indexesForClaude.length} results`);
   }
 
-  // Apply extracted metadata to results — Claude overwrites regex data
   for (let i = 0; i < results.length; i++) {
     const r = results[i];
-    const claudeMeta = claudeResults.get(i);
     const pageText = pageTexts[i];
 
-    if (claudeMeta) {
-      mergeClaudeMetadata(r, claudeMeta);
-    } else if (pageText) {
-      // Fallback: regex extraction from page text (only when Claude failed)
+    if (!extracted.has(i) && pageText) {
+      // Fallback: regex extraction from page text (only when Claude did not run)
       const pageMeta = extractMetadata(pageText, r.title, searchIndustries);
       if (!r.location && pageMeta.location) r.location = pageMeta.location;
       if (!r.cfpDeadline && pageMeta.cfpDeadline) r.cfpDeadline = pageMeta.cfpDeadline;
@@ -957,7 +815,6 @@ async function enrichResultsFromPages(
       if (!r.isRemote && pageMeta.isRemote) r.isRemote = true;
     }
 
-    // Recalculate quality score with enriched data
     r.qualityScore = computeLiveQualityScore({
       cfpDeadline: r.cfpDeadline,
       eventDate: r.eventDate,
@@ -979,7 +836,8 @@ async function performLinkupSearch(
   const now = new Date().toISOString();
 
   const maxPerPage = 50;
-  const maxPages = 3;
+  // One page per variant keeps the request fast; variants run in parallel.
+  const maxPages = 1;
 
   try {
     for (let page = 1; page <= maxPages; page++) {
@@ -1054,19 +912,11 @@ async function performLinkupSearch(
   }
 
   const filtered = results.filter(r => !isJunkResult({ title: r.title, description: r.description, applyUrl: r.applyUrl }));
-
-  // Cap results before expensive enrichment
-  const toEnrich = filtered.sort((a, b) => b.qualityScore - a.qualityScore).slice(0, 50);
-
-  // Scrape actual pages to fill in missing metadata (dates, locations, etc.)
-  console.log(`[LiveSearch] Enriching ${toEnrich.length} results from page content...`);
-  await enrichResultsFromPages(toEnrich, searchIndustries);
-
-  return toEnrich.sort((a, b) => b.qualityScore - a.qualityScore);
+  return filtered.sort((a, b) => b.qualityScore - a.qualityScore);
 }
 
 /**
- * Convert live search result to ScraperResult format for enrichment and persistence
+ * Convert live search result to ScraperResult format for merging and persistence
  */
 function liveResultToScraperResult(result: EnrichedLiveResult): ScraperResult {
   return {
@@ -1083,88 +933,67 @@ function liveResultToScraperResult(result: EnrichedLiveResult): ScraperResult {
     compensationAmount: result.compensationAmount || undefined,
     compensationDetails: result.compensationDetails || undefined,
     applyUrl: result.applyUrl,
-    qualityScore: result.qualityScore,
-    source: `Live Search - ${result.industries.join(', ') || 'general'}`,
+    source: 'Live Search',
     sourceUrl: result.sourceUrl,
+    isClosed: result.isClosed,
+    isRelevant: result.isRelevant,
   };
 }
 
 /**
- * Auto-save live search results to the database after enrichment
+ * Row data for a live hit. Hits enriched in the request are stored as
+ * enriched (and verified when their page was fetched); the rest are stored
+ * with no enrichment status so the cron worker picks them up.
  */
-export async function autoSaveLiveResults(
-  liveResults: EnrichedLiveResult[]
-): Promise<{ saved: number; updated: number; skipped: number }> {
-  let saved = 0;
-  let updated = 0;
-  let skipped = 0;
+export function buildLiveCreateData(result: EnrichedLiveResult, now: Date = new Date()): Prisma.OpportunityCreateManyInput {
+  const base = buildCreateData(liveResultToScraperResult(result));
+  const extracted = result.extracted === true;
+  return {
+    ...base,
+    isClosed: result.isClosed === true,
+    isRelevant: result.isRelevant !== false,
+    dateConfidence: serializeDateConfidence(result.dateConfidence),
+    enrichmentStatus: extracted ? 'enriched' : null,
+    enrichedAt: extracted ? now : null,
+    verifiedAt: extracted && result.pageFetched ? now : null,
+  };
+}
 
-  if (liveResults.length === 0) {
-    return { saved, updated, skipped };
-  }
+/**
+ * Store live hits that are not already in the database. Existing rows are
+ * left alone: enrichment and verification keep them current.
+ */
+export async function persistLiveResults(
+  results: EnrichedLiveResult[],
+  now: Date = new Date()
+): Promise<{ created: number; existing: number }> {
+  if (results.length === 0) return { created: 0, existing: 0 };
 
-  console.log(`Auto-saving ${liveResults.length} live search results...`);
+  const urls = results.map((r) => r.applyUrl);
+  const existingRows = await prisma.opportunity.findMany({
+    where: { applyUrl: { in: urls } },
+    select: { applyUrl: true },
+  });
+  const existingUrls = new Set(existingRows.map((row) => row.applyUrl));
+  const fresh = results.filter((r) => !existingUrls.has(r.applyUrl));
+  if (fresh.length === 0) return { created: 0, existing: existingUrls.size };
 
-  // Convert to ScraperResult format
-  const scraperResults = liveResults.map(liveResultToScraperResult);
-
-  // Enrich with Claude API if configured
-  let enrichedResults = scraperResults;
-  if (config.claude.apiKey) {
-    console.log('Enriching live results with Claude API...');
-    enrichedResults = await enrichOpportunitiesBatch(scraperResults, 3);
-  }
-
-  // Save to database
-  for (const result of enrichedResults) {
-    try {
-      const existing = await prisma.opportunity.findFirst({
-        where: { applyUrl: result.applyUrl },
-      });
-
-      const data = {
-        title: result.title,
-        organization: result.organization,
-        description: result.description || null,
-        location: result.location || null,
-        isRemote: result.isRemote,
-        eventDate: result.eventDate || null,
-        cfpDeadline: result.cfpDeadline || null,
-        format: result.format,
-        industries: JSON.stringify(result.industries),
-        compensationType: result.compensationType || null,
-        compensationAmount: result.compensationAmount || null,
-        compensationDetails: result.compensationDetails || null,
-        applyUrl: result.applyUrl,
-        qualityScore: result.qualityScore,
-        source: result.source,
-        sourceUrl: result.sourceUrl || null,
-        enrichmentStatus: (result as any).enrichmentStatus || null,
-        enrichedAt: (result as any).enrichedAt || null,
-        enrichmentError: (result as any).enrichmentError || null,
-      };
-
-      if (existing) {
-        // Update existing opportunity with better data
-        await prisma.opportunity.update({
-          where: { id: existing.id },
-          data,
-        });
-        updated++;
-      } else {
-        // Create new opportunity
-        await prisma.opportunity.create({ data });
-        saved++;
+  const data = fresh.map((r) => buildLiveCreateData(r, now));
+  try {
+    const created = await prisma.opportunity.createMany({ data });
+    return { created: created.count, existing: existingUrls.size };
+  } catch (error) {
+    // A concurrent search may have inserted one of these URLs; fall back to row-by-row.
+    console.warn('[LiveSearch] createMany failed, inserting individually:', error instanceof Error ? error.message : error);
+    let created = 0;
+    for (const row of data) {
+      try {
+        await prisma.opportunity.create({ data: row });
+        created++;
+      } catch {
+        // already stored
       }
-    } catch (error) {
-      console.error(`Failed to save live result: ${result.title}`, error);
-      skipped++;
     }
+    return { created, existing: existingUrls.size };
   }
-
-  console.log(
-    `Auto-save complete: ${saved} new, ${updated} updated, ${skipped} skipped`
-  );
-
-  return { saved, updated, skipped };
 }
