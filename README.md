@@ -78,12 +78,12 @@ Linkup API ---- live search --------+
 Claude API ---- enrichment ---------+
 ```
 
-- **Scrapers** (confs.tech, javaconferences, callingallpapers, developers.events, PaperCall, WikiCFP, ConferenceAlerts, Linkup) pull opportunities into the database. Each run is recorded in `ScraperRun`.
+- **Scrapers** (confs.tech, javaconferences, callingallpapers, developers.events, WikiCFP, ConferenceAlerts, Linkup) pull opportunities into the database. Each run is recorded in `ScraperRun`.
 - **Live search** queries the Linkup API at request time and merges real-time results with stored data. Live results display a "Live" badge.
 - **Enrichment** runs as a background process. Claude API calls fill in missing deadlines, locations, and topics on stored opportunities.
 - **Sync schedule** via Vercel Cron:
   - Daily (6:00 UTC): structured scrapers, least-recently-run first, within a 50s budget
-  - Weekly (Monday 8:00 UTC): slower sources plus a rotating slice of Linkup queries
+  - Weekly (Monday 8:00 UTC): slower sources (WikiCFP, ConferenceAlerts)
   - Every 5 minutes: Enrichment pass on unenriched opportunities
 
 ### Key Files

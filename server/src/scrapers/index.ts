@@ -4,7 +4,6 @@ import { scrapeConfsTech } from './confstech.js';
 import { scrapeJavaConferences } from './javaconferences.js';
 import { scrapeCallingAllPapers } from './callingallpapers.js';
 import { scrapeLinkupCFPs, LINKUP_QUERY_COUNT } from './linkupcfp.js';
-import { scrapePaperCall } from './papercall.js';
 import { scrapeWikiCFP } from './wikicfp.js';
 import { scrapeConferenceAlertsUSA } from './conferenceAlerts.js';
 import { scrapeDevelopersEvents } from './developersEvents.js';
@@ -194,7 +193,6 @@ export const SCRAPERS: ScraperDefinition[] = [
   { name: 'callingallpapers.com', cadence: 'daily', run: scrapeCallingAllPapers },
   { name: 'developers.events', cadence: 'daily', run: scrapeDevelopersEvents },
   { name: 'linkup', cadence: 'daily', run: () => scrapeLinkupCFPs(config.scrapers?.webSearch, rotatingLinkupSlice()) },
-  { name: 'papercall.io', cadence: 'weekly', run: scrapePaperCall },
   { name: 'wikicfp.com', cadence: 'weekly', run: scrapeWikiCFP },
   { name: 'conferencealerts.com', cadence: 'weekly', run: scrapeConferenceAlertsUSA },
 ];

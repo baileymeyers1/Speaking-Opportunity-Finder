@@ -9,7 +9,7 @@ Current state only. History lives in `docs/CHANGELOG.md`. Full review: `docs/pla
 ## What's Working
 - Browse, filters, saved opportunities, saved searches, auth (JWT cookie), admin dashboard.
 - **Hosting: Vercel only.** Express runs as one serverless function; Vercel Cron drives syncs and enrichment. The build copies the production schema and runs `prisma db push`, so schema changes deploy themselves.
-- **Scrapers** (registry in `server/src/scrapers/index.ts`): confs.tech, javaconferences.org, callingallpapers.com, developers.events, linkup (daily, Linkup runs a 6-query rotating slice); papercall.io, wikicfp.com, conferencealerts.com (weekly). Each run persists its own rows and is recorded in `ScraperRun` (`GET /api/admin/analytics/scraper-runs`). Syncs take a time budget (50s under cron) and run least-recently-run sources first, so nothing starves.
+- **Scrapers** (registry in `server/src/scrapers/index.ts`): confs.tech, javaconferences.org, callingallpapers.com, developers.events, linkup (daily, Linkup runs a 6-query rotating slice); wikicfp.com, conferencealerts.com (weekly). papercall.io was removed: the domain no longer resolves. Each run persists its own rows and is recorded in `ScraperRun` (`GET /api/admin/analytics/scraper-runs`). Syncs take a time budget (50s under cron) and run least-recently-run sources first, so nothing starves.
 - Background enrichment on `claude-haiku-5-5` with a DB-backed daily budget (200 calls), per-row claim lock and 3 retries. Re-scrapes preserve enriched fields. Cleanup never deletes saved rows. Closed/irrelevant rows are flagged in columns and hidden.
 - One shared Prisma client (`server/src/lib/prisma.ts`). Search is case-insensitive on Postgres; industry filter matches the exact JSON token.
 
@@ -33,6 +33,7 @@ Current state only. History lives in `docs/CHANGELOG.md`. Full review: `docs/pla
 - Password reset only logs the token to the console.
 - Deadlines are UTC midnight, so they expire the evening before in US timezones.
 - `shared/types.ts` is unused and drifted.
+- conferencealerts.com is a general conference directory; rows kept are those with an open abstract deadline, and some are expos whose deadline equals the event date. WikiCFP rows are academic calls for papers.
 - A row marked `skipped` for a too-short description is never revisited.
 - `server/src/scripts/promoteAdmin.ts` still creates its own PrismaClient (standalone script, acceptable).
 

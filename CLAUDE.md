@@ -27,7 +27,7 @@ Aggregates speaking opportunities (CFPs, conferences, podcasts, meetups) from mu
 - `server/src/services/liveSearchService.ts` -- Live search integration
 - `server/src/services/enrichmentService.ts` -- Claude-powered enrichment
 - `server/src/scrapers/index.ts` -- Scraper registry, per-scraper runs with time budget, persistence
-- `server/src/scrapers/` -- confs.tech, javaconferences, callingallpapers, developers.events (daily); PaperCall, WikiCFP, ConferenceAlerts, Linkup (weekly)
+- `server/src/scrapers/` -- confs.tech, javaconferences, callingallpapers, developers.events and a Linkup slice (daily); WikiCFP, ConferenceAlerts (weekly)
 - `client/src/pages/Home.tsx` -- Main grid with unified live+stored results
 - `client/src/components/` -- OpportunityCard (deadline badges), MultiSelectDropdown
 - `prisma/schema.prisma` -- Data model (User, Opportunity, SavedOpportunity, SavedSearch, EnrichmentUsage, ScraperRun)
@@ -47,5 +47,5 @@ Vercel. Push to main auto-deploys; the build copies the production schema and ru
 
 ## Sync Schedule (Vercel Cron)
 - **Daily 06:00 UTC:** structured scrapers, least-recently-run first, within a 50s budget
-- **Weekly Mon 08:00 UTC:** slower sources (PaperCall, WikiCFP, ConferenceAlerts, a rotating slice of Linkup queries)
+- **Weekly Mon 08:00 UTC:** slower sources (WikiCFP, ConferenceAlerts)
 - **Every 5 min:** enrichment batch of 5 (DB-backed daily cap of 200 Claude calls)
