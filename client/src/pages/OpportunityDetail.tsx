@@ -4,19 +4,13 @@ import { useAuth } from '../hooks/useAuth';
 import { useOpportunity } from '../hooks/useOpportunity';
 import { useSaveOpportunity } from '../hooks/useSaveOpportunity';
 import type { SavedCategory } from '../types';
-import { formatDate } from '../lib/dates';
 import { OpportunityDetailSkeleton } from '../components/OpportunityDetailSkeleton';
-import { approximate, formatVerifiedAgo, isLowConfidence, LOW_CONFIDENCE_HINT } from '../utils/verification';
+import { DateWithConfidence, VerifiedBadge } from '../components/VerificationHints';
 
 import { Card, CardHeader, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
-import {
-  Tooltip,
-  TooltipTrigger,
-  TooltipContent,
-} from '@/components/ui/tooltip';
 
 import {
   ArrowLeft,
@@ -29,7 +23,6 @@ import {
   Zap,
   Star,
   AlertCircle,
-  ShieldCheck,
 } from 'lucide-react';
 import { SaveOpportunitySelect } from '../components/SaveOpportunitySelect';
 
@@ -88,25 +81,7 @@ export function OpportunityDetail() {
 
   const hasQualityScore =
     opportunity.qualityScore !== undefined && opportunity.qualityScore !== null;
-  const verifiedLabel = formatVerifiedAgo(opportunity);
 
-  const renderDate = (value: string | null, field: 'eventDate' | 'cfpDeadline') => {
-    if (!value) return 'Not listed';
-    const label = formatDate(value, 'long')!;
-    if (!isLowConfidence(opportunity, field)) return label;
-    return (
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <span className="cursor-help underline decoration-dotted underline-offset-2">
-            {approximate(label, true)}
-          </span>
-        </TooltipTrigger>
-        <TooltipContent>
-          <p>{LOW_CONFIDENCE_HINT}</p>
-        </TooltipContent>
-      </Tooltip>
-    );
-  };
 
   return (
     <div className="max-w-3xl mx-auto space-y-4">
@@ -176,19 +151,7 @@ export function OpportunityDetail() {
                 Quality {opportunity.qualityScore}/100
               </Badge>
             )}
-            {verifiedLabel && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Badge variant="outline" className="gap-1 cursor-default text-emerald-700 border-emerald-300 dark:text-emerald-400 dark:border-emerald-700">
-                    <ShieldCheck className="h-3 w-3" aria-hidden="true" />
-                    {verifiedLabel}
-                  </Badge>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>Dates and status were checked against the event page on {formatDate(opportunity.verifiedAt!)}.</p>
-                </TooltipContent>
-              </Tooltip>
-            )}
+            <VerifiedBadge opportunity={opportunity} variant="badge" />
           </div>
         </CardHeader>
 
@@ -218,7 +181,7 @@ export function OpportunityDetail() {
                   Event Date
                 </p>
                 <p className="text-sm text-muted-foreground">
-                  {renderDate(opportunity.eventDate, 'eventDate')}
+                  <DateWithConfidence opportunity={opportunity} field="eventDate" style="long" fallback="Not listed" />
                 </p>
               </div>
             </div>
@@ -231,7 +194,7 @@ export function OpportunityDetail() {
                   CFP Deadline
                 </p>
                 <p className="text-sm text-muted-foreground">
-                  {renderDate(opportunity.cfpDeadline, 'cfpDeadline')}
+                  <DateWithConfidence opportunity={opportunity} field="cfpDeadline" style="long" fallback="Not listed" />
                 </p>
               </div>
             </div>
