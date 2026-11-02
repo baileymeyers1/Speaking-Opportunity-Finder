@@ -7,29 +7,32 @@ Aggregates speaking opportunities (CFPs, conferences, podcasts, meetups) from mu
 - **Monorepo** with npm workspaces: `client/`, `server/`, `shared/`
 - **Client:** React 18 + Vite + TypeScript + Tailwind CSS + React Router
 - **Server:** Express + TypeScript + Prisma ORM
-- **Database:** SQLite (dev), PostgreSQL (prod via Render)
+- **Database:** SQLite (dev), PostgreSQL (prod; `DATABASE_URL` set in Vercel)
 - **AI:** Anthropic Claude SDK (opportunity enrichment)
 - **Auth:** bcryptjs + JWT (custom, no third-party auth)
-- **Hosting:** Render free tier (see `render.yaml`)
+- **Hosting:** Vercel. Express app runs as one serverless function (`api/index.ts` imports `server/dist/app.js`); Vercel Cron drives syncs and enrichment (`vercel.json`). 60s function limit.
 
 ## Key Conventions
-- Prisma for all DB access. Production uses `schema.production.prisma` (copied at build time on Render).
+- Prisma for all DB access through the shared client in `server/src/lib/prisma.ts` (never `new PrismaClient()` in a module). Production uses `schema.production.prisma`, copied and pushed at build time; keep both schema files identical except for `provider`.
 - JSON arrays stored as strings in SQLite (`industries`, `topics` fields).
 - Live search results show "Live" badges; save them via `POST /api/opportunities/save-live`.
-- Client uses localStorage caching for instant load on cold starts (Render free tier sleeps).
-- App pings health endpoint on mount to wake Render.
-- Default query filter: only future-deadline opportunities shown.
+- Client uses localStorage caching for instant load while the serverless API cold-starts; it pings the health endpoint on mount.
+- Default query filter: only future-deadline opportunities shown; `isClosed`/`isRelevant` rows never shown.
+- Scraped re-syncs never overwrite Claude-enriched fields or enrichment bookkeeping (`server/src/scrapers/persistData.ts`).
+- Enrichment budget and row claims live in the DB (`server/src/services/enrichmentBudget.ts`), not process memory.
 - Dynamic year references throughout -- no hardcoded years.
 
 ## Key Files
 - `server/src/services/opportunityService.ts` -- Core queries + future-deadline filter
 - `server/src/services/liveSearchService.ts` -- Live search integration
 - `server/src/services/enrichmentService.ts` -- Claude-powered enrichment
-- `server/src/scrapers/` -- 10+ scrapers (Sessionize, PaperCall, WikiCFP, Eventbrite, etc.)
+- `server/src/scrapers/index.ts` -- Scraper registry, per-scraper runs with time budget, persistence
+- `server/src/scrapers/` -- confs.tech, javaconferences, callingallpapers, developers.events (daily); PaperCall, WikiCFP, ConferenceAlerts, Linkup (weekly)
 - `client/src/pages/Home.tsx` -- Main grid with unified live+stored results
 - `client/src/components/` -- OpportunityCard (deadline badges), MultiSelectDropdown
-- `prisma/schema.prisma` -- Data model (User, Opportunity, SavedOpportunity)
-- `render.yaml` -- Render deployment config
+- `prisma/schema.prisma` -- Data model (User, Opportunity, SavedOpportunity, SavedSearch, EnrichmentUsage, ScraperRun)
+- `vercel.json` -- Build, routing and cron schedules
+- `docs/STATUS.md` -- Current state and deploy gotchas; `docs/plans/2026-11-02-architecture-review.md` -- full review
 
 ## Build & Dev
 ```bash
@@ -40,8 +43,9 @@ npx prisma db push   # Push schema changes
 ```
 
 ## Deployment
-Render free tier via `render.yaml`. Push to main auto-deploys.
+Vercel. Push to main auto-deploys; the build copies the production schema and runs `prisma db push`. Env vars live in the Vercel dashboard (`DATABASE_URL`, `JWT_SECRET`, `CRON_SECRET`, `ANTHROPIC_API_KEY`, `WEB_SEARCH_API_KEY`).
 
-## Sync Schedule
-- **Daily:** Fast scrapers (CallingAllPapers, Sessionize, PaperCall, WikiCFP)
-- **Weekly:** Deep scrapers (Linkup with 30 industry queries, Eventbrite, etc.)
+## Sync Schedule (Vercel Cron)
+- **Daily 06:00 UTC:** structured scrapers, least-recently-run first, within a 50s budget
+- **Weekly Mon 08:00 UTC:** slower sources (PaperCall, WikiCFP, ConferenceAlerts, a rotating slice of Linkup queries)
+- **Every 5 min:** enrichment batch of 5 (DB-backed daily cap of 200 Claude calls)

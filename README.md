@@ -1,6 +1,6 @@
 # Speaking Opportunity Finder
 
-Aggregates speaking opportunities -- CFPs, conferences, podcasts, and meetups -- from 10+ scrapers and live search. Users filter by industry and location, save opportunities, and get AI-enriched details (deadlines, locations, topics) via Anthropic Claude.
+Aggregates speaking opportunities -- CFPs, conferences, podcasts, and meetups -- from structured scrapers and Linkup live search. Users filter by industry and location, save opportunities, and get AI-enriched details (deadlines, locations, topics) via Anthropic Claude.
 
 ## Tech Stack
 
@@ -78,12 +78,12 @@ Linkup API ---- live search --------+
 Claude API ---- enrichment ---------+
 ```
 
-- **Scrapers** (Sessionize, PaperCall, WikiCFP, Eventbrite, CallingAllPapers, Confs.tech, and more) pull opportunities into the database.
+- **Scrapers** (confs.tech, javaconferences, callingallpapers, developers.events, PaperCall, WikiCFP, ConferenceAlerts, Linkup) pull opportunities into the database. Each run is recorded in `ScraperRun`.
 - **Live search** queries the Linkup API at request time and merges real-time results with stored data. Live results display a "Live" badge.
 - **Enrichment** runs as a background process. Claude API calls fill in missing deadlines, locations, and topics on stored opportunities.
 - **Sync schedule** via Vercel Cron:
-  - Daily (6:00 UTC): Fast scrapers -- CallingAllPapers, Sessionize, PaperCall, WikiCFP
-  - Weekly (Monday 8:00 UTC): Deep scrapers -- Linkup with 30 industry queries, Eventbrite, etc.
+  - Daily (6:00 UTC): structured scrapers, least-recently-run first, within a 50s budget
+  - Weekly (Monday 8:00 UTC): slower sources plus a rotating slice of Linkup queries
   - Every 5 minutes: Enrichment pass on unenriched opportunities
 
 ### Key Files
@@ -93,7 +93,7 @@ Claude API ---- enrichment ---------+
 | `server/src/services/opportunityService.ts` | Core queries, future-deadline filtering |
 | `server/src/services/liveSearchService.ts` | Linkup live search integration |
 | `server/src/services/enrichmentService.ts` | Claude-powered enrichment |
-| `server/src/scrapers/` | 10+ scraper implementations |
+| `server/src/scrapers/` | Scraper registry (`index.ts`) and implementations |
 | `client/src/pages/Home.tsx` | Main opportunity grid with unified results |
 | `prisma/schema.prisma` | Data model (User, Opportunity, SavedOpportunity) |
 | `vercel.json` | Deployment config, routing, cron schedules |
@@ -102,7 +102,7 @@ Claude API ---- enrichment ---------+
 
 Deployed on Vercel. The `vercel.json` config handles:
 
-- **Build**: Copies production Prisma schema, generates client, builds all workspaces
+- **Build**: Copies production Prisma schema, generates client, pushes schema changes, builds all workspaces
 - **Routing**: `/api/*` routes to serverless functions; everything else serves the SPA
 - **Cron jobs**: Daily sync, weekly deep sync, and enrichment runs on schedule
 
