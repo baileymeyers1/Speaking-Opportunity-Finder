@@ -43,6 +43,10 @@ model Opportunity {
   enrichmentStatus    String?
   enrichedAt          DateTime?
   enrichmentError     String?
+  enrichmentAttempts  Int                @default(0)
+  enrichmentClaimedAt DateTime?
+  isClosed            Boolean            @default(false)
+  isRelevant          Boolean            @default(true)
   savedBy             SavedOpportunity[]
 
   @@index([cfpDeadline])
@@ -57,6 +61,8 @@ model Opportunity {
   @@index([source, createdAt])
   @@index([enrichmentStatus, createdAt])
   @@index([cfpDeadline, source])
+  @@index([isClosed, isRelevant])
+  @@index([enrichmentStatus, enrichmentAttempts, enrichmentClaimedAt])
 }
 
 model SavedOpportunity {
@@ -82,4 +88,12 @@ model SavedSearch {
   updatedAt DateTime @updatedAt
 
   @@index([userId])
+}
+
+// Daily Claude enrichment budget, keyed by UTC date (YYYY-MM-DD).
+// Lives in the DB so the cap survives serverless cold starts.
+model EnrichmentUsage {
+  date      String   @id
+  count     Int      @default(0)
+  updatedAt DateTime @updatedAt
 }

@@ -16,64 +16,13 @@ import { scrapePrNewsOnline } from './prNewsOnline.js';
 import { config } from '../config/index.js';
 import { generateDeduplicationKey } from '../services/deduplicationService.js';
 import { decodeHtmlEntities, isJunkResult } from '../services/dataNormalization.js';
+import { computeQualityScore, type ScraperResult } from './qualityScore.js';
+import { buildCreateData, buildUpdateData } from './persistData.js';
 
 const prisma = new PrismaClient();
 
-export interface ScraperResult {
-  title: string;
-  organization: string;
-  description?: string;
-  location?: string | null;
-  isRemote: boolean;
-  eventDate?: Date;
-  cfpDeadline?: Date;
-  format: string;
-  industries: string[];
-  compensationType?: string;
-  compensationAmount?: number;
-  compensationDetails?: string;
-  applyUrl: string;
-  qualityScore?: number;
-  source: string;
-  sourceUrl?: string | null;
-}
-
-export function computeQualityScore(result: ScraperResult): number {
-  let score = 5; // Low base — must earn points
-
-  // Critical fields (55 points)
-  if (result.cfpDeadline) score += 25;
-  if (result.eventDate) score += 15;
-  if (result.location) score += 10;
-  if (result.compensationType || result.compensationAmount) score += 5;
-
-  // Industries (10 points, scaled)
-  const validIndustries = (result.industries || []).filter(
-    (i) => !['events', 'cross-industry', 'general'].includes(i.toLowerCase())
-  );
-  score += Math.min(10, validIndustries.length * 5);
-
-  // Description quality (20 points)
-  const desc = result.description || '';
-  if (desc.length > 200) {
-    const isPlaceholder =
-      /^submit your talk/i.test(desc) ||
-      /^call for (speakers|papers)/i.test(desc) ||
-      /^we invite you/i.test(desc);
-    score += isPlaceholder ? 3 : 20;
-  } else if (desc.length > 80) {
-    score += 8;
-  }
-
-  // Source trust (10 points)
-  const trustedSources = [
-    'papercall.io', 'confs.tech', 'javaconferences.org',
-    'callingallpapers.com', 'wikicfp.com',
-  ];
-  if (trustedSources.includes(result.source)) score += 10;
-
-  return Math.min(100, Math.max(0, score));
-}
+export { computeQualityScore } from './qualityScore.js';
+export type { ScraperResult } from './qualityScore.js';
 
 async function backfillQualityScores(): Promise<number> {
   const batchSize = 200;
@@ -151,6 +100,8 @@ export async function recalculateAllQualityScores(): Promise<number> {
         compensationAmount: opp.compensationAmount || undefined,
         applyUrl: opp.applyUrl,
         source: opp.source,
+        isClosed: opp.isClosed,
+        isRelevant: opp.isRelevant,
       };
 
       const newScore = computeQualityScore(result);
@@ -179,27 +130,6 @@ export function normalizeUrl(url: string): string {
   } catch {
     return url.toLowerCase().replace(/\/$/, '');
   }
-}
-
-function inferCompensation(description?: string) {
-  if (!description) return {};
-  const lower = description.toLowerCase();
-  let compensationType: string | undefined;
-
-  if (/\bhonorarium\b/.test(lower)) compensationType = 'honorarium';
-  else if (/\bpaid\b/.test(lower)) compensationType = 'paid';
-  else if (/\btravel\b/.test(lower)) compensationType = 'travel';
-  else if (/\bstipend\b/.test(lower)) compensationType = 'paid';
-  else if (/\bexposure\b/.test(lower)) compensationType = 'exposure';
-
-  const amountMatch = description.match(/\$[\s]*([0-9]{2,6}(?:,[0-9]{3})?)/);
-  const compensationAmount = amountMatch
-    ? parseInt(amountMatch[1].replace(/,/g, ''), 10)
-    : undefined;
-
-  const compensationDetails = compensationType ? description.substring(0, 300) : undefined;
-
-  return { compensationType, compensationAmount, compensationDetails };
 }
 
 function deduplicateResults(results: ScraperResult[]): ScraperResult[] {
@@ -324,40 +254,20 @@ async function persistResults(results: ScraperResult[]): Promise<{ added: number
         where: { applyUrl: result.applyUrl },
       });
 
-      const inferredComp = inferCompensation(result.description);
-      const data = {
-        title: result.title,
-        organization: result.organization,
-        description: result.description || null,
-        location: result.location || null,
-        isRemote: result.isRemote,
-        eventDate: result.eventDate || null,
-        cfpDeadline: result.cfpDeadline || null,
-        format: result.format,
-        industries: JSON.stringify(result.industries),
-        compensationType: result.compensationType || inferredComp.compensationType || null,
-        compensationAmount: result.compensationAmount || inferredComp.compensationAmount || null,
-        compensationDetails: result.compensationDetails || inferredComp.compensationDetails || null,
-        applyUrl: result.applyUrl,
-        qualityScore: result.qualityScore ?? computeQualityScore(result),
-        source: result.source,
-        sourceUrl: result.sourceUrl || null,
-        enrichmentStatus: (result as any).enrichmentStatus || null,
-        enrichedAt: (result as any).enrichedAt || null,
-        enrichmentError: (result as any).enrichmentError || null,
-      };
-
       if (existing) {
+        // Re-scrape: refresh scraped fields only. Enrichment bookkeeping and
+        // Claude-set values are preserved (see persistData.ts).
         await prisma.opportunity.update({
           where: { id: existing.id },
-          data,
+          data: buildUpdateData(result, existing),
         });
         updated++;
       } else {
         // Cross-source dedup: check if an event with the same normalized title+org already exists
         const dedupKey = generateDeduplicationKey(result.title, result.organization);
         const orgPrefix = (result.organization || '').substring(0, 10);
-        let dedupMatch: { id: string; title: string; organization: string; qualityScore: number | null } | undefined;
+        let dedupMatchId: string | undefined;
+        let dedupMatchScore: number | null = null;
 
         if (orgPrefix.length > 0) {
           const candidates = await prisma.opportunity.findMany({
@@ -366,22 +276,29 @@ async function persistResults(results: ScraperResult[]): Promise<{ added: number
             take: 50,
           });
 
-          dedupMatch = candidates.find(c =>
+          const match = candidates.find(c =>
             generateDeduplicationKey(c.title, c.organization) === dedupKey
           );
+          dedupMatchId = match?.id;
+          dedupMatchScore = match?.qualityScore ?? null;
         }
 
-        if (dedupMatch) {
-          // Update existing record if the new one has equal or better quality
-          if ((data.qualityScore || 0) >= (dedupMatch.qualityScore || 0)) {
-            await prisma.opportunity.update({
-              where: { id: dedupMatch.id },
-              data,
-            });
+        if (dedupMatchId) {
+          const createData = buildCreateData(result);
+          // Merge into the existing record if the new one has equal or better quality.
+          // applyUrl is deliberately left alone so saved links stay stable.
+          if (createData.qualityScore >= (dedupMatchScore || 0)) {
+            const dedupRow = await prisma.opportunity.findUnique({ where: { id: dedupMatchId } });
+            if (dedupRow) {
+              await prisma.opportunity.update({
+                where: { id: dedupRow.id },
+                data: buildUpdateData(result, dedupRow),
+              });
+            }
           }
           updated++;
         } else {
-          await prisma.opportunity.create({ data });
+          await prisma.opportunity.create({ data: buildCreateData(result) });
           added++;
         }
       }
@@ -397,19 +314,26 @@ async function cleanupExpired(): Promise<number> {
   const now = new Date();
   const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
 
-  // Delete expired non-live results (existing behavior)
+  // Rows a user has saved are never deleted: deleting them would cascade to
+  // their SavedOpportunity rows. They stay in the DB and are hidden from
+  // browse by the future-deadline filter.
+  const notSaved = { savedBy: { none: {} } };
+
+  // Delete expired, unsaved, non-live results
   const expiredResult = await prisma.opportunity.deleteMany({
     where: {
       cfpDeadline: { lt: now },
       NOT: { source: { startsWith: 'Live Search' } },
+      ...notSaved,
     },
   });
 
-  // Delete stale live search results (7-day TTL)
+  // Delete stale, unsaved live search results (7-day TTL)
   const staleLiveResult = await prisma.opportunity.deleteMany({
     where: {
       source: { startsWith: 'Live Search' },
       createdAt: { lt: sevenDaysAgo },
+      ...notSaved,
     },
   });
 

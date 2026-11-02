@@ -140,3 +140,29 @@ describe('computeQualityScore', () => {
     expect(fiveScore).toEqual(twoScore);
   });
 });
+
+describe('computeQualityScore — enrichment flags', () => {
+  it('returns 0 for a closed CFP no matter how complete the metadata is', () => {
+    const full = makeResult({
+      cfpDeadline: new Date('2027-01-01'),
+      eventDate: new Date('2027-06-01'),
+      location: 'Austin, TX',
+      compensationType: 'paid',
+      industries: ['technology', 'ai'],
+      description: 'x'.repeat(250),
+      source: 'confs.tech',
+    });
+    expect(computeQualityScore(full)).toBeGreaterThan(50);
+    expect(computeQualityScore({ ...full, isClosed: true })).toBe(0);
+  });
+
+  it('returns 0 for an irrelevant listing', () => {
+    const full = makeResult({ cfpDeadline: new Date('2027-01-01'), location: 'Austin, TX' });
+    expect(computeQualityScore({ ...full, isRelevant: false })).toBe(0);
+  });
+
+  it('leaves the score alone when flags are unset or benign', () => {
+    const r = makeResult({ cfpDeadline: new Date('2027-01-01') });
+    expect(computeQualityScore({ ...r, isClosed: false, isRelevant: true })).toBe(computeQualityScore(r));
+  });
+});

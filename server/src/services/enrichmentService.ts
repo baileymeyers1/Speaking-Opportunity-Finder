@@ -31,10 +31,31 @@ function getAnthropicClient(): Anthropic | null {
   if (!anthropic) {
     anthropic = new Anthropic({
       apiKey: config.claude.apiKey,
+      timeout: 30_000,
+      maxRetries: 1,
     });
   }
 
   return anthropic;
+}
+
+/**
+ * Cheap pre-checks that decide whether Claude should be called at all.
+ * Returns a reason string when enrichment should be skipped, else null.
+ * Exported so the background worker can skip rows without spending budget.
+ */
+export function shouldSkipEnrichment(result: ScraperResult): string | null {
+  const hasCompleteData =
+    result.cfpDeadline &&
+    result.eventDate &&
+    result.industries?.length > 0 &&
+    result.location &&
+    result.compensationType;
+  if (hasCompleteData) return 'already complete';
+
+  if ((result.description || '').length < 30) return 'description too short';
+
+  return null;
 }
 
 /**
@@ -53,28 +74,13 @@ export async function enrichOpportunity(
     };
   }
 
-  // Skip enrichment if we already have most data
-  const hasCompleteData =
-    result.cfpDeadline &&
-    result.eventDate &&
-    result.industries?.length > 0 &&
-    result.location &&
-    result.compensationType;
-
-  if (hasCompleteData) {
+  const skipReason = shouldSkipEnrichment(result);
+  if (skipReason) {
     return {
       ...result,
       enrichmentStatus: 'skipped',
-      enrichedAt: new Date()
-    };
-  }
-
-  // Skip enrichment if description is too short to extract anything useful
-  if ((result.description || '').length < 30) {
-    return {
-      ...result,
-      enrichmentStatus: 'skipped',
-      enrichedAt: new Date()
+      enrichedAt: new Date(),
+      enrichmentError: skipReason,
     };
   }
 
@@ -84,6 +90,8 @@ export async function enrichOpportunity(
     const message = await client.messages.create({
       model: config.claude.model,
       max_tokens: config.claude.maxTokens,
+      // Extraction is simple; keep reasoning spend minimal.
+      output_config: { effort: 'low' },
       messages: [
         {
           role: 'user',
@@ -92,7 +100,18 @@ export async function enrichOpportunity(
       ],
     });
 
-    const responseText = message.content[0].type === 'text' ? message.content[0].text : '';
+    if (message.stop_reason === 'max_tokens') {
+      return {
+        ...result,
+        enrichmentStatus: 'failed',
+        enrichedAt: new Date(),
+        enrichmentError: `Response truncated at ${config.claude.maxTokens} tokens`,
+      };
+    }
+
+    // Models with thinking enabled may return a thinking block first.
+    const textBlock = message.content.find((block) => block.type === 'text');
+    const responseText = textBlock && textBlock.type === 'text' ? textBlock.text : '';
     const enriched = parseEnrichmentResponse(responseText);
 
     // If parsing failed, return failed status
@@ -161,7 +180,10 @@ export async function enrichOpportunitiesBatch(
   return enriched;
 }
 
-function buildEnrichmentPrompt(result: ScraperResult): string {
+export function buildEnrichmentPrompt(result: ScraperResult, now: Date = new Date()): string {
+  const todayStr = now.toISOString().split('T')[0];
+  const thisYear = now.getUTCFullYear();
+  const nextYear = thisYear + 1;
   const missing: string[] = [];
   if (!result.cfpDeadline) missing.push('cfpDeadline');
   if (!result.eventDate) missing.push('eventDate');
@@ -170,6 +192,8 @@ function buildEnrichmentPrompt(result: ScraperResult): string {
   if (!result.compensationType) missing.push('compensationType');
 
   return `Analyze this speaking opportunity listing. Return ONLY a JSON object, no other text.
+
+Today's date is ${todayStr}. If a date has no year, assume ${thisYear} if that month has not passed yet, otherwise ${nextYear}.
 
 Title: ${result.title}
 Organization: ${result.organization}
@@ -182,11 +206,12 @@ Tasks:
 4. Determine if this is genuinely a speaking/presenting opportunity (true) or just a conference listing, job posting, or unrelated page (false).
 5. IMPORTANT — Date distinction:
    - "cfpDeadline" = the date by which speaker proposals/abstracts must be SUBMITTED (submission deadline, proposal deadline, abstract due date). This is NOT the event date.
-   - "eventDate" = the date(s) when the actual conference/event takes place. If a date range is given (e.g., "May 4-6, 2026"), use the START date.
-   - Do NOT confuse these two. A "proposal deadline of September 21, 2025" for an event on "May 4-6, 2026" means cfpDeadline=2025-09-21 and eventDate=2026-05-04.
+   - "eventDate" = the date(s) when the actual conference/event takes place. If a date range is given (e.g., "May 4-6, ${nextYear}"), use the START date.
+   - Do NOT confuse these two. A "proposal deadline of September 21, ${thisYear}" for an event on "May 4-6, ${nextYear}" means cfpDeadline=${thisYear}-09-21 and eventDate=${nextYear}-05-04.
 6. IMPORTANT — Closed CFP detection:
    - Set "isClosed" to true if the description indicates the call for speakers/papers/proposals is closed, expired, or no longer accepting submissions.
    - Look for phrases like "call for speakers is now closed", "submissions closed", "no longer accepting proposals", etc.
+   - Also set "isClosed" to true if the submission deadline is clearly before ${todayStr}.
 
 {"cfpDeadline":"YYYY-MM-DD or null","eventDate":"YYYY-MM-DD or null","industries":["topic1","topic2"],"location":"City, Country or Remote or null","compensationType":"paid|travel|honorarium|exposure or null","compensationAmount":null,"isRemote":false,"cleanTitle":"cleaned event name","cleanOrganization":"organizing body name","isRelevant":true,"isClosed":false}`;
 }
