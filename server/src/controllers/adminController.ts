@@ -24,6 +24,19 @@ export async function getAnalytics(
   }
 }
 
+export async function getScraperRuns(
+  _req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    const runs = await analyticsService.getScraperRuns();
+    res.json({ success: true, data: runs });
+  } catch (error) {
+    next(error);
+  }
+}
+
 export async function getScraperHealth(
   _req: Request,
   res: Response,

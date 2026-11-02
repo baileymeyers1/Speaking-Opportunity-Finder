@@ -14,12 +14,28 @@ describe('normalizeUrl', () => {
     expect(normalizeUrl('https://example.com/page?utm_source=foo')).toBe('https://example.com/page');
   });
 
-  it('strips all query parameters', () => {
-    expect(normalizeUrl('https://example.com/page?ref=bar&utm_medium=email')).toBe('https://example.com/page');
+  it('strips every tracking parameter but keeps the rest', () => {
+    expect(normalizeUrl('https://example.com/page?ref=bar&utm_medium=email&fbclid=x&gclid=y')).toBe('https://example.com/page');
+    expect(normalizeUrl('https://example.com/page?id=42&utm_medium=email')).toBe('https://example.com/page?id=42');
   });
 
-  it('lowercases the URL', () => {
-    expect(normalizeUrl('https://Example.COM/Page')).toBe('https://example.com/page');
+  it('keeps identifying query parameters so WikiCFP-style URLs stay distinct', () => {
+    const a = normalizeUrl('http://www.wikicfp.com/cfp/servlet/event.showcfp?eventid=1001&copyownerid=5');
+    const b = normalizeUrl('http://www.wikicfp.com/cfp/servlet/event.showcfp?eventid=1002&copyownerid=5');
+    expect(a).not.toBe(b);
+    expect(a).toContain('eventid=1001');
+  });
+
+  it('sorts query parameters so order does not create duplicates', () => {
+    expect(normalizeUrl('https://example.com/p?b=2&a=1')).toBe(normalizeUrl('https://example.com/p?a=1&b=2'));
+  });
+
+  it('drops the hash fragment', () => {
+    expect(normalizeUrl('https://example.com/page#section')).toBe('https://example.com/page');
+  });
+
+  it('lowercases the host but preserves path case', () => {
+    expect(normalizeUrl('https://Example.COM/Page')).toBe('https://example.com/Page');
   });
 
   it('handles URLs with both www and trailing slash', () => {
@@ -34,8 +50,8 @@ describe('normalizeUrl', () => {
     expect(normalizeUrl('https://example.com/page')).toBe('https://example.com/page');
   });
 
-  it('handles invalid URLs gracefully by lowercasing and stripping trailing slash', () => {
-    expect(normalizeUrl('not-a-valid-url/')).toBe('not-a-valid-url');
+  it('handles invalid URLs gracefully by trimming and stripping trailing slash', () => {
+    expect(normalizeUrl('Not-A-Valid-Url/')).toBe('Not-A-Valid-Url');
   });
 
   it('handles http protocol', () => {

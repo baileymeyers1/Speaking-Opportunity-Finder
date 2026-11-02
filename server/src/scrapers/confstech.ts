@@ -4,8 +4,9 @@ import { cleanTitle, normalizeIndustries } from '../services/dataNormalization.j
 const CONFS_TECH_BASE_URL =
   'https://raw.githubusercontent.com/tech-conferences/conference-data/main/conferences';
 
-const CURRENT_YEAR = new Date().getFullYear();
-const NEXT_YEAR = CURRENT_YEAR + 1;
+function currentYear(): number {
+  return new Date().getFullYear();
+}
 
 // Topics/categories available in confs.tech
 const TOPICS = [
@@ -108,7 +109,7 @@ function mapToScraperResult(
 
 export async function scrapeConfsTech(): Promise<ScraperResult[]> {
   const results: ScraperResult[] = [];
-  const years = [CURRENT_YEAR, NEXT_YEAR];
+  const years = [currentYear(), (currentYear() + 1)];
 
   console.log('Fetching conferences from confs.tech...');
 
