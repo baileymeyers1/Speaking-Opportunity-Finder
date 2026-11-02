@@ -1,4 +1,4 @@
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../lib/prisma.js';
 import { enrichOpportunity, shouldSkipEnrichment } from './enrichmentService.js';
 import { config } from '../config/index.js';
 import { computeQualityScore, type ScraperResult } from '../scrapers/qualityScore.js';
@@ -10,8 +10,6 @@ import {
   releaseEnrichmentSlot,
   reserveEnrichmentSlot,
 } from './enrichmentBudget.js';
-
-const prisma = new PrismaClient();
 
 /**
  * In-process counters for the admin dashboard. These are informational only;

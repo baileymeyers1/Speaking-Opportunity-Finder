@@ -1,8 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
-import { PrismaClient, Opportunity } from '@prisma/client';
+import { Opportunity } from '@prisma/client';
+import { prisma } from '../lib/prisma.js';
 import { AppError } from '../middleware/errorHandler.js';
-
-const prisma = new PrismaClient();
 
 function parseJsonArray(value: string): string[] {
   try {
