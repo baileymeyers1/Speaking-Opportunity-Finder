@@ -103,6 +103,9 @@ export async function getOpportunities(
     ],
     // Hide very low quality results (base score is 5; < 15 means almost no useful metadata)
     qualityScore: { gte: 15 },
+    // Enrichment flags: closed CFPs and non-speaking pages never surface
+    isClosed: false,
+    isRelevant: true,
   };
   const andConditions: Prisma.OpportunityWhereInput[] = [];
 

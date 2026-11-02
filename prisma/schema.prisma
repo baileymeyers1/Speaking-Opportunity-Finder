@@ -43,6 +43,10 @@ model Opportunity {
   enrichmentStatus    String?            // 'enriched' | 'failed' | 'skipped' | null
   enrichedAt          DateTime?
   enrichmentError     String?
+  enrichmentAttempts  Int                @default(0)
+  enrichmentClaimedAt DateTime?
+  isClosed            Boolean            @default(false)
+  isRelevant          Boolean            @default(true)
   savedBy             SavedOpportunity[]
 
   @@index([cfpDeadline])
@@ -52,10 +56,13 @@ model Opportunity {
   @@index([source])
   @@index([createdAt])
   @@index([isRemote])
+  @@index([compensationType])
   @@index([enrichmentStatus])
   @@index([source, createdAt])
   @@index([enrichmentStatus, createdAt])
   @@index([cfpDeadline, source])
+  @@index([isClosed, isRelevant])
+  @@index([enrichmentStatus, enrichmentAttempts, enrichmentClaimedAt])
 }
 
 model SavedOpportunity {
@@ -64,8 +71,8 @@ model SavedOpportunity {
   opportunityId String
   category      String      @default("interested")
   createdAt     DateTime    @default(now())
-  user          User        @relation(fields: [userId], references: [id])
-  opportunity   Opportunity @relation(fields: [opportunityId], references: [id])
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  opportunity   Opportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
 
   @@unique([userId, opportunityId])
 }
@@ -73,7 +80,7 @@ model SavedOpportunity {
 model SavedSearch {
   id        String   @id @default(uuid())
   userId    String
-  user      User     @relation(fields: [userId], references: [id])
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   name      String
   query     String?
   filters   String   // JSON: { industries: [], locations: [], types: [], sort: '', isRemote: bool, ... }
@@ -81,4 +88,12 @@ model SavedSearch {
   updatedAt DateTime @updatedAt
 
   @@index([userId])
+}
+
+// Daily Claude enrichment budget, keyed by UTC date (YYYY-MM-DD).
+// Lives in the DB so the cap survives serverless cold starts.
+model EnrichmentUsage {
+  date      String   @id
+  count     Int      @default(0)
+  updatedAt DateTime @updatedAt
 }
