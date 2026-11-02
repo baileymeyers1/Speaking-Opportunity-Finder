@@ -4,20 +4,14 @@ import { useAuth } from '../hooks/useAuth';
 import { useOpportunity } from '../hooks/useOpportunity';
 import { useSaveOpportunity } from '../hooks/useSaveOpportunity';
 import type { SavedCategory } from '../types';
+import { formatDate } from '../lib/dates';
+import { OpportunityDetailSkeleton } from '../components/OpportunityDetailSkeleton';
 import { approximate, formatVerifiedAgo, isLowConfidence, LOW_CONFIDENCE_HINT } from '../utils/verification';
 
 import { Card, CardHeader, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
-import { Skeleton } from '@/components/ui/skeleton';
-import {
-  Select,
-  SelectTrigger,
-  SelectValue,
-  SelectContent,
-  SelectItem,
-} from '@/components/ui/select';
 import {
   Tooltip,
   TooltipTrigger,
@@ -35,11 +29,9 @@ import {
   Zap,
   Star,
   AlertCircle,
-  Bookmark,
-  BookmarkCheck,
   ShieldCheck,
 } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { SaveOpportunitySelect } from '../components/SaveOpportunitySelect';
 
 export function OpportunityDetail() {
   const { id } = useParams<{ id: string }>();
@@ -68,98 +60,8 @@ export function OpportunityDetail() {
     );
   };
 
-  const formatDate = (dateString: string | null) => {
-    if (!dateString) return null;
-    return new Date(dateString).toLocaleDateString('en-US', {
-      weekday: 'long',
-      month: 'long',
-      day: 'numeric',
-      year: 'numeric',
-    });
-  };
-
   if (isLoading) {
-    return (
-      <div className="max-w-3xl mx-auto space-y-4">
-        {/* Back button */}
-        <Skeleton className="h-9 w-48" />
-
-        <Card>
-          <CardHeader className="space-y-4">
-            {/* Title + format badge */}
-            <div className="flex items-start justify-between gap-4">
-              <Skeleton className="h-8 w-3/4" />
-              <Skeleton className="h-6 w-20 rounded-full" />
-            </div>
-
-            {/* Organization */}
-            <Skeleton className="h-5 w-1/2" />
-
-            {/* Metadata badges */}
-            <div className="flex flex-wrap gap-2">
-              <Skeleton className="h-6 w-20 rounded-full" />
-              <Skeleton className="h-6 w-28 rounded-full" />
-              <Skeleton className="h-6 w-36 rounded-full" />
-              <Skeleton className="h-6 w-24 rounded-full" />
-            </div>
-          </CardHeader>
-
-          <CardContent className="space-y-6">
-            {/* Description */}
-            <div className="space-y-2">
-              <Skeleton className="h-4 w-24" />
-              <Skeleton className="h-4 w-full" />
-              <Skeleton className="h-4 w-full" />
-              <Skeleton className="h-4 w-5/6" />
-              <Skeleton className="h-4 w-3/4" />
-            </div>
-
-            <Separator />
-
-            {/* Date details grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-              <div className="flex items-start gap-3">
-                <Skeleton className="h-8 w-8 rounded-md" />
-                <div className="space-y-1.5">
-                  <Skeleton className="h-4 w-20" />
-                  <Skeleton className="h-4 w-44" />
-                </div>
-              </div>
-              <div className="flex items-start gap-3">
-                <Skeleton className="h-8 w-8 rounded-md" />
-                <div className="space-y-1.5">
-                  <Skeleton className="h-4 w-24" />
-                  <Skeleton className="h-4 w-40" />
-                </div>
-              </div>
-            </div>
-
-            <Separator />
-
-            {/* Industries */}
-            <div className="space-y-3">
-              <Skeleton className="h-4 w-20" />
-              <div className="flex flex-wrap gap-2">
-                <Skeleton className="h-6 w-24 rounded-full" />
-                <Skeleton className="h-6 w-20 rounded-full" />
-                <Skeleton className="h-6 w-28 rounded-full" />
-              </div>
-            </div>
-
-            <Separator />
-
-            {/* Action buttons */}
-            <div className="flex flex-col sm:flex-row gap-3">
-              <Skeleton className="h-11 flex-1 rounded-md" />
-              <Skeleton className="h-11 w-[160px] rounded-md" />
-            </div>
-
-            {/* Source */}
-            <Skeleton className="h-3 w-32" />
-          </CardContent>
-        </Card>
-      </div>
-    );
+    return <OpportunityDetailSkeleton />;
   }
 
   if (error || !opportunity) {
@@ -190,7 +92,7 @@ export function OpportunityDetail() {
 
   const renderDate = (value: string | null, field: 'eventDate' | 'cfpDeadline') => {
     if (!value) return 'Not listed';
-    const label = formatDate(value)!;
+    const label = formatDate(value, 'long')!;
     if (!isLowConfidence(opportunity, field)) return label;
     return (
       <Tooltip>
@@ -394,37 +296,7 @@ export function OpportunityDetail() {
 
             {isAuthenticated && (
               <div className="flex items-center gap-2">
-                {savedCategory ? (
-                  <div className="flex items-center gap-2 px-4 py-2 rounded-md bg-primary/5 border border-primary/20">
-                    <BookmarkCheck className="h-4 w-4 text-primary" />
-                    <span className="text-sm font-medium text-primary capitalize">
-                      Saved as {savedCategory}
-                    </span>
-                  </div>
-                ) : (
-                  <Select
-                    onValueChange={(value) =>
-                      handleSave(value as SavedCategory)
-                    }
-                    disabled={isSaving}
-                  >
-                    <SelectTrigger
-                      className={cn(
-                        'w-[160px]',
-                        isSaving && 'opacity-50 cursor-not-allowed'
-                      )}
-                    >
-                      <Bookmark className="h-4 w-4 mr-2" />
-                      <SelectValue placeholder="Save to..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="interested">Interested</SelectItem>
-                      <SelectItem value="applied">Applied</SelectItem>
-                      <SelectItem value="accepted">Accepted</SelectItem>
-                      <SelectItem value="rejected">Rejected</SelectItem>
-                    </SelectContent>
-                  </Select>
-                )}
+                <SaveOpportunitySelect savedCategory={savedCategory} isSaving={isSaving} onSave={handleSave} />
               </div>
             )}
           </div>

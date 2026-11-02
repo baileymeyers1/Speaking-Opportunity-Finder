@@ -3,20 +3,15 @@ import { Link, useNavigate, useLocation } from 'react-router-dom';
 import type { Opportunity, SavedCategory } from '../types';
 import { useAuth } from '../hooks/useAuth';
 import { useSaveOpportunity } from '../hooks/useSaveOpportunity';
+import { formatDate, isPastDate } from '../lib/dates';
+import { getDeadlineBadge, getQualityColor, getQualityLabel } from '../lib/opportunityDisplay';
+import { SaveOpportunityMenu } from './SaveOpportunityMenu';
 import { approximate, formatVerifiedAgo, isLowConfidence, LOW_CONFIDENCE_HINT } from '../utils/verification';
 import { cn } from '@/lib/utils';
 
 import { Card, CardHeader, CardContent, CardFooter } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import {
-  DropdownMenu,
-  DropdownMenuTrigger,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-} from '@/components/ui/dropdown-menu';
 import {
   Tooltip,
   TooltipTrigger,
@@ -29,8 +24,6 @@ import {
   Clock,
   DollarSign,
   Globe,
-  Bookmark,
-  BookmarkCheck,
   ExternalLink,
   Zap,
   Star,
@@ -41,66 +34,6 @@ interface OpportunityCardProps {
   opportunity: Opportunity;
   showSave?: boolean;
   isPast?: boolean;
-}
-
-const SAVE_CATEGORIES = [
-  { value: 'interested', label: 'Interested' },
-  { value: 'applied', label: 'Applied' },
-  { value: 'accepted', label: 'Accepted' },
-  { value: 'rejected', label: 'Rejected' },
-] as const;
-
-function formatDate(dateString: string | null): string | null {
-  if (!dateString) return null;
-  return new Date(dateString).toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  });
-}
-
-function getDeadlineBadge(dateString: string | null): {
-  label: string;
-  variant: 'secondary' | 'destructive' | 'outline';
-  className?: string;
-} {
-  if (!dateString) {
-    return { label: 'No deadline', variant: 'secondary' };
-  }
-
-  const now = new Date();
-  const deadline = new Date(dateString);
-  const daysLeft = Math.ceil(
-    (deadline.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
-  );
-
-  if (daysLeft <= 0) {
-    return { label: 'Closed', variant: 'destructive' };
-  }
-  if (daysLeft <= 3) {
-    return { label: `${daysLeft}d left`, variant: 'destructive' };
-  }
-  if (daysLeft <= 7) {
-    return {
-      label: `${daysLeft}d left`,
-      variant: 'outline',
-      className: 'border-amber-400 bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-400 dark:border-amber-700',
-    };
-  }
-
-  return { label: formatDate(dateString)!, variant: 'secondary' };
-}
-
-function getQualityColor(score: number): string {
-  if (score >= 70) return 'bg-emerald-500';
-  if (score >= 40) return 'bg-amber-500';
-  return 'bg-red-500';
-}
-
-function getQualityLabel(score: number): string {
-  if (score >= 70) return 'High quality';
-  if (score >= 40) return 'Medium quality';
-  return 'Low quality';
 }
 
 export function OpportunityCard({ opportunity, showSave = true, isPast }: OpportunityCardProps) {
@@ -117,7 +50,7 @@ export function OpportunityCard({ opportunity, showSave = true, isPast }: Opport
   const eventDateIsApproximate = isLowConfidence(current, 'eventDate');
   const verifiedLabel = formatVerifiedAgo(current);
   const isLive = current.isLiveResult;
-  const isPastDeadline = isPast ?? (!!current.cfpDeadline && new Date(current.cfpDeadline) < new Date());
+  const isPastDeadline = isPast ?? isPastDate(current.cfpDeadline);
   const hasCompensation = !!current.compensationType;
   const hasQualityScore =
     current.qualityScore !== undefined && current.qualityScore !== null;
@@ -341,47 +274,7 @@ export function OpportunityCard({ opportunity, showSave = true, isPast }: Opport
         {/* Actions */}
         <div className="flex items-center gap-2">
           {showSave && (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  disabled={isSaving}
-                  className={cn(
-                    'h-8 px-2',
-                    savedCategory && 'text-primary'
-                  )}
-                >
-                  {savedCategory ? (
-                    <BookmarkCheck className="h-4 w-4" />
-                  ) : (
-                    <Bookmark className="h-4 w-4" />
-                  )}
-                  <span className="sr-only">
-                    {savedCategory ? `Saved as ${savedCategory}` : 'Save opportunity'}
-                  </span>
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuLabel>Save to...</DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                {SAVE_CATEGORIES.map((cat) => (
-                  <DropdownMenuItem
-                    key={cat.value}
-                    onClick={() => handleSave(cat.value)}
-                    className={cn(
-                      'cursor-pointer',
-                      savedCategory === cat.value && 'font-semibold text-primary'
-                    )}
-                  >
-                    {cat.label}
-                    {savedCategory === cat.value && (
-                      <span className="ml-auto text-xs text-primary">Saved</span>
-                    )}
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
+            <SaveOpportunityMenu savedCategory={savedCategory} isSaving={isSaving} onSave={handleSave} />
           )}
 
           <Button variant="default" size="sm" className="h-8" asChild>
