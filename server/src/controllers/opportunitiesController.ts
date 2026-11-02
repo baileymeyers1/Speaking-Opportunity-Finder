@@ -2,6 +2,17 @@ import { Request, Response, NextFunction } from 'express';
 import * as opportunityService from '../services/opportunityService.js';
 import * as liveSearchService from '../services/liveSearchService.js';
 import { AppError } from '../middleware/errorHandler.js';
+import type {
+  ApiResponse,
+  CompensationType,
+  FilterOptions,
+  Opportunity,
+  OpportunityFormat,
+  OpportunityWithDates,
+  OpportunitiesResponse,
+  SaveLiveOpportunityInput,
+  SerializableOpportunity,
+} from 'shared';
 
 /**
  * Build OpportunityFilters from raw query params.
@@ -136,12 +147,12 @@ export async function getOpportunities(
 
     // Deduplicate: exclude DB results that match live result URLs
     const liveUrls = new Set(liveResults.map((r) => r.applyUrl));
-    const dedupedDbItems = liveResults.length > 0
-      ? dbResults.items.filter((item: any) => !liveUrls.has(item.applyUrl))
+    const dedupedDbItems: OpportunityWithDates[] = liveResults.length > 0
+      ? dbResults.items.filter((item) => !liveUrls.has(item.applyUrl))
       : dbResults.items;
 
     // Convert live results to match the Opportunity response shape
-    const liveOpportunities = liveResults.map((r) => ({
+    const liveOpportunities: Opportunity[] = liveResults.map((r) => ({
       id: r.id,
       title: r.title,
       organization: r.organization,
@@ -150,9 +161,9 @@ export async function getOpportunities(
       isRemote: r.isRemote,
       eventDate: r.eventDate,
       cfpDeadline: r.cfpDeadline,
-      format: r.format,
+      format: r.format as OpportunityFormat,
       industries: r.industries,
-      compensationType: r.compensationType,
+      compensationType: r.compensationType as CompensationType | null,
       compensationAmount: r.compensationAmount,
       compensationDetails: r.compensationDetails,
       applyUrl: r.applyUrl,
@@ -167,7 +178,7 @@ export async function getOpportunities(
     }));
 
     // Combine and sort
-    const combined = [...liveOpportunities, ...dedupedDbItems] as any[];
+    const combined: SerializableOpportunity[] = [...liveOpportunities, ...dedupedDbItems];
     const sortBy = filters.sortBy || 'deadline';
 
     combined.sort((a, b) => {
@@ -182,14 +193,15 @@ export async function getOpportunities(
       return dateVal(a.cfpDeadline) - dateVal(b.cfpDeadline);
     });
 
-    res.json({
+    const payload: OpportunitiesResponse<SerializableOpportunity> = {
       success: true,
       data: {
         ...dbResults,
         items: combined,
         liveResultCount: liveResults.length,
       },
-    });
+    };
+    res.json(payload);
   } catch (error) {
     next(error);
   }
@@ -204,10 +216,8 @@ export async function getOpportunityById(
     const { id } = req.params;
     const opportunity = await opportunityService.getOpportunityById(id);
 
-    res.json({
-      success: true,
-      data: opportunity,
-    });
+    const payload: ApiResponse<OpportunityWithDates> = { success: true, data: opportunity };
+    res.json(payload);
   } catch (error) {
     next(error);
   }
@@ -226,25 +236,18 @@ export async function getFilterOptions(
       opportunityService.getCompensationStats(),
     ]);
 
-    res.json({
+    const payload: ApiResponse<FilterOptions> = {
       success: true,
       data: {
         locations,
         industries,
         compensationRange,
         compensationStats,
-        formats: [
-          'conference',
-          'meetup',
-          'podcast',
-          'webinar',
-          'workshop',
-          'panel',
-          'other',
-        ],
+        formats: ['conference', 'meetup', 'podcast', 'webinar', 'workshop', 'panel', 'other'],
         compensationTypes: ['paid', 'travel', 'exposure', 'honorarium'],
       },
-    });
+    };
+    res.json(payload);
   } catch (error) {
     next(error);
   }
@@ -320,7 +323,7 @@ export async function saveLiveResult(
       qualityScore,
       applyUrl,
       liveSearchUrl,
-    } = req.body;
+    } = req.body as SaveLiveOpportunityInput;
 
     if (!title || !applyUrl) {
       throw new AppError(400, 'Title and applyUrl are required');
@@ -329,7 +332,8 @@ export async function saveLiveResult(
     // Check if this URL already exists in the database
     const existing = await opportunityService.findByApplyUrl(applyUrl);
     if (existing) {
-      res.json({ success: true, data: existing });
+      const payload: ApiResponse<OpportunityWithDates> = { success: true, data: existing };
+      res.json(payload);
       return;
     }
 
@@ -352,7 +356,8 @@ export async function saveLiveResult(
       sourceUrl: liveSearchUrl || applyUrl,
     });
 
-    res.status(201).json({ success: true, data: opportunity });
+    const payload: ApiResponse<OpportunityWithDates> = { success: true, data: opportunity };
+    res.status(201).json(payload);
   } catch (error) {
     next(error);
   }

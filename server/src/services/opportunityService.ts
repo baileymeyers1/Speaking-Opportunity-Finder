@@ -2,6 +2,7 @@ import { prisma } from '../lib/prisma.js';
 import { Prisma } from '@prisma/client';
 import { AppError } from '../middleware/errorHandler.js';
 import { parseDateConfidence } from './extraction.js';
+import type { CompensationType, OpportunityFormat, OpportunityWithDates } from 'shared';
 
 export interface OpportunityFilters {
   search?: string;
@@ -94,9 +95,12 @@ function transformOpportunity(opp: {
   createdAt: Date;
   updatedAt: Date;
   dateConfidence?: string | null;
-}) {
+}): OpportunityWithDates {
+  // The database stores these as plain strings; the wire type narrows them.
   return {
     ...opp,
+    format: opp.format as OpportunityFormat,
+    compensationType: opp.compensationType as CompensationType | null,
     industries: parseJsonArray(opp.industries),
     dateConfidence: parseDateConfidence(opp.dateConfidence),
   };
