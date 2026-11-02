@@ -1,6 +1,7 @@
 import { prisma } from '../lib/prisma.js';
 import { Prisma } from '@prisma/client';
 import { AppError } from '../middleware/errorHandler.js';
+import { parseDateConfidence } from './extraction.js';
 
 export interface OpportunityFilters {
   search?: string;
@@ -92,10 +93,12 @@ function transformOpportunity(opp: {
   sourceUrl: string | null;
   createdAt: Date;
   updatedAt: Date;
+  dateConfidence?: string | null;
 }) {
   return {
     ...opp,
     industries: parseJsonArray(opp.industries),
+    dateConfidence: parseDateConfidence(opp.dateConfidence),
   };
 }
 

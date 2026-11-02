@@ -47,6 +47,9 @@ model Opportunity {
   enrichmentClaimedAt DateTime?
   isClosed            Boolean            @default(false)
   isRelevant          Boolean            @default(true)
+  verifiedAt          DateTime?
+  verificationError   String?
+  dateConfidence      String?
   savedBy             SavedOpportunity[]
 
   @@index([cfpDeadline])
@@ -63,6 +66,8 @@ model Opportunity {
   @@index([cfpDeadline, source])
   @@index([isClosed, isRelevant])
   @@index([enrichmentStatus, enrichmentAttempts, enrichmentClaimedAt])
+  @@index([verifiedAt])
+  @@index([cfpDeadline, verifiedAt])
 }
 
 model SavedOpportunity {

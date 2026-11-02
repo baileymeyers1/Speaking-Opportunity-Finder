@@ -1,4 +1,5 @@
 import type { PrismaClient } from '@prisma/client';
+import { verificationCandidates } from './verification.js';
 
 /**
  * Daily Claude budget and per-row claims for the enrichment worker.
@@ -103,4 +104,36 @@ export async function releaseClaim(prisma: PrismaClient, id: string): Promise<vo
     where: { id },
     data: { enrichmentClaimedAt: null, enrichmentAttempts: { decrement: 1 } },
   });
+}
+
+/**
+ * Atomically claim the next row due for re-verification (see verification.ts
+ * for the priority order). Uses the same `enrichmentClaimedAt` lock as
+ * enrichment, without touching the attempt counter.
+ */
+export async function claimNextForVerification(prisma: PrismaClient, now: Date = new Date()) {
+  for (const candidate of verificationCandidates(now)) {
+    const rows = await prisma.opportunity.findMany({
+      where: candidate.where,
+      orderBy: candidate.orderBy,
+      take: 5,
+    });
+
+    for (const row of rows) {
+      const claimed = await prisma.opportunity.updateMany({
+        where: { id: row.id, enrichmentClaimedAt: row.enrichmentClaimedAt },
+        data: { enrichmentClaimedAt: now },
+      });
+      if (claimed.count === 1) {
+        return { ...row, enrichmentClaimedAt: now, verificationReason: candidate.label };
+      }
+    }
+  }
+
+  return null;
+}
+
+/** Undo a verification claim (used when the budget is exhausted). */
+export async function releaseVerificationClaim(prisma: PrismaClient, id: string): Promise<void> {
+  await prisma.opportunity.update({ where: { id }, data: { enrichmentClaimedAt: null } });
 }
