@@ -312,6 +312,21 @@ export function OpportunityCard({ opportunity, showSave = true, isPast }: Opport
               <span className="truncate capitalize">{compensationLabel}</span>
             </div>
           )}
+
+          {/* Last checked against the event page */}
+          {verifiedLabel && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div className="flex items-center gap-1.5 text-muted-foreground cursor-default">
+                  <ShieldCheck className="h-3.5 w-3.5 flex-shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
+                  <span className="truncate">{verifiedLabel}</span>
+                </div>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Dates and status were checked against the event page on {formatDate(current.verifiedAt!)}.</p>
+              </TooltipContent>
+            </Tooltip>
+          )}
         </div>
 
         {/* Industry tags -- show ALL, wrap naturally */}
@@ -331,21 +346,8 @@ export function OpportunityCard({ opportunity, showSave = true, isPast }: Opport
       </CardContent>
 
       <CardFooter className="justify-between gap-2">
-        {/* Quality score and verification */}
-        <div className="flex items-center gap-3 min-w-0">
-          {verifiedLabel && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <span className="flex items-center gap-1 text-xs text-muted-foreground cursor-default whitespace-nowrap">
-                  <ShieldCheck className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
-                  {verifiedLabel}
-                </span>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>Dates and status were checked against the event page on {formatDate(current.verifiedAt!)}.</p>
-              </TooltipContent>
-            </Tooltip>
-          )}
+        {/* Quality score indicator */}
+        <div className="flex items-center">
           {hasQualityScore ? (
             <Tooltip>
               <TooltipTrigger asChild>
