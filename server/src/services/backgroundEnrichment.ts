@@ -146,21 +146,8 @@ async function processNextUnenriched(): Promise<void> {
       const isClosed = enriched.isClosed === true;
       const isRelevant = enriched.isRelevant !== false;
 
-      const mergedResult: ScraperResult = {
-        ...scraperResult,
-        title: enriched.cleanTitle || scraperResult.title,
-        organization: enriched.cleanOrganization || scraperResult.organization,
-        location: enriched.location || scraperResult.location,
-        isRemote: enriched.isRemote ?? scraperResult.isRemote,
-        eventDate: enriched.eventDate || scraperResult.eventDate,
-        cfpDeadline: enriched.cfpDeadline || scraperResult.cfpDeadline,
-        industries: enriched.industries?.length ? enriched.industries : scraperResult.industries,
-        compensationType: enriched.compensationType || scraperResult.compensationType,
-        compensationAmount: enriched.compensationAmount || scraperResult.compensationAmount,
-        compensationDetails: enriched.compensationDetails || scraperResult.compensationDetails,
-        isClosed,
-        isRelevant,
-      };
+      // enrichOpportunity already merged the extraction into the row (extraction.ts rules).
+      const mergedResult: ScraperResult = { ...enriched, isClosed, isRelevant };
 
       await prisma.opportunity.update({
         where: { id: opportunity.id },
