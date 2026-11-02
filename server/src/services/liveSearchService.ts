@@ -1,6 +1,6 @@
 import { config } from '../config/index.js';
 import { randomUUID } from 'crypto';
-import { Prisma } from '@prisma/client';
+import type { Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma.js';
 import { cleanTitle, extractOrganization, normalizeIndustries, decodeHtmlEntities, isJunkResult } from './dataNormalization.js';
 import {
@@ -271,7 +271,6 @@ function extractEventDate(content: string): string | null {
     const precedingText = content.substring(Math.max(0, rangeMatch.index - 60), rangeMatch.index).toLowerCase();
     const isDeadlineContext = /(?:deadline|submit|due|closes?|proposal|abstract)/.test(precedingText);
     if (!isDeadlineContext) {
-      const dateStr = rangeMatch[2] || rangeMatch[1];
       const parsed = new Date(`${rangeMatch[1]}, ${rangeMatch[2].replace(/^(\d{1,2})/, '')}`);
       // Try parsing the end date of the range
       const fullStr = `${rangeMatch[1].replace(/\d+$/, '')}${rangeMatch[2]}`;

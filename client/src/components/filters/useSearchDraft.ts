@@ -12,7 +12,9 @@ export function useSearchDraft(committed: string, onCommit: (value: string) => v
   const [draft, setDraft] = useState(committed);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const latestCommit = useRef(onCommit);
-  latestCommit.current = onCommit;
+  useEffect(() => {
+    latestCommit.current = onCommit;
+  });
 
   useEffect(() => {
     if (timer.current === null) setDraft(committed);

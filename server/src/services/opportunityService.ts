@@ -62,7 +62,9 @@ function computeSearchRelevance(opportunity: any, query: string): number {
   try {
     const industries = JSON.parse(opportunity.industries || '[]');
     if (industries.some((ind: string) => ind.toLowerCase().includes(q))) score += 40;
-  } catch {}
+  } catch {
+    // Malformed JSON contributes nothing to the score.
+  }
 
   // Description match (weakest — any tech conf could mention "entertainment" in passing)
   const desc = (opportunity.description || '').toLowerCase();

@@ -33,7 +33,7 @@ export function ForgotPassword() {
     <div className="max-w-md mx-auto mt-8">
       <Card>
         <CardHeader className="text-center">
-          <CardTitle className="text-2xl">Forgot your password?</CardTitle>
+          <CardTitle className="text-2xl" role="heading" aria-level={1}>Forgot your password?</CardTitle>
           <CardDescription>
             Enter your email and we'll send you a link to reset your password
           </CardDescription>

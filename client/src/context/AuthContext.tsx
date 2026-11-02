@@ -1,10 +1,4 @@
-import {
-  createContext,
-  useState,
-  useEffect,
-  useCallback,
-  type ReactNode,
-} from 'react';
+import { createContext, useState, useEffect, type ReactNode } from 'react';
 import { apiClient } from '../api/client';
 import type { User } from '../types';
 
@@ -35,22 +29,25 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  const fetchUser = useCallback(async () => {
-    try {
-      const response = await apiClient.get<User>('/auth/me');
-      if (response.data) {
-        setUser(response.data);
-      }
-    } catch {
-      // No valid cookie — user is not authenticated
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
+  // Check the session cookie once on mount; a cancelled check (StrictMode
+  // remount, provider unmount) must not touch state afterwards.
   useEffect(() => {
-    fetchUser();
-  }, [fetchUser]);
+    let active = true;
+    apiClient
+      .get<User>('/auth/me')
+      .then((response) => {
+        if (active && response.data) setUser(response.data);
+      })
+      .catch(() => {
+        // No valid cookie — user is not authenticated
+      })
+      .finally(() => {
+        if (active) setIsLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const login = async (email: string, password: string) => {
     const response = await apiClient.post<AuthCookieResponse>('/auth/login', {

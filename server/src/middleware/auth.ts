@@ -1,4 +1,4 @@
-import { Request, Response, NextFunction } from 'express';
+import { type Request, type Response, type NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { config } from '../config/index.js';
 import { AppError } from './errorHandler.js';
@@ -9,6 +9,8 @@ export interface JwtPayload {
 }
 
 declare global {
+  // Express augments its Request type through this namespace; there is no module form.
+  // eslint-disable-next-line @typescript-eslint/no-namespace
   namespace Express {
     interface Request {
       user?: JwtPayload;

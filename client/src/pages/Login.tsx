@@ -47,7 +47,7 @@ export function Login() {
     <div className="max-w-md mx-auto mt-8">
       <Card>
         <CardHeader className="text-center">
-          <CardTitle className="text-2xl">Log in</CardTitle>
+          <CardTitle className="text-2xl" role="heading" aria-level={1}>Log in</CardTitle>
           <CardDescription>
             Enter your credentials to access your account
           </CardDescription>

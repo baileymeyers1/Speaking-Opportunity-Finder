@@ -11,6 +11,7 @@ import {
   filtersToSearchParams,
   savedSearchToFilters,
   searchParamsToFilters,
+  serializeFilters,
   type BrowseFilters,
 } from '../filters/serialize';
 import { useAuth } from '../hooks/useAuth';
@@ -46,7 +47,9 @@ export function Home() {
   const { filters, page, updateFilters, setPage } = useBrowseFilters();
   const query = useOpportunities(filters);
   const liveSearch = useLiveSearch(filters);
-  const [rateLimitDismissed, setRateLimitDismissed] = useState(false);
+  // The dismissal is remembered per filter set, so a new search shows the notice again.
+  const [rateLimitDismissedFor, setRateLimitDismissedFor] = useState<string | null>(null);
+  const rateLimitDismissed = rateLimitDismissedFor === serializeFilters(filters);
   const [bannerDismissed, setBannerDismissed] = useState(
     () => sessionStorage.getItem(BANNER_DISMISSED_KEY) === 'true'
   );
@@ -72,10 +75,6 @@ export function Home() {
       setPage(data.totalPages);
     }
   }, [data, page, setPage]);
-
-  useEffect(() => {
-    setRateLimitDismissed(false);
-  }, [filters]);
 
   const handleFiltersChange = (next: OpportunityFilters) => updateFilters(() => ({ ...next, page: 1 }));
   const handleClearFilters = () => updateFilters(() => ({}));
@@ -176,7 +175,7 @@ export function Home() {
               liveSearchFailed={liveSearchFailed}
               onClearLiveResults={() => query.refetch()}
               onDismissRateLimit={() => {
-                setRateLimitDismissed(true);
+                setRateLimitDismissedFor(serializeFilters(filters));
                 liveSearch.reset();
               }}
               onDismissLiveError={() => liveSearch.reset()}

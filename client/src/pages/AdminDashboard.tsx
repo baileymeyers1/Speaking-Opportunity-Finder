@@ -1,5 +1,4 @@
-import { useState, useEffect } from 'react';
-import { apiClient } from '../api/client';
+import { useEffect } from 'react';
 import { AdminLoadingSkeleton } from '../components/admin/AdminLoadingSkeleton';
 import { DatabaseStatsCard } from '../components/admin/DatabaseStatsCard';
 import { EnrichmentCard } from '../components/admin/EnrichmentCard';
@@ -8,54 +7,33 @@ import { ScraperHealthCard } from '../components/admin/ScraperHealthCard';
 import { ScraperRunsPanel } from '../components/admin/ScraperRunsPanel';
 import { SourceQualityCard } from '../components/admin/SourceQualityCard';
 import { StatCard } from '../components/admin/StatCard';
-import type { AnalyticsData } from '../components/admin/types';
+import { useAdminAnalytics } from '../hooks/useAdminAnalytics';
 import { useAuth } from '../hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
 
 import { Database, TrendingUp, Activity, AlertCircle } from 'lucide-react';
 
 export function AdminDashboard() {
-  const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const { user, isLoading: authLoading } = useAuth();
   const navigate = useNavigate();
-  const isAdmin = user?.isAdmin;
+  const isAdmin = Boolean(user?.isAdmin);
 
   useEffect(() => {
     // Wait for the session cookie check; redirecting earlier bounces a reload to /login.
     if (authLoading) return;
-
     if (!user) {
       navigate('/login');
       return;
     }
-
     if (!isAdmin) {
       navigate('/');
-      return;
     }
-
-    fetchAnalytics();
-    const interval = setInterval(fetchAnalytics, 60000);
-
-    return () => clearInterval(interval);
   }, [authLoading, user, isAdmin, navigate]);
 
-  async function fetchAnalytics() {
-    try {
-      const response = await apiClient.get<AnalyticsData>('/admin/analytics');
-      if (response.data) {
-        setAnalytics(response.data);
-        setError(null);
-      }
-    } catch (err) {
-      setError('Failed to load analytics data');
-      console.error(err);
-    } finally {
-      setIsLoading(false);
-    }
-  }
+  const { data: analytics, isPending: isLoading, error: loadError } = useAdminAnalytics({
+    enabled: !authLoading && isAdmin,
+  });
+  const error = loadError ? 'Failed to load analytics data' : null;
 
   if (authLoading || isLoading) {
     return <AdminLoadingSkeleton />;

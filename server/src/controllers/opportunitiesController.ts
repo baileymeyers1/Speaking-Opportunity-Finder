@@ -1,4 +1,4 @@
-import { Request, Response, NextFunction } from 'express';
+import { type Request, type Response, type NextFunction } from 'express';
 import * as opportunityService from '../services/opportunityService.js';
 import * as liveSearchService from '../services/liveSearchService.js';
 import { AppError } from '../middleware/errorHandler.js';
