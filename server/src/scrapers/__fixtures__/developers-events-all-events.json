@@ -1,0 +1,663 @@
+[
+ {
+  "name": "Voice Agents Forum",
+  "date": [
+   1793836800000
+  ],
+  "hyperlink": "https://luma.com/voiceagentssf",
+  "location": "San Francisco, CA (USA) & Online",
+  "city": "San Francisco, CA",
+  "country": "USA",
+  "misc": "",
+  "cfp": {
+   "link": "https://aaif.live/events/voiceagentssf/talks",
+   "until": "05-November-2026",
+   "untilDate": 1793836800000
+  },
+  "closedCaptions": false,
+  "scholarship": false,
+  "sponsoringBadge": false,
+  "status": "open",
+  "tags": [
+   {
+    "key": "tech",
+    "value": "voice-agents"
+   },
+   {
+    "key": "topic",
+    "value": "ai"
+   }
+  ]
+ },
+ {
+  "name": "Cloud & Code Oost 2026",
+  "date": [
+   1794441600000
+  ],
+  "hyperlink": "https://cloudcodeoost.nl",
+  "location": "Doetinchem (Netherlands)",
+  "city": "Doetinchem",
+  "country": "Netherlands",
+  "misc": "",
+  "cfp": {
+   "link": "https://sessionize.com/cloudcodeoost/",
+   "until": "22-September-2027",
+   "untilDate": 1821571200000,
+   "durations": [
+    "talk:20",
+    "talk:45"
+   ]
+  },
+  "closedCaptions": false,
+  "scholarship": false,
+  "sponsoringBadge": false,
+  "status": "open",
+  "tags": [
+   {
+    "key": "language",
+    "value": "dutch"
+   },
+   {
+    "key": "tech",
+    "value": "cloud"
+   },
+   {
+    "key": "topic",
+    "value": "cloud"
+   }
+  ]
+ },
+ {
+  "name": "ffconf",
+  "date": [
+   1794528000000
+  ],
+  "hyperlink": "https://2026.ffconf.org",
+  "location": "Brighton (UK)",
+  "city": "Brighton",
+  "country": "UK",
+  "misc": "",
+  "cfp": {
+   "link": "https://docs.google.com/forms/d/e/1FAIpQLSfp1CznTTQey3bB0ALMq8OJpFZkWqrevlBhvAvWlRBlo4c6xg/viewform",
+   "until": "13-November-2026",
+   "untilDate": 1794528000000
+  },
+  "closedCaptions": false,
+  "scholarship": false,
+  "sponsoringBadge": false,
+  "status": "open",
+  "tags": [
+   {
+    "key": "tech",
+    "value": "web"
+   },
+   {
+    "key": "topic",
+    "value": "frontend"
+   },
+   {
+    "key": "language",
+    "value": "english"
+   }
+  ]
+ },
+ {
+  "name": "PyCon Hong Kong 2026",
+  "date": [
+   1794614400000,
+   1794700800000
+  ],
+  "hyperlink": "https://pycon.hk/",
+  "location": "Hong Kong (Hong Kong)",
+  "city": "Hong Kong",
+  "country": "Hong Kong",
+  "misc": "",
+  "cfp": {
+   "link": "https://pretalx.com/pyconhk2026/cfp",
+   "until": "14-November-2026",
+   "untilDate": 1794614400000
+  },
+  "sponsoring": "https://pycon.hk/2026/en/sponsorships/",
+  "closedCaptions": false,
+  "scholarship": false,
+  "sponsoringBadge": true,
+  "status": "open",
+  "tags": [
+   {
+    "key": "language",
+    "value": "english"
+   },
+   {
+    "key": "tech",
+    "value": "python"
+   },
+   {
+    "key": "topic",
+    "value": "python"
+   },
+   {
+    "key": "topic",
+    "value": "open-source"
+   }
+  ]
+ },
+ {
+  "name": "HalfStack Vienna",
+  "date": [
+   1794787200000
+  ],
+  "hyperlink": "https://halfstackconf.com/vienna",
+  "location": "Vienna (Austria)",
+  "city": "Vienna",
+  "country": "Austria",
+  "misc": "",
+  "cfp": {
+   "link": "https://halfstackconf.com/cfp",
+   "until": "16-November-2026",
+   "untilDate": 1794787200000
+  },
+  "sponsoring": "https://halfstackconf.com/vienna/spon",
+  "closedCaptions": false,
+  "scholarship": false,
+  "sponsoringBadge": true,
+  "status": "open",
+  "tags": [
+   {
+    "key": "language",
+    "value": "english"
+   },
+   {
+    "key": "tech",
+    "value": "software"
+   },
+   {
+    "key": "topic",
+    "value": "architecture"
+   }
+  ],
+  "attendees": 200
+ },
+ {
+  "name": "PIKSEL26",
+  "date": [
+   1795046400000,
+   1795305600000
+  ],
+  "hyperlink": "https://piksel.no/",
+  "location": "Bergen (Norway)",
+  "city": "Bergen",
+  "country": "Norway",
+  "misc": "",
+  "cfp": {
+   "link": "https://pretalx.com/piksel26/cfp",
+   "until": "05-November-2026",
+   "untilDate": 1793836800000
+  },
+  "sponsoring": "https://piksel.no/festival/p12/xpartners",
+  "closedCaptions": false,
+  "scholarship": false,
+  "sponsoringBadge": true,
+  "status": "open",
+  "tags": [
+   {
+    "key": "language",
+    "value": "norwegian"
+   },
+   {
+    "key": "topic",
+    "value": "technology"
+   },
+   {
+    "key": "topic",
+    "value": "innovation"
+   },
+   {
+    "key": "topic",
+    "value": "conference"
+   }
+  ]
+ },
+ {
+  "name": "ARIA Community",
+  "date": [
+   1795132800000
+  ],
+  "hyperlink": "https://ariacommunity.com/",
+  "location": "Online",
+  "city": "Online",
+  "country": "Online",
+  "misc": "",
+  "cfp": {
+   "link": "https://sessionize.com/ARIACommunity/",
+   "until": "20-November-2026",
+   "untilDate": 1795132800000
+  },
+  "closedCaptions": false,
+  "scholarship": false,
+  "sponsoringBadge": false,
+  "status": "open",
+  "tags": [
+   {
+    "key": "language",
+    "value": "english"
+   },
+   {
+    "key": "tech",
+    "value": "accessibility"
+   },
+   {
+    "key": "topic",
+    "value": "web"
+   }
+  ]
+ },
+ {
+  "name": "PyDay SDQ 2026",
+  "date": [
+   1795132800000,
+   1795219200000
+  ],
+  "hyperlink": "https://pyday.do",
+  "location": "Santo Domingo (Dominican Republic)",
+  "city": "Santo Domingo",
+  "country": "Dominican Republic",
+  "misc": "",
+  "cfp": {
+   "link": "https://www.papercall.io/pyday-sdq-2026",
+   "until": "15-November-2026",
+   "untilDate": 1794700800000
+  },
+  "closedCaptions": false,
+  "scholarship": false,
+  "sponsoringBadge": false,
+  "status": "open",
+  "tags": [
+   {
+    "key": "tech",
+    "value": "python"
+   },
+   {
+    "key": "topic",
+    "value": "developer-conference"
+   },
+   {
+    "key": "language",
+    "value": "spanish"
+   }
+  ]
+ },
+ {
+  "name": "DevFest Lafia 2026",
+  "date": [
+   1795219200000
+  ],
+  "hyperlink": "https://gdg.community.dev/events/details/google-gdg-lafia-presents-devfest-lafia-2026/",
+  "location": "Lafia (Nigeria)",
+  "city": "Lafia",
+  "country": "Nigeria",
+  "misc": "",
+  "cfp": {
+   "link": "https://sessionize.com/devfest-lafia-2026/",
+   "until": "10-November-2026",
+   "untilDate": 1794268800000
+  },
+  "closedCaptions": false,
+  "scholarship": false,
+  "sponsoringBadge": false,
+  "status": "open",
+  "tags": [
+   {
+    "key": "language",
+    "value": "english"
+   },
+   {
+    "key": "tech",
+    "value": "android"
+   },
+   {
+    "key": "topic",
+    "value": "google"
+   },
+   {
+    "key": "topic",
+    "value": "developer"
+   }
+  ]
+ },
+ {
+  "name": "Damanhour DevFest 2026",
+  "date": [
+   1795219200000
+  ],
+  "hyperlink": "https://gdg.community.dev/events/details/google-gdg-damanhour-presents-damanhour-devfest-2026/",
+  "location": "Damanhour (Egypt)",
+  "city": "Damanhour",
+  "country": "Egypt",
+  "misc": "",
+  "cfp": {
+   "link": "https://app.advocu.com/events/6a52bf90027053c42dd906e3",
+   "until": "05-November-2026",
+   "untilDate": 1793836800000
+  },
+  "closedCaptions": false,
+  "scholarship": false,
+  "sponsoringBadge": false,
+  "status": "open",
+  "tags": [
+   {
+    "key": "language",
+    "value": "english"
+   }
+  ]
+ },
+ {
+  "name": "HalfStack Phoenix",
+  "date": [
+   1801785600000
+  ],
+  "hyperlink": "https://halfstackconf.com/phoenix",
+  "location": "Gilbert, AZ (USA)",
+  "city": "Gilbert, AZ",
+  "country": "USA",
+  "misc": "",
+  "cfp": {
+   "link": "https://halfstackconf.com/cfp",
+   "until": "05-February-2027",
+   "untilDate": 1801785600000
+  },
+  "closedCaptions": false,
+  "scholarship": false,
+  "sponsoringBadge": false,
+  "status": "open",
+  "tags": [
+   {
+    "key": "language",
+    "value": "english"
+   },
+   {
+    "key": "tech",
+    "value": "software"
+   },
+   {
+    "key": "topic",
+    "value": "developer"
+   }
+  ],
+  "attendees": 160
+ },
+ {
+  "name": "Debezium Community Showcase",
+  "date": [
+   1796083200000
+  ],
+  "hyperlink": "https://debezium.io",
+  "location": "Online",
+  "city": "Online",
+  "country": "Online",
+  "misc": "",
+  "cfp": {
+   "link": "https://sessionize.com/debezium-community-showcase/",
+   "until": "31-December-2026",
+   "untilDate": 1798675200000
+  },
+  "closedCaptions": false,
+  "scholarship": false,
+  "sponsoringBadge": false,
+  "status": "open",
+  "tags": [
+   {
+    "key": "tech",
+    "value": "database"
+   },
+   {
+    "key": "topic",
+    "value": "open-source"
+   },
+   {
+    "key": "language",
+    "value": "english"
+   }
+  ]
+ },
+ {
+  "name": "Cloud Identity Summit '26",
+  "date": [
+   1793664000000
+  ],
+  "hyperlink": "https://www.identitysummit.cloud/",
+  "location": "Frankfurt (Germany)",
+  "city": "Frankfurt",
+  "country": "Germany",
+  "misc": "",
+  "cfp": {
+   "link": "https://sessionize.com/cloud-identity-summit-26",
+   "until": "25-May-2026",
+   "untilDate": 1779667200000,
+   "durations": [
+    "talk:50"
+   ]
+  },
+  "closedCaptions": false,
+  "scholarship": false,
+  "sponsoringBadge": false,
+  "status": "open",
+  "tags": [
+   {
+    "key": "tech",
+    "value": "cloud"
+   },
+   {
+    "key": "topic",
+    "value": "identity"
+   },
+   {
+    "key": "language",
+    "value": "german"
+   }
+  ]
+ },
+ {
+  "name": "S2N: Storage Server Network",
+  "date": [
+   1793664000000,
+   1793750400000
+  ],
+  "hyperlink": "https://s2n.heise.de",
+  "location": "Berlin (Germany)",
+  "city": "Berlin",
+  "country": "Germany",
+  "misc": "",
+  "cfp": {
+   "link": "https://s2n.heise.de/cfp.php",
+   "until": "04-May-2026",
+   "untilDate": 1777852800000,
+   "durations": [
+    "talk:40",
+    "talk:70"
+   ]
+  },
+  "closedCaptions": false,
+  "scholarship": false,
+  "sponsoringBadge": false,
+  "status": "open",
+  "tags": [
+   {
+    "key": "tech",
+    "value": "storage"
+   },
+   {
+    "key": "topic",
+    "value": "networking"
+   }
+  ]
+ },
+ {
+  "name": "The AI Conf",
+  "date": [
+   1793664000000,
+   1793750400000
+  ],
+  "hyperlink": "https://theconf.ai/",
+  "location": "Barcelona (Spain)",
+  "city": "Barcelona",
+  "country": "Spain",
+  "misc": "",
+  "cfp": {
+   "link": "https://theconf.ai/call-for-papers",
+   "until": "30-September-2026",
+   "untilDate": 1790726400000,
+   "durations": [
+    "talk:40"
+   ]
+  },
+  "sponsoring": "https://theconf.ai/become-a-sponsor",
+  "closedCaptions": false,
+  "scholarship": false,
+  "sponsoringBadge": true,
+  "status": "open",
+  "tags": [
+   {
+    "key": "tech",
+    "value": "artificial-intelligence"
+   },
+   {
+    "key": "language",
+    "value": "spanish"
+   }
+  ],
+  "attendees": 800
+ },
+ {
+  "name": "Humanoid Robots Summit North America 2026",
+  "date": [
+   1793664000000,
+   1793750400000
+  ],
+  "hyperlink": "https://acgrobotus.com/",
+  "location": "Chicago, IL (USA)",
+  "city": "Chicago, IL",
+  "country": "USA",
+  "misc": "",
+  "cfp": {},
+  "closedCaptions": false,
+  "scholarship": false,
+  "sponsoringBadge": false,
+  "status": "open",
+  "tags": [
+   {
+    "key": "topic",
+    "value": "ai"
+   },
+   {
+    "key": "topic",
+    "value": "robotics"
+   },
+   {
+    "key": "topic",
+    "value": "technology"
+   },
+   {
+    "key": "tech",
+    "value": "manufacturing"
+   }
+  ],
+  "attendees": 500
+ },
+ {
+  "name": "Open Source in Finance Forum New York",
+  "date": [
+   1793750400000,
+   1793836800000
+  ],
+  "hyperlink": "https://events.linuxfoundation.org/open-source-finance-forum-new-york/",
+  "location": "New York, NY (USA)",
+  "city": "New York, NY",
+  "country": "USA",
+  "misc": "",
+  "cfp": {},
+  "closedCaptions": false,
+  "scholarship": false,
+  "sponsoringBadge": false,
+  "status": "open",
+  "tags": [
+   {
+    "key": "tech",
+    "value": "finance"
+   },
+   {
+    "key": "topic",
+    "value": "open-source"
+   },
+   {
+    "key": "topic",
+    "value": "technology"
+   },
+   {
+    "key": "language",
+    "value": "english"
+   }
+  ]
+ },
+ {
+  "name": "Nerdearla Madrid",
+  "date": [
+   1793750400000,
+   1793923200000
+  ],
+  "hyperlink": "https://nerdearla.com/en/sp/",
+  "location": "Madrid (Spain)",
+  "city": "Madrid",
+  "country": "Spain",
+  "misc": "",
+  "cfp": {},
+  "closedCaptions": false,
+  "scholarship": false,
+  "sponsoringBadge": false,
+  "status": "open",
+  "tags": [
+   {
+    "key": "tech",
+    "value": "python"
+   },
+   {
+    "key": "topic",
+    "value": "data"
+   },
+   {
+    "key": "topic",
+    "value": "open-source"
+   },
+   {
+    "key": "language",
+    "value": "spanish"
+   }
+  ]
+ },
+ {
+  "name": "Unlock Your Brain #UYBHYS26",
+  "date": [
+   1793923200000,
+   1794009600000
+  ],
+  "hyperlink": "https://unlockyourbrain.bzh/en/",
+  "location": "Brest (France)",
+  "city": "Brest",
+  "country": "France",
+  "misc": "",
+  "cfp": {
+   "link": "https://pretalx.com/uybhys26/cfp",
+   "until": "Closed",
+   "untilDate": null
+  },
+  "closedCaptions": false,
+  "scholarship": false,
+  "sponsoringBadge": false,
+  "status": "open",
+  "tags": [
+   {
+    "key": "language",
+    "value": "french"
+   }
+  ]
+ }
+]

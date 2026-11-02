@@ -1,90 +1,146 @@
-import type { ScraperResult } from './index.js';
+import type { ScraperResult } from './qualityScore.js';
+import { normalizeIndustries } from '../services/dataNormalization.js';
+import { fetchWithTimeout, startOfUtcDay } from './lib/html.js';
 
-interface DeveloperEvent {
-  name?: string;
-  url?: string;
-  cfpUrl?: string;
-  city?: string;
-  country?: string;
-  online?: boolean;
-  startDate?: string;
-  endDate?: string;
-  cfpEndDate?: string;
-  cfpStartDate?: string;
-  tags?: string[];
+/**
+ * developers.events publishes its whole dataset as JSON. all-events.json holds
+ * every conference, with an embedded `cfp` object for those that run a call
+ * for speakers. all-cfps.json is the same CFP data nested under `conf` but
+ * without tags/city/country, so only all-events.json is fetched.
+ *
+ * Live shape (verified): { name, date: [startMs, endMs?], hyperlink, location,
+ * city, country, status, tags: [{ key, value }], cfp: { link, until, untilDate } | {} }
+ */
+
+const EVENTS_URL = 'https://developers.events/all-events.json';
+const SOURCE = 'developers.events';
+const FETCH_TIMEOUT_MS = 30_000;
+
+interface DevelopersEventTag {
+  key?: string;
+  value?: string;
 }
 
-async function fetchJson<T>(url: string): Promise<T | null> {
+interface DevelopersEventCfp {
+  link?: string;
+  until?: string;
+  untilDate?: number | null;
+  durations?: string[];
+}
+
+interface DevelopersEvent {
+  name?: string;
+  date?: number[];
+  hyperlink?: string;
+  location?: string;
+  city?: string;
+  country?: string;
+  status?: string;
+  tags?: DevelopersEventTag[];
+  cfp?: DevelopersEventCfp | null;
+}
+
+function isAbsoluteHttpUrl(value: string | undefined): value is string {
+  if (!value) return false;
   try {
-    const response = await fetch(url, {
-      headers: { Accept: 'application/json' },
-    });
-    if (!response.ok) return null;
-    return (await response.json()) as T;
+    const url = new URL(value);
+    return url.protocol === 'http:' || url.protocol === 'https:';
   } catch {
-    return null;
+    return false;
   }
 }
 
-function toDate(value?: string): Date | undefined {
-  if (!value) return undefined;
-  const parsed = new Date(value);
-  if (isNaN(parsed.getTime())) return undefined;
-  return parsed;
+function describeDurations(durations: string[] | undefined): string | undefined {
+  const formats = (durations ?? [])
+    .map((entry) => entry.match(/^([a-z-]+):(\d+)$/i))
+    .filter((match): match is RegExpMatchArray => match !== null)
+    .map((match) => `${match[1]} (${match[2]} min)`);
+  return formats.length > 0 ? `Session formats: ${formats.join(', ')}.` : undefined;
+}
+
+function industriesFromTags(tags: DevelopersEventTag[] | undefined): string[] {
+  const values = (tags ?? [])
+    .filter((tag) => tag.key === 'topic' || tag.key === 'tech')
+    .map((tag) => tag.value ?? '');
+  const industries = normalizeIndustries(values);
+  return industries.length > 0 ? industries : ['technology'];
+}
+
+/**
+ * Map all-events.json to open calls for speakers: a CFP link and a CFP close
+ * date that has not passed (the close day itself still counts), for events
+ * that have not ended and were not cancelled. One result per CFP link, keeping
+ * the earliest-closing event when a link is shared (e.g. one CFP form for a
+ * multi-city series).
+ */
+export function parseDevelopersEvents(data: unknown, now: Date): ScraperResult[] {
+  if (!Array.isArray(data)) return [];
+  const today = startOfUtcDay(now).getTime();
+
+  const open: Array<{ event: DevelopersEvent; name: string; link: string; closesAt: number }> = [];
+  for (const event of data as DevelopersEvent[]) {
+    const name = event.name?.trim();
+    const cfp = event.cfp;
+    if (!name || !cfp || !isAbsoluteHttpUrl(cfp.link)) continue;
+    // untilDate is UTC midnight of the closing day; that day still counts as open.
+    if (typeof cfp.untilDate !== 'number' || cfp.untilDate < today) continue;
+    if (event.status && !['open', 'virtualized'].includes(event.status.toLowerCase())) continue;
+    const lastDay = event.date?.[event.date.length - 1];
+    if (typeof lastDay === 'number' && lastDay < today) continue;
+    open.push({ event, name, link: cfp.link, closesAt: cfp.untilDate });
+  }
+  open.sort((left, right) => left.closesAt - right.closesAt);
+
+  const results: ScraperResult[] = [];
+  const seenLinks = new Set<string>();
+
+  for (const { event, name, link, closesAt } of open) {
+    if (seenLinks.has(link)) continue;
+    seenLinks.add(link);
+
+    const rawLocation = event.location?.trim();
+    const isOnlineOnly = !rawLocation || /^online$/i.test(rawLocation);
+    const startMs = event.date?.[0];
+
+    results.push({
+      title: name,
+      organization: name,
+      description: describeDurations(event.cfp?.durations),
+      location: isOnlineOnly ? null : rawLocation,
+      isRemote:
+        isOnlineOnly || /online/i.test(rawLocation ?? '') || event.status?.toLowerCase() === 'virtualized',
+      eventDate: typeof startMs === 'number' ? new Date(startMs) : undefined,
+      cfpDeadline: new Date(closesAt),
+      format: 'conference',
+      industries: industriesFromTags(event.tags),
+      applyUrl: link,
+      source: SOURCE,
+      sourceUrl: isAbsoluteHttpUrl(event.hyperlink) ? event.hyperlink : link,
+    });
+  }
+
+  return results;
 }
 
 export async function scrapeDevelopersEvents(): Promise<ScraperResult[]> {
-  const results: ScraperResult[] = [];
-
   console.log('Fetching events from developers.events...');
-  const events = await fetchJson<DeveloperEvent[]>('https://developers.events/all-events.json');
-  const cfps = await fetchJson<DeveloperEvent[]>('https://developers.events/all-cfps.json');
-  console.log(`developers.events: ${events?.length || 0} events, ${cfps?.length || 0} CFPs fetched`);
-
-  if (!events && !cfps) return results;
-
-  const combined = [...(events || []), ...(cfps || [])];
-  const seen = new Set<string>();
-
-  for (const event of combined) {
-    const name = event.name?.trim();
-    if (!name) continue;
-
-    const applyUrl = event.cfpUrl || event.url;
-    if (!applyUrl || seen.has(applyUrl)) continue;
-
-    // Skip events with past CFP deadlines or past event dates
-    const now = new Date();
-    const cfpEnd = toDate(event.cfpEndDate);
-    const eventStart = toDate(event.startDate);
-    if (cfpEnd && cfpEnd < now) continue;
-    if (!cfpEnd && eventStart && eventStart < now) continue;
-
-    seen.add(applyUrl);
-
-    const location =
-      event.city && event.country ? `${event.city}, ${event.country}` : event.country || null;
-
-    const industries = event.tags && event.tags.length > 0 ? event.tags.slice(0, 5) : ['technology'];
-
-    results.push({
-      title: `${name} - Call for Speakers`,
-      organization: name,
-      description: `Developer conference listed on developers.events.`,
-      location,
-      isRemote: event.online || false,
-      eventDate: toDate(event.startDate),
-      cfpDeadline: toDate(event.cfpEndDate),
-      format: 'conference',
-      industries,
-      compensationType: undefined,
-      compensationDetails: undefined,
-      applyUrl,
-      source: 'developers.events',
-      sourceUrl: event.url || applyUrl,
+  try {
+    const response = await fetchWithTimeout(EVENTS_URL, {
+      timeoutMs: FETCH_TIMEOUT_MS,
+      headers: { Accept: 'application/json' },
     });
+    if (!response.ok) {
+      console.log(`developers.events returned ${response.status}, skipping...`);
+      return [];
+    }
+    const data: unknown = await response.json();
+    const results = parseDevelopersEvents(data, new Date());
+    console.log(
+      `developers.events: ${Array.isArray(data) ? data.length : 0} events, ${results.length} open calls for speakers`,
+    );
+    return results;
+  } catch (error) {
+    console.error('Error scraping developers.events:', error instanceof Error ? error.message : error);
+    return [];
   }
-
-  console.log(`Found ${results.length} current events from developers.events`);
-  return results;
 }
