@@ -18,11 +18,14 @@ export function AdminDashboard() {
   const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const { user } = useAuth();
+  const { user, isLoading: authLoading } = useAuth();
   const navigate = useNavigate();
   const isAdmin = user?.isAdmin;
 
   useEffect(() => {
+    // Wait for the session cookie check; redirecting earlier bounces a reload to /login.
+    if (authLoading) return;
+
     if (!user) {
       navigate('/login');
       return;
@@ -37,7 +40,7 @@ export function AdminDashboard() {
     const interval = setInterval(fetchAnalytics, 60000);
 
     return () => clearInterval(interval);
-  }, [user, navigate]);
+  }, [authLoading, user, isAdmin, navigate]);
 
   async function fetchAnalytics() {
     try {
@@ -54,7 +57,7 @@ export function AdminDashboard() {
     }
   }
 
-  if (isLoading) {
+  if (authLoading || isLoading) {
     return <AdminLoadingSkeleton />;
   }
 

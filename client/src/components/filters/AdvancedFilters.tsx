@@ -49,6 +49,9 @@ export function AdvancedFilters({
       id="advanced-filters"
       role="region"
       aria-label="Advanced filters"
+      // Collapsed content is visually hidden but would otherwise stay in the tab order.
+      inert={isExpanded ? undefined : ''}
+      aria-hidden={!isExpanded}
       className={cn(
         'grid transition-all duration-300 ease-in-out',
         isExpanded ? 'grid-rows-[1fr] opacity-100 mt-4' : 'grid-rows-[0fr] opacity-0'

@@ -1,5 +1,16 @@
-const SHORT: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric', year: 'numeric' };
-const LONG: Intl.DateTimeFormatOptions = { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' };
+/**
+ * Deadlines and event dates are stored as UTC midnight. Formatting them in the
+ * viewer's local zone shows the previous day anywhere west of Greenwich, so
+ * they are always formatted in UTC.
+ */
+const SHORT: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' };
+const LONG: Intl.DateTimeFormatOptions = {
+  weekday: 'long',
+  month: 'long',
+  day: 'numeric',
+  year: 'numeric',
+  timeZone: 'UTC',
+};
 
 /** Format an ISO date string for display; returns null for missing dates. */
 export function formatDate(dateString: string | null | undefined, style: 'short' | 'long' = 'short'): string | null {

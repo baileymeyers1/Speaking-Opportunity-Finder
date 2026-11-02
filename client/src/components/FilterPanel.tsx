@@ -59,7 +59,7 @@ export function FilterPanel({
             value={filters.sortBy || DEFAULT_SORT}
             onValueChange={(value) => onFiltersChange({ ...filters, sortBy: value as SortBy })}
           >
-            <SelectTrigger className="w-[180px] h-9">
+            <SelectTrigger className="w-[180px] h-9" aria-label="Sort by">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
