@@ -113,25 +113,3 @@ export async function enrichOpportunity(
   const merged = mergeExtraction(result, outcome.result, now);
   return { ...merged, enrichmentStatus: 'enriched', enrichedAt: now };
 }
-
-/**
- * Enrich multiple opportunities in batches.
- */
-export async function enrichOpportunitiesBatch(
-  results: ScraperResult[],
-  batchSize: number = 5
-): Promise<EnrichedOpportunity[]> {
-  const enriched: EnrichedOpportunity[] = [];
-
-  for (let i = 0; i < results.length; i += batchSize) {
-    const batch = results.slice(i, i + batchSize);
-    enriched.push(...(await Promise.all(batch.map((result) => enrichOpportunity(result)))));
-
-    // Rate limiting: wait 1 second between batches
-    if (i + batchSize < results.length) {
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-    }
-  }
-
-  return enriched;
-}

@@ -1,12 +1,22 @@
 import { config } from '../config/index.js';
 import { randomUUID } from 'crypto';
+import { Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma.js';
-import { enrichOpportunitiesBatch } from './enrichmentService.js';
 import { cleanTitle, extractOrganization, normalizeIndustries, decodeHtmlEntities, isJunkResult } from './dataNormalization.js';
-import { extractOpportunitiesBatch, mergeExtraction, type DateConfidence, type ExtractionResult } from './extraction.js';
+import {
+  extractOpportunitiesBatch,
+  mergeExtraction,
+  serializeDateConfidence,
+  type DateConfidence,
+  type ExtractionResult,
+} from './extraction.js';
 import { fetchPageText } from './pageText.js';
 import { mapWithConcurrency } from '../scrapers/lib/html.js';
-import type { ScraperResult } from '../scrapers/index.js';
+import { buildCreateData } from '../scrapers/persistData.js';
+import type { ScraperResult } from '../scrapers/qualityScore.js';
+
+/** Live hits enriched synchronously per request; the enrichment cron finishes the rest. */
+export const SYNC_ENRICH_LIMIT = 8;
 
 export interface EnrichedLiveResult {
   id: string;
@@ -36,6 +46,10 @@ export interface EnrichedLiveResult {
   /** Set by Claude extraction: false when the page is not a speaking opportunity. */
   isRelevant?: boolean;
   dateConfidence?: DateConfidence | null;
+  /** True once a Claude extraction was applied to this result. */
+  extracted?: boolean;
+  /** True when the apply page itself was fetched (so the extraction counts as a verification). */
+  pageFetched?: boolean;
 }
 
 // Search query templates for different industries
@@ -571,7 +585,8 @@ export async function performLiveSearch(
 
   console.log(`[LiveSearch] Running ${searchQueries.length} parallel queries:`, searchQueries);
 
-  // Run all query variations in parallel, then deduplicate
+  // Run all query variations in parallel. Each returns regex-tagged hits only;
+  // no page is fetched and no Claude call is made before deduplication.
   const allResults = await Promise.all(
     searchQueries.map(sq => performLinkupSearch(sq, apiKey, industries))
   );
@@ -588,11 +603,10 @@ export async function performLiveSearch(
     }
   }
 
-  // --- Post-fetch filtering ---
+  // --- Cheap filtering before any enrichment ---
 
   // 1. Remove closed CFPs, past deadlines, and past events
   const now = new Date();
-  results = results.filter(r => !r.isClosed && r.isRelevant !== false);
   results = results.filter(r => !isCfpClosed(r.description || '', r.title));
   results = results.filter(r => {
     if (!r.cfpDeadline) return true; // Keep results with unknown deadlines
@@ -621,6 +635,25 @@ export async function performLiveSearch(
       });
     });
   }
+
+  // --- Synchronous enrichment of the top hits only ---
+  results.sort((a, b) => b.qualityScore - a.qualityScore);
+  const toEnrich = results.slice(0, SYNC_ENRICH_LIMIT);
+  if (toEnrich.length > 0) {
+    console.log(`[LiveSearch] Enriching top ${toEnrich.length} of ${results.length} results from page content...`);
+    await enrichResultsFromPages(toEnrich, industries);
+  }
+
+  // Persist every hit now; the enrichment cron finishes the ones not enriched here.
+  try {
+    const persisted = await persistLiveResults(results, now);
+    console.log(`[LiveSearch] Persisted ${persisted.created} new results (${persisted.existing} already stored)`);
+  } catch (error) {
+    console.error('[LiveSearch] Failed to persist live results:', error);
+  }
+
+  // Enrichment may have found a closed call or a page that is not an opportunity.
+  results = results.filter(r => !r.isClosed && r.isRelevant !== false);
 
   // Location filtering is now handled client-side via matchesLocationFilter flag
 
@@ -676,7 +709,7 @@ export async function performLiveSearch(
     }
   }
 
-  return results;
+  return results.sort((a, b) => b.qualityScore - a.qualityScore);
 }
 
 interface LinkupSearchResult {
@@ -721,19 +754,19 @@ async function enrichResultsFromPages(
   results: EnrichedLiveResult[],
   searchIndustries: string[]
 ): Promise<void> {
-  const FETCH_CONCURRENCY = 6;
+  const FETCH_CONCURRENCY = SYNC_ENRICH_LIMIT;
   const pageTexts = await mapWithConcurrency(results, FETCH_CONCURRENCY, async (r) => {
     const page = await fetchPageText(r.applyUrl);
     if (!page.ok && page.reason === 'gone') r.isClosed = true;
+    r.pageFetched = page.ok;
     return page.ok ? page.text : null;
   });
 
   const fetchedCount = pageTexts.filter(t => t !== null).length;
   console.log(`[LiveSearch] Page fetch: ${fetchedCount}/${results.length} pages returned content`);
 
-  const CLAUDE_ENRICHMENT_LIMIT = 10;
   const indexesForClaude: number[] = [];
-  for (let i = 0; i < Math.min(results.length, CLAUDE_ENRICHMENT_LIMIT); i++) {
+  for (let i = 0; i < results.length; i++) {
     const text = pageTexts[i] || results[i].description || '';
     if (text.length > 20 && !results[i].isClosed) indexesForClaude.push(i);
   }
@@ -749,12 +782,13 @@ async function enrichResultsFromPages(
         pageText: pageTexts[i],
         applyUrl: results[i].applyUrl,
       })),
-      5
+      SYNC_ENRICH_LIMIT
     );
     outcomes.forEach((outcome, position) => {
       const index = indexesForClaude[position];
       if (outcome.status === 'ok') {
         applyExtractionToLiveResult(results[index], outcome.result);
+        results[index].extracted = true;
         extracted.add(index);
       } else if (outcome.status === 'failed') {
         console.warn(`[LiveSearch] Extraction failed for ${results[index].applyUrl}: ${outcome.error}`);
@@ -802,7 +836,8 @@ async function performLinkupSearch(
   const now = new Date().toISOString();
 
   const maxPerPage = 50;
-  const maxPages = 3;
+  // One page per variant keeps the request fast; variants run in parallel.
+  const maxPages = 1;
 
   try {
     for (let page = 1; page <= maxPages; page++) {
@@ -877,19 +912,11 @@ async function performLinkupSearch(
   }
 
   const filtered = results.filter(r => !isJunkResult({ title: r.title, description: r.description, applyUrl: r.applyUrl }));
-
-  // Cap results before expensive enrichment
-  const toEnrich = filtered.sort((a, b) => b.qualityScore - a.qualityScore).slice(0, 50);
-
-  // Scrape actual pages to fill in missing metadata (dates, locations, etc.)
-  console.log(`[LiveSearch] Enriching ${toEnrich.length} results from page content...`);
-  await enrichResultsFromPages(toEnrich, searchIndustries);
-
-  return toEnrich.sort((a, b) => b.qualityScore - a.qualityScore);
+  return filtered.sort((a, b) => b.qualityScore - a.qualityScore);
 }
 
 /**
- * Convert live search result to ScraperResult format for enrichment and persistence
+ * Convert live search result to ScraperResult format for merging and persistence
  */
 function liveResultToScraperResult(result: EnrichedLiveResult): ScraperResult {
   return {
@@ -906,88 +933,67 @@ function liveResultToScraperResult(result: EnrichedLiveResult): ScraperResult {
     compensationAmount: result.compensationAmount || undefined,
     compensationDetails: result.compensationDetails || undefined,
     applyUrl: result.applyUrl,
-    qualityScore: result.qualityScore,
-    source: `Live Search - ${result.industries.join(', ') || 'general'}`,
+    source: 'Live Search',
     sourceUrl: result.sourceUrl,
+    isClosed: result.isClosed,
+    isRelevant: result.isRelevant,
   };
 }
 
 /**
- * Auto-save live search results to the database after enrichment
+ * Row data for a live hit. Hits enriched in the request are stored as
+ * enriched (and verified when their page was fetched); the rest are stored
+ * with no enrichment status so the cron worker picks them up.
  */
-export async function autoSaveLiveResults(
-  liveResults: EnrichedLiveResult[]
-): Promise<{ saved: number; updated: number; skipped: number }> {
-  let saved = 0;
-  let updated = 0;
-  let skipped = 0;
+export function buildLiveCreateData(result: EnrichedLiveResult, now: Date = new Date()): Prisma.OpportunityCreateManyInput {
+  const base = buildCreateData(liveResultToScraperResult(result));
+  const extracted = result.extracted === true;
+  return {
+    ...base,
+    isClosed: result.isClosed === true,
+    isRelevant: result.isRelevant !== false,
+    dateConfidence: serializeDateConfidence(result.dateConfidence),
+    enrichmentStatus: extracted ? 'enriched' : null,
+    enrichedAt: extracted ? now : null,
+    verifiedAt: extracted && result.pageFetched ? now : null,
+  };
+}
 
-  if (liveResults.length === 0) {
-    return { saved, updated, skipped };
-  }
+/**
+ * Store live hits that are not already in the database. Existing rows are
+ * left alone: enrichment and verification keep them current.
+ */
+export async function persistLiveResults(
+  results: EnrichedLiveResult[],
+  now: Date = new Date()
+): Promise<{ created: number; existing: number }> {
+  if (results.length === 0) return { created: 0, existing: 0 };
 
-  console.log(`Auto-saving ${liveResults.length} live search results...`);
+  const urls = results.map((r) => r.applyUrl);
+  const existingRows = await prisma.opportunity.findMany({
+    where: { applyUrl: { in: urls } },
+    select: { applyUrl: true },
+  });
+  const existingUrls = new Set(existingRows.map((row) => row.applyUrl));
+  const fresh = results.filter((r) => !existingUrls.has(r.applyUrl));
+  if (fresh.length === 0) return { created: 0, existing: existingUrls.size };
 
-  // Convert to ScraperResult format
-  const scraperResults = liveResults.map(liveResultToScraperResult);
-
-  // Enrich with Claude API if configured
-  let enrichedResults = scraperResults;
-  if (config.claude.apiKey) {
-    console.log('Enriching live results with Claude API...');
-    enrichedResults = await enrichOpportunitiesBatch(scraperResults, 3);
-  }
-
-  // Save to database
-  for (const result of enrichedResults) {
-    try {
-      const existing = await prisma.opportunity.findFirst({
-        where: { applyUrl: result.applyUrl },
-      });
-
-      const data = {
-        title: result.title,
-        organization: result.organization,
-        description: result.description || null,
-        location: result.location || null,
-        isRemote: result.isRemote,
-        eventDate: result.eventDate || null,
-        cfpDeadline: result.cfpDeadline || null,
-        format: result.format,
-        industries: JSON.stringify(result.industries),
-        compensationType: result.compensationType || null,
-        compensationAmount: result.compensationAmount || null,
-        compensationDetails: result.compensationDetails || null,
-        applyUrl: result.applyUrl,
-        qualityScore: result.qualityScore,
-        source: result.source,
-        sourceUrl: result.sourceUrl || null,
-        enrichmentStatus: (result as any).enrichmentStatus || null,
-        enrichedAt: (result as any).enrichedAt || null,
-        enrichmentError: (result as any).enrichmentError || null,
-      };
-
-      if (existing) {
-        // Update existing opportunity with better data
-        await prisma.opportunity.update({
-          where: { id: existing.id },
-          data,
-        });
-        updated++;
-      } else {
-        // Create new opportunity
-        await prisma.opportunity.create({ data });
-        saved++;
+  const data = fresh.map((r) => buildLiveCreateData(r, now));
+  try {
+    const created = await prisma.opportunity.createMany({ data });
+    return { created: created.count, existing: existingUrls.size };
+  } catch (error) {
+    // A concurrent search may have inserted one of these URLs; fall back to row-by-row.
+    console.warn('[LiveSearch] createMany failed, inserting individually:', error instanceof Error ? error.message : error);
+    let created = 0;
+    for (const row of data) {
+      try {
+        await prisma.opportunity.create({ data: row });
+        created++;
+      } catch {
+        // already stored
       }
-    } catch (error) {
-      console.error(`Failed to save live result: ${result.title}`, error);
-      skipped++;
     }
+    return { created, existing: existingUrls.size };
   }
-
-  console.log(
-    `Auto-save complete: ${saved} new, ${updated} updated, ${skipped} skipped`
-  );
-
-  return { saved, updated, skipped };
 }

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { applyExtractionToLiveResult, type EnrichedLiveResult } from './liveSearchService.js';
+import { applyExtractionToLiveResult, buildLiveCreateData, type EnrichedLiveResult } from './liveSearchService.js';
 import type { ExtractionResult } from './extraction.js';
 
 const NOW = new Date('2026-11-02T12:00:00Z');
@@ -110,5 +110,57 @@ describe('applyExtractionToLiveResult', () => {
     expect(result.title).toBe('Clean Title');
     expect(result.organization).toBe('Clean Org');
     expect(result.dateConfidence).toEqual({ eventDate: 'low', cfpDeadline: 'medium', location: 'high' });
+  });
+});
+
+describe('buildLiveCreateData', () => {
+  it('stores an unenriched hit for the cron worker to finish', () => {
+    const data = buildLiveCreateData(makeResult({ description: 'A long description of a call for speakers about data platforms.' }), NOW);
+    expect(data.source).toBe('Live Search');
+    expect(data.applyUrl).toBe('https://example.com');
+    expect(data.enrichmentStatus).toBeNull();
+    expect(data.enrichedAt).toBeNull();
+    expect(data.verifiedAt).toBeNull();
+    expect(data.isClosed).toBe(false);
+    expect(data.isRelevant).toBe(true);
+    expect(data.dateConfidence).toBeNull();
+    expect(data.industries).toBe('[]');
+  });
+
+  it('stores a hit enriched from its page as enriched and verified', () => {
+    const result = makeResult({ industries: ['ai'] });
+    applyExtractionToLiveResult(
+      result,
+      extraction({ cfpDeadline: new Date('2027-01-15T00:00:00Z'), location: 'Denver, CO', confidence: { eventDate: 'low', cfpDeadline: 'high', location: 'high' } }),
+      NOW
+    );
+    result.extracted = true;
+    result.pageFetched = true;
+    const data = buildLiveCreateData(result, NOW);
+    expect(data.enrichmentStatus).toBe('enriched');
+    expect(data.enrichedAt).toEqual(NOW);
+    expect(data.verifiedAt).toEqual(NOW);
+    expect(data.cfpDeadline).toEqual(new Date('2027-01-15T00:00:00Z'));
+    expect(data.location).toBe('Denver, CO');
+    expect(data.dateConfidence).toBe(JSON.stringify({ eventDate: 'low', cfpDeadline: 'high', location: 'high' }));
+    expect(data.industries).toBe(JSON.stringify(['ai']));
+  });
+
+  it('does not count an extraction from the snippet alone as a verification', () => {
+    const result = makeResult();
+    result.extracted = true;
+    result.pageFetched = false;
+    const data = buildLiveCreateData(result, NOW);
+    expect(data.enrichmentStatus).toBe('enriched');
+    expect(data.verifiedAt).toBeNull();
+  });
+
+  it('stores closed and irrelevant hits flagged with a zero score so they are not re-discovered', () => {
+    const closed = buildLiveCreateData(makeResult({ isClosed: true }), NOW);
+    expect(closed.isClosed).toBe(true);
+    expect(closed.qualityScore).toBe(0);
+    const irrelevant = buildLiveCreateData(makeResult({ isRelevant: false }), NOW);
+    expect(irrelevant.isRelevant).toBe(false);
+    expect(irrelevant.qualityScore).toBe(0);
   });
 });

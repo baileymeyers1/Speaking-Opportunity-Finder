@@ -129,18 +129,9 @@ export async function getOpportunities(
         compensationType: filters.compensationType,
       };
 
+      // performLiveSearch persists every hit before returning; the enrichment
+      // cron finishes the ones it did not enrich in the request.
       liveResults = await liveSearchService.performLiveSearch(searchQuery, industryList, locationList, liveFilters);
-
-      // Fire-and-forget auto-save
-      if (liveResults.length > 0) {
-        liveSearchService.autoSaveLiveResults(liveResults)
-          .then(stats => {
-            console.log(`Live search auto-save: ${stats.saved} new, ${stats.updated} updated`);
-          })
-          .catch(err => {
-            console.error('Failed to auto-save live results:', err);
-          });
-      }
     }
 
     // Deduplicate: exclude DB results that match live result URLs
@@ -290,23 +281,13 @@ export async function liveSearch(
         : undefined,
     };
 
+    // Hits are persisted inside performLiveSearch; nothing runs after the response.
     const results = await liveSearchService.performLiveSearch(
       searchQuery,
       industryList,
       locationList,
       liveFilters
     );
-
-    // Auto-save live results to database (async, don't wait for completion)
-    if (results.length > 0) {
-      liveSearchService.autoSaveLiveResults(results)
-        .then(stats => {
-          console.log(`Live search auto-save: ${stats.saved} new, ${stats.updated} updated`);
-        })
-        .catch(err => {
-          console.error('Failed to auto-save live results:', err);
-        });
-    }
 
     res.json({
       success: true,
