@@ -101,7 +101,8 @@ export function Home() {
         </p>
       </div>
 
-      <div className="flex items-start gap-3">
+      {/* Saved Searches sits beside the filters on wide screens and under them on phones */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
         <div className="flex-1 min-w-0">
           <FilterPanel
             filters={filters}
