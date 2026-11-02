@@ -1,9 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import type { Opportunity } from '../types';
+import type { Opportunity, SavedCategory } from '../types';
 import { useAuth } from '../hooks/useAuth';
-import { apiClient } from '../api/client';
-import { removeLiveResult } from '../utils/liveResultsCache';
+import { useSaveOpportunity } from '../hooks/useSaveOpportunity';
 import { approximate, formatVerifiedAgo, isLowConfidence, LOW_CONFIDENCE_HINT } from '../utils/verification';
 import { cn } from '@/lib/utils';
 
@@ -108,13 +107,10 @@ export function OpportunityCard({ opportunity, showSave = true, isPast }: Opport
   const { isAuthenticated } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const [current, setCurrent] = useState(opportunity);
-  const [isSaving, setIsSaving] = useState(false);
-  const [savedCategory, setSavedCategory] = useState<string>('');
-
-  useEffect(() => {
-    setCurrent(opportunity);
-  }, [opportunity]);
+  const save = useSaveOpportunity();
+  const [savedCategory, setSavedCategory] = useState<SavedCategory | ''>('');
+  const current = opportunity;
+  const isSaving = save.isPending;
 
   const deadlineBadge = getDeadlineBadge(current.cfpDeadline);
   const deadlineIsApproximate = isLowConfidence(current, 'cfpDeadline');
@@ -132,54 +128,18 @@ export function OpportunityCard({ opportunity, showSave = true, isPast }: Opport
       : current.compensationType
     : null;
 
-  const handleSave = async (category: string) => {
-    if (!category) return;
+  const handleSave = (category: SavedCategory) => {
     if (!isAuthenticated) {
       navigate('/login');
       return;
     }
-
-    setIsSaving(true);
-    try {
-      let target = current;
-
-      if (current.isLiveResult) {
-        const saved = await apiClient.post<Opportunity>('/opportunities/save-live', {
-          title: current.title,
-          organization: current.organization,
-          description: current.description,
-          location: current.location,
-          isRemote: current.isRemote,
-          eventDate: current.eventDate,
-          cfpDeadline: current.cfpDeadline,
-          format: current.format,
-          industries: current.industries,
-          compensationType: current.compensationType,
-          compensationAmount: current.compensationAmount,
-          compensationDetails: current.compensationDetails,
-          qualityScore: current.qualityScore,
-          applyUrl: current.applyUrl,
-          liveSearchUrl: current.liveSearchUrl,
-        });
-
-        if (saved.data) {
-          target = { ...saved.data, isLiveResult: false };
-          setCurrent(target);
-          removeLiveResult(current.id);
-        }
+    save.mutate(
+      { opportunity: current, category },
+      {
+        onSuccess: () => setSavedCategory(category),
+        onError: (error) => console.error('Failed to save:', error),
       }
-
-      await apiClient.post('/saved', {
-        opportunityId: target.id,
-        category,
-      });
-
-      setSavedCategory(category);
-    } catch (error) {
-      console.error('Failed to save:', error);
-    } finally {
-      setIsSaving(false);
-    }
+    );
   };
 
   return (

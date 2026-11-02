@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import {
   SlidersHorizontal,
   X,
@@ -7,7 +7,7 @@ import {
   ChevronUp,
   Loader2,
 } from 'lucide-react';
-import { apiClient } from '../api/client';
+import { useFilterOptions } from '../hooks/useFilterOptions';
 import { MultiSelectDropdown } from './MultiSelectDropdown';
 import { MultiLocationInput } from './MultiLocationInput';
 import { SearchBar } from './filters/SearchBar';
@@ -30,7 +30,6 @@ import type {
   OpportunityFilters,
   OpportunityFormat,
   CompensationType,
-  FilterOptions,
 } from '../types';
 
 interface FilterPanelProps {
@@ -49,39 +48,7 @@ export function FilterPanel({
   isSearching = false,
 }: FilterPanelProps) {
   const [isExpanded, setIsExpanded] = useState(false);
-  const [filterOptions, setFilterOptions] = useState<FilterOptions | null>(null);
-
-  useEffect(() => {
-    const CACHE_KEY = 'filter_options_cache';
-    const CACHE_TTL = 60 * 60 * 1000; // 1 hour
-
-    const cached = localStorage.getItem(CACHE_KEY);
-    if (cached) {
-      try {
-        const { data, timestamp } = JSON.parse(cached);
-        if (Date.now() - timestamp < CACHE_TTL) {
-          setFilterOptions(data);
-          return;
-        }
-      } catch { /* invalid cache, refetch */ }
-    }
-
-    const fetchFilters = async () => {
-      try {
-        const response = await apiClient.get<FilterOptions>('/opportunities/filters');
-        if (response.success && response.data) {
-          setFilterOptions(response.data);
-          localStorage.setItem(CACHE_KEY, JSON.stringify({
-            data: response.data,
-            timestamp: Date.now(),
-          }));
-        }
-      } catch (error) {
-        console.error('Failed to fetch filter options:', error);
-      }
-    };
-    fetchFilters();
-  }, []);
+  const { data: filterOptions } = useFilterOptions();
 
   const formats = filterOptions?.formats || OPPORTUNITY_FORMATS;
   const compensationTypes = filterOptions?.compensationTypes || COMPENSATION_TYPES;

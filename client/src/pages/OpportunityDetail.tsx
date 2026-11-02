@@ -1,9 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useParams, Link, useNavigate, useLocation } from 'react-router-dom';
-import { apiClient } from '../api/client';
 import { useAuth } from '../hooks/useAuth';
-import type { Opportunity, SavedOpportunity, SavedCategory } from '../types';
-import { getLiveResultById, removeLiveResult } from '../utils/liveResultsCache';
+import { useOpportunity } from '../hooks/useOpportunity';
+import { useSaveOpportunity } from '../hooks/useSaveOpportunity';
+import type { SavedCategory } from '../types';
 import { approximate, formatVerifiedAgo, isLowConfidence, LOW_CONFIDENCE_HINT } from '../utils/verification';
 
 import { Card, CardHeader, CardContent } from '@/components/ui/card';
@@ -46,94 +46,26 @@ export function OpportunityDetail() {
   const navigate = useNavigate();
   const location = useLocation();
   const { isAuthenticated } = useAuth();
-  const [opportunity, setOpportunity] = useState<Opportunity | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [savedCategory, setSavedCategory] = useState<SavedCategory | null>(
-    null
-  );
-  const [isSaving, setIsSaving] = useState(false);
+  const { data: opportunity, isPending: isLoading, error: loadError } = useOpportunity(id);
+  const save = useSaveOpportunity();
+  const [savedCategory, setSavedCategory] = useState<SavedCategory | null>(null);
+  const isSaving = save.isPending;
+  const error = loadError ? loadError.message : null;
 
-  useEffect(() => {
-    const fetchOpportunity = async () => {
-      if (!id) return;
-
-      setIsLoading(true);
-      try {
-        if (id.startsWith('live-')) {
-          const cached = getLiveResultById(id);
-          if (cached) {
-            setOpportunity(cached);
-            return;
-          }
-        }
-
-        const response = await apiClient.get<Opportunity>(`/opportunities/${id}`);
-        if (response.data) setOpportunity(response.data);
-      } catch (err) {
-        if (id.startsWith('live-')) {
-          setError('This live search result is no longer cached. Please search again to find it.');
-        } else {
-          setError(err instanceof Error ? err.message : 'Failed to load');
-        }
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchOpportunity();
-  }, [id]);
-
-  const handleSave = async (category: SavedCategory) => {
+  const handleSave = (category: SavedCategory) => {
     if (!id || !isAuthenticated || !opportunity) return;
-
-    setIsSaving(true);
-    try {
-      let opportunityId = id;
-      let target = opportunity;
-
-      if (opportunity.isLiveResult) {
-        const saved = await apiClient.post<Opportunity>('/opportunities/save-live', {
-          title: opportunity.title,
-          organization: opportunity.organization,
-          description: opportunity.description,
-          location: opportunity.location,
-          isRemote: opportunity.isRemote,
-          eventDate: opportunity.eventDate,
-          cfpDeadline: opportunity.cfpDeadline,
-          format: opportunity.format,
-          industries: opportunity.industries,
-          compensationType: opportunity.compensationType,
-          compensationAmount: opportunity.compensationAmount,
-          compensationDetails: opportunity.compensationDetails,
-          qualityScore: opportunity.qualityScore,
-          applyUrl: opportunity.applyUrl,
-          liveSearchUrl: opportunity.liveSearchUrl,
-        });
-
-        if (saved.data) {
-          target = { ...saved.data, isLiveResult: false };
-          setOpportunity(target);
-          opportunityId = saved.data.id;
-          removeLiveResult(id);
-        }
+    save.mutate(
+      { opportunity, category },
+      {
+        onSuccess: (result) => {
+          setSavedCategory(category);
+          if (result.opportunity.id !== id) {
+            navigate(`/opportunities/${result.opportunity.id}`, { replace: true, state: location.state });
+          }
+        },
+        onError: (saveError) => console.error('Failed to save:', saveError),
       }
-
-      await apiClient.post<SavedOpportunity>('/saved', {
-        opportunityId,
-        category,
-      });
-
-      setSavedCategory(category);
-
-      if (target.id !== id) {
-        navigate(`/opportunities/${target.id}`, { replace: true });
-      }
-    } catch (err) {
-      console.error('Failed to save:', err);
-    } finally {
-      setIsSaving(false);
-    }
+    );
   };
 
   const formatDate = (dateString: string | null) => {
