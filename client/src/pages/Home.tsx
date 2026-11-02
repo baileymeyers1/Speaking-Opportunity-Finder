@@ -1,11 +1,17 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { FilterPanel } from '../components/FilterPanel';
 import { OpportunityList } from '../components/OpportunityList';
 import { SavedSearches } from '../components/SavedSearches';
 import { apiClient } from '../api/client';
-import type { Opportunity, OpportunityFilters, OpportunityFormat, PaginatedResponse } from '../types';
-import { useDebounce } from '../hooks/useDebounce';
+import type { Opportunity, OpportunityFilters, PaginatedResponse } from '../types';
+import {
+  filtersToApiQuery,
+  filtersToSearchParams,
+  savedSearchToFilters,
+  searchParamsToFilters,
+  type BrowseFilters,
+} from '../filters/serialize';
 import { useAuth } from '../hooks/useAuth';
 import { upsertLiveResults } from '../utils/liveResultsCache';
 import { Button } from '@/components/ui/button';
@@ -30,32 +36,6 @@ function loadCache(): { items: Opportunity[]; totalPages: number; timestamp: num
   }
 }
 
-function parseFiltersFromParams(searchParams: URLSearchParams): OpportunityFilters {
-  const filters: OpportunityFilters = {};
-  const q = searchParams.get('q');
-  if (q) filters.search = q;
-  const industries = searchParams.getAll('industries');
-  if (industries.length) filters.industries = industries;
-  const locations = searchParams.getAll('locations');
-  if (locations.length) filters.locations = locations;
-  const types = searchParams.getAll('types');
-  if (types.length) filters.format = types as OpportunityFormat[];
-  const sort = searchParams.get('sort');
-  if (sort) filters.sortBy = sort as OpportunityFilters['sortBy'];
-  return filters;
-}
-
-function filtersToParams(filters: OpportunityFilters, page: number): URLSearchParams {
-  const params = new URLSearchParams();
-  if (filters.search) params.set('q', filters.search);
-  if (filters.sortBy) params.set('sort', filters.sortBy);
-  if (page > 1) params.set('page', String(page));
-  filters.industries?.forEach((i) => params.append('industries', i));
-  filters.locations?.forEach((l) => params.append('locations', l));
-  filters.format?.forEach((f) => params.append('types', f));
-  return params;
-}
-
 const BANNER_DISMISSED_KEY = 'loginBannerDismissed';
 
 export function Home() {
@@ -67,12 +47,22 @@ export function Home() {
   const [isSearching, setIsSearching] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [rateLimitWarning, setRateLimitWarning] = useState<string | null>(null);
-  const [filters, setFilters] = useState<OpportunityFilters>(() => parseFiltersFromParams(searchParams));
-  const debouncedFilters = useDebounce(filters, 400);
-  const [page, setPage] = useState(() => {
-    const p = searchParams.get('page');
-    return p ? Math.max(1, parseInt(p, 10)) : 1;
-  });
+  // The URL is the only source of filter state.
+  const filters = useMemo(() => searchParamsToFilters(searchParams), [searchParams]);
+  const page = filters.page ?? 1;
+  const updateFilters = useCallback(
+    (updater: (previous: BrowseFilters) => BrowseFilters) => {
+      setSearchParams(
+        (previous) => filtersToSearchParams(updater(searchParamsToFilters(previous))),
+        { replace: true }
+      );
+    },
+    [setSearchParams]
+  );
+  const setPage = useCallback(
+    (nextPage: number) => updateFilters((previous) => ({ ...previous, page: nextPage })),
+    [updateFilters]
+  );
   const [totalPages, setTotalPages] = useState(1);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [liveResultCount, setLiveResultCount] = useState(0);
@@ -80,7 +70,6 @@ export function Home() {
   const allLiveResults = useRef<Opportunity[]>([]);
   const cacheLoaded = useRef(false);
   const skipNextFetch = useRef(false);
-  const filtersHydrated = useRef(true);
   const [bannerDismissed, setBannerDismissed] = useState(
     () => sessionStorage.getItem(BANNER_DISMISSED_KEY) === 'true'
   );
@@ -92,15 +81,13 @@ export function Home() {
       const liveRaw = sessionStorage.getItem(LIVE_SEARCH_CACHE_KEY);
       if (liveRaw) {
         const liveCached = JSON.parse(liveRaw);
-        // Restore if cache is fresh (< 5 min) and params match current URL
-        const currentParams = new URLSearchParams();
-        if (filters.search) currentParams.set('search', filters.search);
-        filters.locations?.forEach((l) => currentParams.append('locations', l));
-        filters.industries?.forEach((i) => currentParams.append('industries', i));
-        currentParams.set('liveSearch', 'true');
-        currentParams.set('page', '1');
+        // Restore if cache is fresh (< 5 min) and was built for the current URL
+        const currentParams = filtersToApiQuery({ ...filters, page: 1 }, { liveSearch: true });
 
-        if (Date.now() - liveCached.timestamp < 5 * 60 * 1000) {
+        if (
+          Date.now() - liveCached.timestamp < 5 * 60 * 1000 &&
+          liveCached.params === currentParams.toString()
+        ) {
           setOpportunities(liveCached.items);
           allLiveResults.current = liveCached.items;
           setTotalPages(liveCached.totalPages);
@@ -127,7 +114,6 @@ export function Home() {
   }, []);
 
   const fetchOpportunities = useCallback(async (liveSearch = false) => {
-    if (!filtersHydrated.current) return;
     // Skip the automatic re-fetch if we just restored from live cache
     if (skipNextFetch.current && !liveSearch) {
       skipNextFetch.current = false;
@@ -136,7 +122,7 @@ export function Home() {
     // If we have active live results and this is a non-live fetch (sort/filter change),
     // re-sort the existing results client-side instead of losing them
     if (!liveSearch && allLiveResults.current.length > 0) {
-      const sortBy = debouncedFilters.sortBy || 'deadline';
+      const sortBy = filters.sortBy || 'deadline';
       const sorted = [...allLiveResults.current].sort((a, b) => {
         const dateVal = (v: string | null) => {
           if (!v) return Number.MAX_SAFE_INTEGER;
@@ -159,24 +145,7 @@ export function Home() {
     setError(null);
     setRateLimitWarning(null);
     try {
-      const params = new URLSearchParams();
-      params.set('page', String(page));
-
-      if (debouncedFilters.search) params.set('search', debouncedFilters.search);
-      if (debouncedFilters.isRemote) params.set('isRemote', 'true');
-      if (debouncedFilters.compensationMin) params.set('compensationMin', String(debouncedFilters.compensationMin));
-      if (debouncedFilters.compensationMax) params.set('compensationMax', String(debouncedFilters.compensationMax));
-      if (debouncedFilters.sortBy) params.set('sortBy', debouncedFilters.sortBy);
-      if (debouncedFilters.qualityMin !== undefined) params.set('qualityMin', String(debouncedFilters.qualityMin));
-
-      debouncedFilters.locations?.forEach((loc) => params.append('locations', loc));
-      debouncedFilters.format?.forEach((f) => params.append('format', f));
-      debouncedFilters.industries?.forEach((i) => params.append('industries', i));
-      debouncedFilters.compensationType?.forEach((c) => params.append('compensationType', c));
-
-      if (liveSearch) {
-        params.set('liveSearch', 'true');
-      }
+      const params = filtersToApiQuery(filters, { liveSearch });
 
       const response = await apiClient.get<PaginatedResponse<Opportunity>>(
         `/opportunities?${params.toString()}`
@@ -214,7 +183,7 @@ export function Home() {
         }
 
         // Cache the default (unfiltered, page 1) response
-        if (page === 1 && Object.keys(debouncedFilters).length === 0 && !liveSearch) {
+        if (page === 1 && Object.keys(filters).length === 0 && !liveSearch) {
           localStorage.setItem(CACHE_KEY, JSON.stringify({
             items: response.data.items,
             totalPages: response.data.totalPages,
@@ -236,7 +205,7 @@ export function Home() {
       setIsSearching(false);
       cacheLoaded.current = false;
     }
-  }, [debouncedFilters, page]);
+  }, [filters, page]);
 
   // Fetch DB results on filter/page changes
   useEffect(() => {
@@ -248,18 +217,10 @@ export function Home() {
     if (totalPages > 0 && page > totalPages) {
       setPage(totalPages);
     }
-  }, [totalPages, page]);
-
-  // Sync filters + page to URL search params
-  useEffect(() => {
-    if (!filtersHydrated.current) return;
-    const newParams = filtersToParams(filters, page);
-    setSearchParams(newParams, { replace: true });
-  }, [filters, page, setSearchParams]);
+  }, [totalPages, page, setPage]);
 
   const handleFiltersChange = (newFilters: OpportunityFilters) => {
-    setFilters(newFilters);
-    setPage(1);
+    updateFilters(() => ({ ...newFilters, page: 1 }));
     // Don't clear live results on filter/sort changes — we re-sort client-side
     if (allLiveResults.current.length === 0) {
       setLiveResultCount(0);
@@ -268,16 +229,15 @@ export function Home() {
   };
 
   const handleClearFilters = () => {
-    setFilters({});
-    setPage(1);
+    updateFilters(() => ({}));
     setLiveResultCount(0);
   };
 
-  const handleLiveSearch = async () => {
-    if (!filters.search && !filters.industries?.length) {
-      alert('Please enter a search term or select an industry to perform a live search.');
+  const handleLiveSearch = (effective: OpportunityFilters) => {
+    if (!effective.search && !effective.industries?.length) {
       return;
     }
+    updateFilters(() => ({ ...effective, page: 1 }));
     fetchOpportunities(true);
   };
 
@@ -299,19 +259,7 @@ export function Home() {
   };
 
   const handleApplySavedSearch = (query: string, savedFilters: Record<string, unknown>) => {
-    const applied: OpportunityFilters = {};
-    if (query) applied.search = query;
-    if (Array.isArray(savedFilters.industries)) applied.industries = savedFilters.industries as string[];
-    if (Array.isArray(savedFilters.locations)) applied.locations = savedFilters.locations as string[];
-    if (Array.isArray(savedFilters.format)) applied.format = savedFilters.format as OpportunityFormat[];
-    if (Array.isArray(savedFilters.compensationType)) applied.compensationType = savedFilters.compensationType as OpportunityFilters['compensationType'];
-    if (savedFilters.sortBy) applied.sortBy = savedFilters.sortBy as OpportunityFilters['sortBy'];
-    if (savedFilters.isRemote) applied.isRemote = savedFilters.isRemote as boolean;
-    if (typeof savedFilters.compensationMin === 'number') applied.compensationMin = savedFilters.compensationMin;
-    if (typeof savedFilters.compensationMax === 'number') applied.compensationMax = savedFilters.compensationMax;
-    if (typeof savedFilters.qualityMin === 'number') applied.qualityMin = savedFilters.qualityMin;
-    setFilters(applied);
-    setPage(1);
+    updateFilters(() => savedSearchToFilters(query, savedFilters));
   };
 
   return (
@@ -338,7 +286,7 @@ export function Home() {
         {isAuthenticated && (
           <SavedSearches
             currentQuery={filters.search || ''}
-            currentFilters={filters as Record<string, unknown>}
+            currentFilters={{ ...filters, page: undefined } as Record<string, unknown>}
             onApplySearch={handleApplySavedSearch}
           />
         )}
@@ -495,7 +443,7 @@ export function Home() {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                onClick={() => setPage(Math.max(1, page - 1))}
                 disabled={page === 1}
                 aria-label="Go to previous page"
               >
@@ -508,7 +456,7 @@ export function Home() {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                onClick={() => setPage(Math.min(totalPages, page + 1))}
                 disabled={page === totalPages}
                 aria-label="Go to next page"
               >

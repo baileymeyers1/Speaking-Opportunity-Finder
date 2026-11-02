@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import {
-  Search,
   SlidersHorizontal,
   X,
   Zap,
@@ -11,7 +10,10 @@ import {
 import { apiClient } from '../api/client';
 import { MultiSelectDropdown } from './MultiSelectDropdown';
 import { MultiLocationInput } from './MultiLocationInput';
-import { Input } from '@/components/ui/input';
+import { SearchBar } from './filters/SearchBar';
+import { useSearchDraft } from './filters/useSearchDraft';
+import { canLiveSearch, countActiveFilters } from '../filters/serialize';
+import { COMPENSATION_MAX, COMPENSATION_TYPES, OPPORTUNITY_FORMATS } from '../filters/constants';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -33,29 +35,12 @@ import type {
 
 interface FilterPanelProps {
   filters: OpportunityFilters;
+  /** Called with the complete next filter set; the parent writes it to the URL. */
   onFiltersChange: (filters: OpportunityFilters) => void;
-  onLiveSearch?: () => void;
+  /** Called with the effective filters, including any search text not yet committed. */
+  onLiveSearch?: (filters: OpportunityFilters) => void;
   isSearching?: boolean;
 }
-
-const defaultFormats: OpportunityFormat[] = [
-  'conference',
-  'meetup',
-  'podcast',
-  'webinar',
-  'workshop',
-  'panel',
-  'other',
-];
-
-const defaultCompensationTypes: CompensationType[] = [
-  'paid',
-  'travel',
-  'exposure',
-  'honorarium',
-];
-
-const COMPENSATION_MAX = 2000;
 
 export function FilterPanel({
   filters,
@@ -98,13 +83,22 @@ export function FilterPanel({
     fetchFilters();
   }, []);
 
-  const formats = filterOptions?.formats || defaultFormats;
-  const compensationTypes = filterOptions?.compensationTypes || defaultCompensationTypes;
+  const formats = filterOptions?.formats || OPPORTUNITY_FORMATS;
+  const compensationTypes = filterOptions?.compensationTypes || COMPENSATION_TYPES;
   const hasCompensation = filterOptions?.compensationStats?.hasCompensation ?? true;
   const industries = filterOptions?.industries || [];
 
-  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    onFiltersChange({ ...filters, search: e.target.value || undefined });
+  const search = useSearchDraft(filters.search ?? '', (term) =>
+    onFiltersChange({ ...filters, search: term || undefined })
+  );
+
+  const effectiveFilters = (): OpportunityFilters => {
+    const term = search.flush();
+    return { ...filters, search: term || undefined };
+  };
+
+  const handleLiveSearch = () => {
+    onLiveSearch?.(effectiveFilters());
   };
 
   const handleFormatChange = (format: OpportunityFormat) => {
@@ -157,17 +151,7 @@ export function FilterPanel({
   };
 
   const selectedLocations = filters.locations || [];
-
-  const activeFilterCount = [
-    filters.format?.length,
-    filters.industries?.length,
-    filters.compensationType?.length,
-    filters.isRemote,
-    selectedLocations.length,
-    filters.compensationMin,
-    filters.compensationMax,
-    filters.qualityMin,
-  ].filter(Boolean).length;
+  const activeFilterCount = countActiveFilters(filters);
 
   const formatCompensationValue = (value: number, isMax: boolean) => {
     if (isMax && value >= COMPENSATION_MAX) {
@@ -257,23 +241,13 @@ export function FilterPanel({
     });
   }
 
-  const liveSearchDisabled = isSearching || (!filters.search && !filters.industries?.length);
+  const liveSearchDisabled =
+    isSearching || !canLiveSearch({ ...filters, search: search.draft });
 
   return (
     <Card className="p-4 mb-6">
       {/* Top row: Search input */}
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" aria-hidden="true" />
-        <label htmlFor="opportunity-search" className="sr-only">Search opportunities</label>
-        <Input
-          type="text"
-          id="opportunity-search"
-          placeholder="Search opportunities..."
-          value={filters.search || ''}
-          onChange={handleSearchChange}
-          className="pl-10"
-        />
-      </div>
+      <SearchBar value={search.draft} onChange={search.update} onSubmit={search.flush} />
 
       {/* Active filter pills */}
       {activeFilterPills.length > 0 && (
@@ -323,7 +297,7 @@ export function FilterPanel({
 
         {onLiveSearch && (
           <Button
-            onClick={onLiveSearch}
+            onClick={handleLiveSearch}
             disabled={liveSearchDisabled}
             size="sm"
             className="gap-1.5"
