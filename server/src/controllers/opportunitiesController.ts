@@ -1,6 +1,7 @@
 import { type Request, type Response, type NextFunction } from 'express';
 import * as opportunityService from '../services/opportunityService.js';
 import * as liveSearchService from '../services/liveSearchService.js';
+import { recordSearch } from '../services/searchLog.js';
 import { AppError } from '../middleware/errorHandler.js';
 import type {
   ApiResponse,
@@ -143,6 +144,14 @@ export async function getOpportunities(
       // performLiveSearch persists every hit before returning; the enrichment
       // cron finishes the ones it did not enrich in the request.
       liveResults = await liveSearchService.performLiveSearch(searchQuery, industryList, locationList, liveFilters);
+      // Awaited on purpose: a fire-and-forget insert is lost when the function freezes.
+      await recordSearch({
+        query: searchQuery,
+        industries: industryList,
+        locations: locationList,
+        resultCount: liveResults.length,
+        userId: req.user?.userId,
+      });
     }
 
     // Deduplicate: exclude DB results that match live result URLs
@@ -291,6 +300,13 @@ export async function liveSearch(
       locationList,
       liveFilters
     );
+    await recordSearch({
+      query: searchQuery,
+      industries: industryList,
+      locations: locationList,
+      resultCount: results.length,
+      userId: req.user?.userId,
+    });
 
     res.json({
       success: true,

@@ -119,3 +119,18 @@ model ScraperRun {
 
   @@index([scraper, startedAt])
 }
+
+// One row per live search, so frequent queries can be promoted into the
+// scheduled Linkup slice and the admin dashboard can show what people look for.
+model SearchLog {
+  id          String   @id @default(uuid())
+  query       String
+  industries  String   @default("[]")
+  locations   String   @default("[]")
+  resultCount Int      @default(0)
+  userId      String?
+  createdAt   DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([query])
+}
