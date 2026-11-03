@@ -1,5 +1,7 @@
 import { createContext, useState, useEffect, type ReactNode } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '../api/client';
+import { queryKeys } from '../hooks/queryKeys';
 import type { User } from '../types';
 
 interface AuthContextType {
@@ -26,8 +28,18 @@ interface AuthCookieResponse {
 }
 
 export function AuthProvider({ children }: AuthProviderProps) {
+  const queryClient = useQueryClient();
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+
+  // Opportunity responses carry per-user match scores, so a change of user
+  // means every cached list and detail is for someone else.
+  const resetUserScopedQueries = () => {
+    queryClient.removeQueries({ queryKey: queryKeys.profile });
+    queryClient.removeQueries({ queryKey: queryKeys.saved.all });
+    queryClient.invalidateQueries({ queryKey: queryKeys.opportunities.all });
+    queryClient.invalidateQueries({ queryKey: ['opportunity'] });
+  };
 
   // Check the session cookie once on mount; a cancelled check (StrictMode
   // remount, provider unmount) must not touch state afterwards.
@@ -57,6 +69,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
     if (response.data) {
       setUser(response.data.user);
+      resetUserScopedQueries();
     }
   };
 
@@ -76,6 +89,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
     if (response.data) {
       setUser(response.data.user);
+      resetUserScopedQueries();
     }
   };
 
@@ -86,6 +100,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       // Clear local state even if server call fails
     }
     setUser(null);
+    resetUserScopedQueries();
   };
 
   return (

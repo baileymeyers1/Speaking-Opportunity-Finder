@@ -19,6 +19,8 @@ interface FilterPanelProps {
   /** Called with the effective filters, including any search text not yet committed. */
   onLiveSearch?: (filters: OpportunityFilters) => void;
   isSearching?: boolean;
+  /** True when the signed-in user has a speaker profile, which "Best match" needs. */
+  matchSortAvailable?: boolean;
 }
 
 export function FilterPanel({
@@ -26,6 +28,7 @@ export function FilterPanel({
   onFiltersChange,
   onLiveSearch,
   isSearching = false,
+  matchSortAvailable = false,
 }: FilterPanelProps) {
   const [isExpanded, setIsExpanded] = useState(false);
 
@@ -66,6 +69,11 @@ export function FilterPanel({
               <SelectItem value="deadline">Deadline (soonest)</SelectItem>
               <SelectItem value="eventDate">Event date (soonest)</SelectItem>
               <SelectItem value="quality">Quality (highest)</SelectItem>
+              {(matchSortAvailable || filters.sortBy === 'match') && (
+                <SelectItem value="match" disabled={!matchSortAvailable}>
+                  Best match
+                </SelectItem>
+              )}
             </SelectContent>
           </Select>
         </div>

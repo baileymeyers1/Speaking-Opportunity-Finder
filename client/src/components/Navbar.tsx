@@ -53,6 +53,11 @@ export function Navbar() {
               Saved
             </Link>
           )}
+          {isAuthenticated && (
+            <Link to="/profile" className={navLinkClass('/profile')} aria-current={isActive('/profile') ? 'page' : undefined}>
+              Profile
+            </Link>
+          )}
           {isAuthenticated && isAdmin && (
             <Link
               to="/admin/dashboard"
@@ -142,6 +147,21 @@ export function Navbar() {
                     )}
                   >
                     Saved
+                  </Link>
+                )}
+                {isAuthenticated && (
+                  <Link
+                    to="/profile"
+                    onClick={() => setSheetOpen(false)}
+                    aria-current={isActive('/profile') ? 'page' : undefined}
+                    className={cn(
+                      'px-2 py-1.5 text-sm font-medium rounded-md transition-colors',
+                      isActive('/profile')
+                        ? 'bg-accent text-accent-foreground'
+                        : 'text-foreground/60 hover:text-foreground hover:bg-accent/50'
+                    )}
+                  >
+                    Profile
                   </Link>
                 )}
                 {isAuthenticated && isAdmin && (

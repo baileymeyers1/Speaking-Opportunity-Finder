@@ -17,7 +17,8 @@ export const COMPENSATION_TYPES: readonly CompensationType[] = [
   'honorarium',
 ];
 
-export const SORT_OPTIONS: readonly SortBy[] = ['deadline', 'eventDate', 'quality'];
+/** `match` only ranks for a signed-in user with a speaker profile; the server falls back to quality otherwise. */
+export const SORT_OPTIONS: readonly SortBy[] = ['deadline', 'eventDate', 'quality', 'match'];
 
 export const DEFAULT_SORT: SortBy = 'deadline';
 

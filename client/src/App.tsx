@@ -17,6 +17,7 @@ const Register = lazy(() => import('./pages/Register'));
 const AdminDashboard = lazy(() => import('./pages/AdminDashboard'));
 const ForgotPassword = lazy(() => import('./pages/ForgotPassword'));
 const ResetPassword = lazy(() => import('./pages/ResetPassword'));
+const Profile = lazy(() => import('./pages/Profile'));
 
 function AppContent() {
   // Fire-and-forget health ping to warm the serverless function on app load
@@ -38,6 +39,7 @@ function AppContent() {
           <Route path="/" element={<Home />} />
           <Route path="/opportunities/:id" element={<OpportunityDetail />} />
           <Route path="/saved" element={<SavedOpportunities />} />
+          <Route path="/profile" element={<Profile />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />

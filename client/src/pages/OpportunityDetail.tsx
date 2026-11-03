@@ -6,6 +6,7 @@ import { useSaveOpportunity } from '../hooks/useSaveOpportunity';
 import type { SavedCategory } from '../types';
 import { OpportunityDetailSkeleton } from '../components/OpportunityDetailSkeleton';
 import { DateWithConfidence, VerifiedBadge } from '../components/VerificationHints';
+import { hasMatchScore, MatchExplanationBlock } from '../components/MatchHints';
 
 import { Card, CardHeader, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -156,6 +157,14 @@ export function OpportunityDetail() {
         </CardHeader>
 
         <CardContent className="space-y-6">
+          {/* Match against the signed-in user's speaker profile */}
+          {hasMatchScore(opportunity) && (
+            <>
+              <MatchExplanationBlock opportunity={opportunity} />
+              <Separator />
+            </>
+          )}
+
           {/* Description */}
           {opportunity.description && (
             <div className="space-y-2">
