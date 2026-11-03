@@ -16,12 +16,18 @@ export async function getCatalogue(now: Date = new Date()): Promise<AdminCatalog
     isRelevant: true,
     OR: [{ cfpDeadline: { gte: today } }, { cfpDeadline: null }],
   };
+  // A deadline is stored as the end of its day in its zone, AoE (UTC-12) by
+  // default, so "day N" closes at 11:59:59 UTC on day N+1. An edge at noon UTC
+  // of day N+1 puts day N's deadline in the earlier bucket for every zone west
+  // of UTC+12; the first bucket starts at today so a not-yet-migrated
+  // midnight-UTC row for today still counts.
+  const bucketEdge = (days: number) => new Date(today.getTime() + days * DAY_MS + DAY_MS / 2);
   const deadlineBetween = (fromDays: number, toDays: number | null) => ({
     isClosed: false,
     isRelevant: true,
     cfpDeadline: {
-      gte: new Date(today.getTime() + fromDays * DAY_MS),
-      ...(toDays === null ? {} : { lt: new Date(today.getTime() + toDays * DAY_MS) }),
+      gte: fromDays === 0 ? today : bucketEdge(fromDays),
+      ...(toDays === null ? {} : { lt: bucketEdge(toDays) }),
     },
   });
 

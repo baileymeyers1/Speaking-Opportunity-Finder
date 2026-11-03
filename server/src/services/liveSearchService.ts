@@ -11,7 +11,8 @@ import {
   type ExtractionResult,
 } from './extraction.js';
 import { fetchPageText } from './pageText.js';
-import { mapWithConcurrency } from '../scrapers/lib/html.js';
+import { mapWithConcurrency, parseHumanDate } from '../scrapers/lib/html.js';
+import { endOfCalendarDay } from '../lib/deadlines.js';
 import { buildCreateData } from '../scrapers/persistData.js';
 import type { ScraperResult } from '../scrapers/qualityScore.js';
 
@@ -27,6 +28,8 @@ export interface EnrichedLiveResult {
   isRemote: boolean;
   eventDate: string | null;
   cfpDeadline: string | null;
+  /** Set by Claude extraction when the page states a zone; null = read as AoE. */
+  deadlineTimezone?: string | null;
   format: string;
   industries: string[];
   compensationType: string | null;
@@ -398,10 +401,11 @@ function extractDeadline(content: string): string | null {
   for (const pattern of deadlinePatterns) {
     const match = content.match(pattern);
     if (match) {
-      const parsed = new Date(match[1]);
-      const thisYear = new Date().getFullYear();
-      if (!isNaN(parsed.getTime()) && parsed.getFullYear() >= thisYear - 1 && parsed.getFullYear() <= thisYear + 4) {
-        return parsed.toISOString();
+      const day = parseHumanDate(match[1]);
+      const thisYear = new Date().getUTCFullYear();
+      if (day && day.getUTCFullYear() >= thisYear - 1 && day.getUTCFullYear() <= thisYear + 4) {
+        // A snippet never states a zone: the day is read as Anywhere on Earth.
+        return endOfCalendarDay(day)?.toISOString() ?? null;
       }
     }
   }
@@ -736,6 +740,7 @@ export function applyExtractionToLiveResult(result: EnrichedLiveResult, extracti
   result.isRemote = merged.isRemote;
   result.eventDate = merged.eventDate ? merged.eventDate.toISOString() : null;
   result.cfpDeadline = merged.cfpDeadline ? merged.cfpDeadline.toISOString() : null;
+  result.deadlineTimezone = merged.cfpDeadline ? (merged.deadlineTimezone ?? null) : null;
   result.format = merged.format;
   result.industries = merged.industries;
   result.compensationType = merged.compensationType ?? null;
@@ -926,6 +931,7 @@ function liveResultToScraperResult(result: EnrichedLiveResult): ScraperResult {
     isRemote: result.isRemote,
     eventDate: result.eventDate ? new Date(result.eventDate) : undefined,
     cfpDeadline: result.cfpDeadline ? new Date(result.cfpDeadline) : undefined,
+    deadlineTimezone: result.deadlineTimezone ?? null,
     format: result.format,
     industries: result.industries,
     compensationType: result.compensationType || undefined,

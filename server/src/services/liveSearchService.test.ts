@@ -35,6 +35,7 @@ function extraction(overrides: Partial<ExtractionResult> = {}): ExtractionResult
   return {
     eventDate: null,
     cfpDeadline: null,
+    deadlineTimezone: null,
     location: null,
     isRemote: false,
     isClosed: false,
@@ -131,16 +132,23 @@ describe('buildLiveCreateData', () => {
     const result = makeResult({ industries: ['ai'] });
     applyExtractionToLiveResult(
       result,
-      extraction({ cfpDeadline: new Date('2027-01-15T00:00:00Z'), location: 'Denver, CO', confidence: { eventDate: 'low', cfpDeadline: 'high', location: 'high' } }),
+      extraction({
+        cfpDeadline: new Date('2027-01-16T04:59:59Z'),
+        deadlineTimezone: 'America/Denver',
+        location: 'Denver, CO',
+        confidence: { eventDate: 'low', cfpDeadline: 'high', location: 'high' },
+      }),
       NOW
     );
     result.extracted = true;
     result.pageFetched = true;
+    expect(result.deadlineTimezone).toBe('America/Denver');
     const data = buildLiveCreateData(result, NOW);
     expect(data.enrichmentStatus).toBe('enriched');
     expect(data.enrichedAt).toEqual(NOW);
     expect(data.verifiedAt).toEqual(NOW);
-    expect(data.cfpDeadline).toEqual(new Date('2027-01-15T00:00:00Z'));
+    expect(data.cfpDeadline).toEqual(new Date('2027-01-16T04:59:59Z'));
+    expect(data.deadlineTimezone).toBe('America/Denver');
     expect(data.location).toBe('Denver, CO');
     expect(data.dateConfidence).toBe(JSON.stringify({ eventDate: 'low', cfpDeadline: 'high', location: 'high' }));
     expect(data.industries).toBe(JSON.stringify(['ai']));
