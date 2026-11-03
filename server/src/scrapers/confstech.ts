@@ -1,5 +1,6 @@
 import type { ScraperResult } from './index.js';
 import { cleanTitle, normalizeIndustries } from '../services/dataNormalization.js';
+import { parseIsoDeadline } from '../lib/deadlines.js';
 
 const CONFS_TECH_BASE_URL =
   'https://raw.githubusercontent.com/tech-conferences/conference-data/main/conferences';
@@ -78,13 +79,9 @@ function mapToScraperResult(
     return null;
   }
 
-  // Skip if CFP has already ended
-  if (conf.cfpEndDate) {
-    const cfpEnd = new Date(conf.cfpEndDate);
-    if (cfpEnd < new Date()) {
-      return null;
-    }
-  }
+  // confs.tech states the closing day (YYYY-MM-DD) with no zone: it is read as Anywhere on Earth.
+  const deadline = parseIsoDeadline(conf.cfpEndDate);
+  if (deadline && deadline.instant < new Date()) return null;
 
   const location =
     conf.city && conf.country ? `${conf.city}, ${conf.country}` : conf.country;
@@ -96,7 +93,8 @@ function mapToScraperResult(
     location: location || null,
     isRemote: conf.online || false,
     eventDate: conf.startDate ? new Date(conf.startDate) : undefined,
-    cfpDeadline: conf.cfpEndDate ? new Date(conf.cfpEndDate) : undefined,
+    cfpDeadline: deadline?.instant,
+    deadlineTimezone: deadline?.zone,
     format: 'conference',
     industries: normalizeIndustries(['technology', topic]),
     compensationType: undefined, // confs.tech doesn't provide compensation info

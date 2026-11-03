@@ -29,6 +29,7 @@ function makeExisting(overrides: Partial<ExistingOpportunityRow> = {}): Existing
     isRemote: true,
     eventDate: new Date('2027-06-01T00:00:00Z'),
     cfpDeadline: new Date('2027-02-01T00:00:00Z'),
+    deadlineTimezone: null,
     format: 'conference',
     industries: JSON.stringify(['open source', 'linux']),
     compensationType: 'travel',
@@ -80,6 +81,23 @@ describe('buildUpdateData', () => {
     expect(data.location).toBe('Prague');
     expect(data.cfpDeadline).toEqual(new Date('2027-01-15T00:00:00Z'));
     expect(JSON.parse(data.industries)).toEqual(['technology']);
+  });
+
+  it('moves the deadline timezone together with the deadline it qualifies', () => {
+    const scraped = makeScraped({ cfpDeadline: new Date('2027-01-16T04:59:59Z'), deadlineTimezone: 'America/Denver' });
+    const enriched = makeExisting({ cfpDeadline: new Date('2027-02-01T11:59:59Z'), deadlineTimezone: 'AoE' });
+    expect(buildUpdateData(scraped, enriched)).toMatchObject({
+      cfpDeadline: new Date('2027-02-01T11:59:59Z'),
+      deadlineTimezone: 'AoE',
+    });
+    expect(buildUpdateData(scraped, makeExisting({ cfpDeadline: null, deadlineTimezone: null }))).toMatchObject({
+      cfpDeadline: new Date('2027-01-16T04:59:59Z'),
+      deadlineTimezone: 'America/Denver',
+    });
+    expect(buildUpdateData(scraped, makeExisting({ enrichmentStatus: null }))).toMatchObject({
+      deadlineTimezone: 'America/Denver',
+    });
+    expect(buildCreateData(makeScraped({ cfpDeadline: undefined, deadlineTimezone: 'UTC' })).deadlineTimezone).toBeNull();
   });
 
   it('refreshes the raw description even on an enriched row', () => {

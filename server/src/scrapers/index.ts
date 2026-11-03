@@ -368,9 +368,19 @@ async function persistResults(results: ScraperResult[]): Promise<{ added: number
   return { added, updated };
 }
 
+/**
+ * A row stored before deadlines carried a zone holds midnight UTC of its
+ * closing day, which under the AoE reading stays open until 11:59:59 UTC the
+ * next day: 36 hours later. Deleting only what closed at least that long ago
+ * never removes a call that is still open anywhere on Earth, whichever shape
+ * the row has (see lib/deadlines.ts and scripts/shiftLegacyDeadlines.ts).
+ */
+export const EXPIRED_GRACE_MS = 36 * 60 * 60 * 1000;
+
 async function cleanupExpired(): Promise<number> {
   const now = new Date();
   const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+  const expiredBefore = new Date(now.getTime() - EXPIRED_GRACE_MS);
 
   // Rows a user has saved are never deleted: deleting them would cascade to
   // their SavedOpportunity rows. They stay in the DB and are hidden from
@@ -380,7 +390,7 @@ async function cleanupExpired(): Promise<number> {
   // Delete expired, unsaved, non-live results
   const expiredResult = await prisma.opportunity.deleteMany({
     where: {
-      cfpDeadline: { lt: now },
+      cfpDeadline: { lt: expiredBefore },
       NOT: { source: { startsWith: 'Live Search' } },
       ...notSaved,
     },

@@ -1,6 +1,8 @@
 import type { ScraperResult } from './index.js';
 import { cleanTitle, extractOrganization, normalizeIndustries } from '../services/dataNormalization.js';
 import { LINKUP_QUERIES, type LinkupQuery } from './linkupQueries.js';
+import { parseHumanDate } from './lib/html.js';
+import { endOfCalendarDay } from '../lib/deadlines.js';
 
 export { LINKUP_QUERY_COUNT, type LinkupQuery } from './linkupQueries.js';
 
@@ -58,10 +60,9 @@ function extractDeadline(content: string): Date | undefined {
   for (const pattern of patterns) {
     const match = content.match(pattern);
     if (match) {
-      const parsed = new Date(match[1]);
-      if (!isNaN(parsed.getTime()) && parsed > new Date()) {
-        return parsed;
-      }
+      // A search snippet never states a zone: the day is read as Anywhere on Earth.
+      const deadline = endOfCalendarDay(parseHumanDate(match[1]));
+      if (deadline && deadline > new Date()) return deadline;
     }
   }
 

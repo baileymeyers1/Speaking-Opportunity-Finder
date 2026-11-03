@@ -33,6 +33,7 @@ describe('parseSessionizeEventPage', () => {
     expect(page.isClosed).toBe(false);
     expect(page.opensAt?.toISOString()).toBe('2026-11-02T00:00:00.000Z');
     expect(page.closesAt?.toISOString()).toBe('2026-11-16T00:00:00.000Z');
+    expect(page.closing).toEqual({ instant: new Date('2026-11-17T04:59:00Z'), offsetMinutes: -300 });
     expect(page.eventDate?.toISOString()).toBe('2026-12-05T00:00:00.000Z');
     expect(page.plannedDates).toEqual([]);
     expect(page.location).toBe('Lima, Peru');
@@ -95,7 +96,9 @@ describe('buildSessionizeResults', () => {
     const netConf = results.find((result) => result.title.startsWith('.NET Conf'))!;
     expect(netConf.applyUrl).toBe(pageUrl('net-conf-2026-my-agents-latam-lima'));
     expect(netConf.sourceUrl).toBe('https://www.meetup.com/my-agents-latam/events/317253972/');
-    expect(netConf.cfpDeadline?.toISOString()).toBe('2026-11-16T00:00:00.000Z');
+    // "Call closes at 11:59 PM, 16 Nov 2026" at UTC-5: the exact instant Sessionize embeds.
+    expect(netConf.cfpDeadline?.toISOString()).toBe('2026-11-17T04:59:00.000Z');
+    expect(netConf.deadlineTimezone).toBe('Etc/GMT+5');
     expect(netConf.eventDate?.toISOString()).toBe('2026-12-05T00:00:00.000Z');
     expect(netConf.source).toBe('sessionize.com');
     expect(netConf.format).toBe('conference');

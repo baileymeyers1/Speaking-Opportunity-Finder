@@ -21,6 +21,7 @@ export interface ExistingOpportunityRow {
   isRemote: boolean;
   eventDate: Date | null;
   cfpDeadline: Date | null;
+  deadlineTimezone: string | null;
   format: string;
   industries: string;
   compensationType: string | null;
@@ -41,6 +42,7 @@ export interface ScrapedUpdateData {
   isRemote: boolean;
   eventDate: Date | null;
   cfpDeadline: Date | null;
+  deadlineTimezone: string | null;
   format: string;
   industries: string;
   compensationType: string | null;
@@ -101,6 +103,7 @@ function scrapedFields(result: ScraperResult) {
     isRemote: result.isRemote,
     eventDate: result.eventDate || null,
     cfpDeadline: result.cfpDeadline || null,
+    deadlineTimezone: result.cfpDeadline ? (result.deadlineTimezone ?? null) : null,
     format: result.format,
     industries: result.industries || [],
     compensationType: result.compensationType || inferred.compensationType || null,
@@ -139,6 +142,8 @@ export function buildUpdateData(
   const existingIndustries = parseIndustries(existing.industries);
   const industries =
     preserveEnriched && existingIndustries.length > 0 ? existingIndustries : scraped.industries;
+  // The zone travels with the deadline it qualifies.
+  const keepExistingDeadline = preserveEnriched && existing.cfpDeadline !== null;
 
   const merged = {
     title: pick(existing.title, scraped.title) as string,
@@ -148,7 +153,8 @@ export function buildUpdateData(
     location: pick(existing.location, scraped.location),
     isRemote: preserveEnriched ? existing.isRemote : scraped.isRemote,
     eventDate: pick(existing.eventDate, scraped.eventDate),
-    cfpDeadline: pick(existing.cfpDeadline, scraped.cfpDeadline),
+    cfpDeadline: keepExistingDeadline ? existing.cfpDeadline : scraped.cfpDeadline,
+    deadlineTimezone: keepExistingDeadline ? existing.deadlineTimezone : scraped.deadlineTimezone,
     format: scraped.format,
     industries,
     compensationType: pick(existing.compensationType, scraped.compensationType),

@@ -119,12 +119,17 @@ export function startOfUtcDay(now: Date): Date {
 
 /**
  * Parse the human-readable date formats the scraped sources use:
- * "10th November 2026", "10 Nov 2026", "Nov 13, 2026", "November 13 2026", "2026-11-13".
- * Returns UTC midnight, or undefined when the text holds no valid date.
+ * "10th November 2026", "10 Nov 2026", "Nov 13, 2026", "November 13 2026",
+ * "2026-11-13", "11/13/2026" (US order). Returns the calendar day as UTC
+ * midnight (a day, not an instant: see lib/deadlines.ts for turning it into
+ * the moment a deadline passes), or undefined when the text holds no valid date.
  */
 export function parseHumanDate(text: string): Date | undefined {
   const iso = text.match(/(?<!\d)(\d{4})-(\d{2})-(\d{2})(?!\d)/);
   if (iso) return utcDate(Number(iso[1]), Number(iso[2]) - 1, Number(iso[3]));
+
+  const slashed = text.match(/(?<!\d)(\d{1,2})\/(\d{1,2})\/(\d{4})(?!\d)/);
+  if (slashed) return utcDate(Number(slashed[3]), Number(slashed[1]) - 1, Number(slashed[2]));
 
   const dayFirst = text.match(/\b(\d{1,2})(?:st|nd|rd|th)?\s+([A-Za-z]{3,9})\.?,?\s+(\d{4})\b/);
   if (dayFirst) {

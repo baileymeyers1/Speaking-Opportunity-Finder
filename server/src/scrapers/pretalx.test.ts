@@ -35,6 +35,7 @@ describe('parsePretalxEventList', () => {
     expect(ossfe?.name).toBe('OSSFE 2027');
     expect(ossfe?.dateFrom.toISOString()).toBe('2027-06-01T00:00:00.000Z');
     expect(ossfe?.dateTo?.toISOString()).toBe('2027-06-04T00:00:00.000Z');
+    expect(ossfe?.timezone).toBe('America/Chicago');
   });
 
   it('accepts a paginated envelope and rejects anything else', () => {
@@ -126,13 +127,16 @@ describe('buildPretalxResults', () => {
     expect(ossfe.applyUrl).toBe('https://cfp.ossfe.org/ossfe2027/cfp');
     expect(ossfe.sourceUrl).toBe('https://pretalx.com/ossfe2027/');
     expect(ossfe.eventDate?.toISOString()).toBe('2027-06-01T00:00:00.000Z');
-    expect(ossfe.cfpDeadline?.toISOString()).toBe('2026-11-11T00:00:00.000Z');
+    // "Submissions close on 2026-11-11" is the end of that day in the event's zone (America/Chicago, CST).
+    expect(ossfe.cfpDeadline?.toISOString()).toBe('2026-11-12T05:59:59.000Z');
+    expect(ossfe.deadlineTimezone).toBe('America/Chicago');
     expect(ossfe.source).toBe('pretalx.com');
     expect(ossfe.format).toBe('conference');
 
     const pydata = results.find((result) => result.title === 'PyData Global 2026')!;
     expect(pydata.applyUrl).toBe('https://pretalx.com/pydata-global-2026/cfp');
     expect(pydata.cfpDeadline).toBeUndefined();
+    expect(pydata.deadlineTimezone).toBeNull();
   });
 
   it('drops an open CFP whose deadline has passed', () => {
