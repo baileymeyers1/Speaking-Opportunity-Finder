@@ -101,7 +101,10 @@ export interface OpportunityBase<DateType> {
   location: string | null;
   isRemote: boolean;
   eventDate: DateType | null;
+  /** The instant the call closes: end of the stated day in `deadlineTimezone` (AoE when none). */
   cfpDeadline: DateType | null;
+  /** IANA zone name or `AoE`; null when the page states none (the deadline is then read as AoE). */
+  deadlineTimezone?: string | null;
   format: OpportunityFormat;
   industries: string[];
   compensationType: CompensationType | null;
@@ -179,6 +182,7 @@ export interface SaveLiveOpportunityInput {
   isRemote?: boolean;
   eventDate?: string | null;
   cfpDeadline?: string | null;
+  deadlineTimezone?: string | null;
   format?: OpportunityFormat;
   industries?: string[];
   compensationType?: CompensationType | null;

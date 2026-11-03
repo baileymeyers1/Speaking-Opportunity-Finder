@@ -51,6 +51,7 @@ model Opportunity {
   verifiedAt          DateTime?
   verificationError   String?
   dateConfidence      String?
+  deadlineTimezone    String?
   savedBy             SavedOpportunity[]
 
   @@index([cfpDeadline])
