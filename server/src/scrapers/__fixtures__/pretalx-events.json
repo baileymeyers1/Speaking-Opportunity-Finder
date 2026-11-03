@@ -1,0 +1,92 @@
+[
+ {
+  "name": {
+   "en": "THOTCON 0xE"
+  },
+  "slug": "thotcon-0xe",
+  "is_public": true,
+  "date_from": "2027-06-11",
+  "date_to": "2027-06-12",
+  "timezone": "America/Chicago"
+ },
+ {
+  "name": {
+   "en": "OSSFE 2027"
+  },
+  "slug": "ossfe2027",
+  "is_public": true,
+  "date_from": "2027-06-01",
+  "date_to": "2027-06-04",
+  "timezone": "America/Chicago"
+ },
+ {
+  "name": {
+   "en": "KCD Texas 2027"
+  },
+  "slug": "kcd-texas-2027",
+  "is_public": true,
+  "date_from": "2027-04-23",
+  "date_to": "2027-04-23",
+  "timezone": "America/Chicago"
+ },
+ {
+  "name": {
+   "en": "BSidesSF 2027"
+  },
+  "slug": "bsidessf-2027",
+  "is_public": true,
+  "date_from": "2027-04-03",
+  "date_to": "2027-04-04",
+  "timezone": "US/Pacific"
+ },
+ {
+  "name": {
+   "en": "BSides London 2026"
+  },
+  "slug": "bsides-london-2026",
+  "is_public": true,
+  "date_from": "2026-12-12",
+  "date_to": "2026-12-12",
+  "timezone": "UTC"
+ },
+ {
+  "name": {
+   "en": "PyData Global 2026"
+  },
+  "slug": "pydata-global-2026",
+  "is_public": true,
+  "date_from": "2026-12-09",
+  "date_to": "2026-12-10",
+  "timezone": "UTC"
+ },
+ {
+  "name": {
+   "en": "DemoCon"
+  },
+  "slug": "democon",
+  "is_public": true,
+  "date_from": "2026-11-03",
+  "date_to": "2026-11-05",
+  "timezone": "Asia/Manila"
+ },
+ {
+  "name": {
+   "en": "Qubes OS Summit 2026"
+  },
+  "slug": "qubes-os-summit-2026",
+  "is_public": true,
+  "date_from": "2026-10-30",
+  "date_to": "2026-11-01",
+  "timezone": "Europe/Berlin"
+ },
+ {
+  "name": {
+   "en": "Hidden Test Event"
+  },
+  "slug": "hidden-test",
+  "is_public": false,
+  "date_from": "2027-03-01",
+  "date_to": "2027-03-02",
+  "timezone": "UTC"
+ }
+]

@@ -31,7 +31,7 @@ Aggregates speaking opportunities (CFPs, conferences, podcasts, meetups) from mu
 - `server/src/services/enrichmentService.ts` -- Enrichment of a row via extraction; `backgroundEnrichment.ts` -- cron worker (enrich, then verify)
 - `server/src/services/verification.ts` -- Which stored rows are re-verified when, and what a check updates
 - `server/src/scrapers/index.ts` -- Scraper registry, per-scraper runs with time budget, persistence
-- `server/src/scrapers/` -- confs.tech, javaconferences, callingallpapers, developers.events and a Linkup slice (daily); WikiCFP, ConferenceAlerts (weekly)
+- `server/src/scrapers/` -- confs.tech, javaconferences, callingallpapers, developers.events, pretalx (hosted API + CFP pages), sessionize (public event pages via the events sitemap) and a Linkup slice (daily); WikiCFP, ConferenceAlerts (weekly). `linkupQueries.ts` holds the Linkup query set, each entry with its `format`; `services/searchLog.ts` promotes frequent live-search queries into the daily Linkup run
 - `client/src/pages/Home.tsx` -- Main grid with unified live+stored results
 - `client/src/components/` -- OpportunityCard (deadline badges), MultiSelectDropdown
 - `prisma/schema.prisma` -- Data model (User, Opportunity, SavedOpportunity, SavedSearch, EnrichmentUsage, ScraperRun)

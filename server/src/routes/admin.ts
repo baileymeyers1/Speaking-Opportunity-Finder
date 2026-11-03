@@ -15,6 +15,7 @@ router.get('/analytics', adminController.getAnalytics);
 // Get individual analytics sections
 router.get('/analytics/scraper-health', adminController.getScraperHealth);
 router.get('/analytics/scraper-runs', adminController.getScraperRuns);
+router.get('/analytics/search-log', adminController.getSearchLog);
 router.get('/analytics/source-quality', adminController.getSourceQuality);
 router.get('/analytics/database-stats', adminController.getDatabaseStats);
 router.get('/analytics/live-search', adminController.getLiveSearchAnalytics);

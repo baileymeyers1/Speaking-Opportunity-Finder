@@ -3,13 +3,17 @@
 Current state only. History lives in `docs/CHANGELOG.md`. Full review: `docs/plans/2026-11-02-architecture-review.md`. What to build next and why: `docs/plans/2026-11-02-roadmap.md`.
 
 ## Last Updated
-- **Date:** 2026-11-02
-- **Session summary:** One schema-validated Claude extraction for both enrichment paths; the enrichment worker fetches the apply page; stored listings are re-verified on a schedule (`verifiedAt`); live search returns in ~10s and persists every hit for the worker (PR #3, merged). Client data flow rebuilt on URL filters + TanStack Query, large files split, shared wire types, ESLint (PR #4, open).
+- **Date:** 2026-11-03
+- **Session summary:** New sources: Pretalx (hosted API + per-event CFP pages) and Sessionize (public event pages from the events sitemap), both daily; Linkup queries carry a `format` and now include podcast, meetup, webinar and panel calls; every live search is logged in `SearchLog` and the two most frequent recent queries are promoted into the daily Linkup run; `GET /api/admin/analytics/search-log` (branch `feature/new-sources-search-log`).
 
 ## What's Working
 - Browse, filters, saved opportunities, saved searches, auth (JWT cookie), admin dashboard.
 - **Hosting: Vercel only.** Express runs as one serverless function; Vercel Cron drives syncs and enrichment. The build copies the production schema and runs `prisma db push`, so schema changes deploy themselves.
-- **Scrapers** (registry in `server/src/scrapers/index.ts`): confs.tech, javaconferences.org, callingallpapers.com, developers.events, linkup (daily, Linkup runs a 6-query rotating slice); wikicfp.com, conferencealerts.com (weekly). papercall.io was removed: the domain no longer resolves. Each run persists its own rows and is recorded in `ScraperRun` (`GET /api/admin/analytics/scraper-runs`). Syncs take a time budget (50s under cron) and run least-recently-run sources first, so nothing starves.
+- **Scrapers** (registry in `server/src/scrapers/index.ts`): confs.tech, javaconferences.org, callingallpapers.com, developers.events, pretalx.com, sessionize.com, linkup (daily); wikicfp.com, conferencealerts.com (weekly). papercall.io was removed: the domain no longer resolves. Each run persists its own rows and is recorded in `ScraperRun` (`GET /api/admin/analytics/scraper-runs`). Syncs take a time budget (50s under cron) and run least-recently-run sources first, so nothing starves.
+- **Pretalx** (`scrapers/pretalx.ts`): `GET {instance}/api/events/` is a flat public list (pretalx.com: 755 events, ~83 upcoming); each upcoming event's `/{slug}/cfp` page gives open/closed (the submit button) and the deadline (a localized status line). Instances: pretalx.com and pretalx.c3voc.de. Live 2026-11-03: 39 open calls in 3.5s. The API has no location; enrichment fills it.
+- **Sessionize** (`scrapers/sessionize.ts`): the Discover listing needs a login, but `sitemap/events.xml` lists ~11,000 public event pages newest first and each page states CFP open/close dates, event date(s), location and website. Each run reads the newest 80 pages; recurring user groups are labelled `meetup`. Live 2026-11-03: 74 open calls (56 conference, 18 meetup) in 3.0s.
+- **Linkup query set** (`scrapers/linkupQueries.ts`, 110 queries): 89 industry conference queries plus a format group (8 podcast guest calls, 6 meetup/user-group, 4 webinar, 3 panel), each stored with its `format`. The daily run takes a 6-query rotating slice plus up to 2 promoted queries.
+- **Search log** (`services/searchLog.ts`, model `SearchLog`): both live-search controllers await one insert per search (query normalized, industries/locations JSON, result count, user id when signed in). `promotedLinkupQueries` returns the most frequent normalized queries of the last 30 days, searched at least twice and not in the static set, as `"<query> call for speakers CFP <years>"`. `GET /api/admin/analytics/search-log` returns 7/30-day totals and the top queries for the admin dashboard.
 - **One extraction call** (`server/src/services/extraction.ts`): structured outputs (`output_config.format`, strict JSON schema) on `claude-haiku-5-5` return typed dates, location, closed/relevant flags, compensation, format, industries, cleaned title/organization and a high/medium/low confidence per date field. `mergeExtraction` holds the single set of merge rules. Enrichment, verification and live search all go through it.
 - **Background enrichment** fetches `applyUrl` first (`services/pageText.ts`, 8s, 5000 visible chars) and extracts from the page text; a 404/410 closes the row without a Claude call. DB-backed daily budget (200 calls), per-row claim lock, 3 retries, 50s time budget per cron run. Re-scrapes preserve enriched fields. Cleanup never deletes saved rows. Closed/irrelevant rows are flagged in columns and hidden.
 - **Scheduled verification** (`services/verification.ts`): once no unenriched rows remain, the same cron re-checks stored listings against their page. Deadlines within 14 days are re-checked every 2 days, everything visible weekly; dates, location, remote flag, compensation and `isClosed` follow the page; `verifiedAt` / `verificationError` / `dateConfidence` are stored. Same daily budget.
@@ -27,7 +31,7 @@ Current state only. History lives in `docs/CHANGELOG.md`. Full review: `docs/pla
 
 ## What's Next (decided 2026-11-03; reasoning in the roadmap)
 1. Speaker profile and explainable match score (roadmap 7), deterministic, no embeddings.
-2. New sources: Pretalx, Sessionize, podcast guest calls and meetup speaker calls (roadmap 9 + 10); `SearchLog` and promotion of frequent live-search queries into the Linkup slice (rest of 8).
+2. ~~New sources and search log (roadmap 9 + 10 + rest of 8)~~ shipped on `feature/new-sources-search-log`; the admin dashboard still needs to render `search-log`.
 3. Admin dashboard deep rework (roadmap 11).
 4. Deferred: saved-search email digests + password-reset email (soon); application tracker with an in-app deadline calendar, no ICS feed (later).
 5. Single Postgres schema; Prisma 7; Anthropic SDK 1.x; `npm audit fix`.
@@ -41,6 +45,9 @@ Current state only. History lives in `docs/CHANGELOG.md`. Full review: `docs/pla
 - Rate limiters are skipped in development and use the in-memory store in production, which does nothing across serverless instances.
 - The Playwright auth/saved specs register accounts with `test-${Date.now()}@example.com`; two workers starting in the same millisecond collide, so one of them fails now and then under `fullyParallel`.
 - conferencealerts.com is a general conference directory; rows kept are those with an open abstract deadline, and some are expos whose deadline equals the event date. WikiCFP rows are academic calls for papers.
+- About a fifth of open Pretalx calls set no deadline in Pretalx (the submit button is live, the status line is empty or only in prose); they are stored without `cfpDeadline` and verification closes them from the page text. Pretalx events carry no location, Sessionize rows no industries, until enrichment runs.
+- Sessionize reads only the newest 80 event pages per run (~4 new events a day), so an older call that reopens is picked up by verification, not by the scraper.
+- The daily cron now has 7 daily sources for a 50s budget; the least-recently-run ordering means a slow day skips one or two, which run first the next day.
 - Rows enriched before verification shipped have `verifiedAt = null` and are picked up by the weekly sweep, oldest first.
 - `server/src/scripts/promoteAdmin.ts` still creates its own PrismaClient (standalone script, acceptable).
 
@@ -48,6 +55,6 @@ Current state only. History lives in `docs/CHANGELOG.md`. Full review: `docs/pla
 - Dev: SQLite at `prisma/dev.db`; run `npx prisma db push` after pulling schema changes.
 - `npm run dev` starts both servers. The desktop-app preview injects `PORT`, which the Express server also reads; start the API separately (`PORT=3001 npx tsx server/src/index.ts`) when previewing only the client.
 - E2E: `npx playwright test` against the dev servers (`reuseExistingServer`). The live-search spec mocks the API; the others need the real API on 3001.
-- Manual sync of one source (admin token required): `POST /api/sync?mode=daily&scraper=confs.tech`.
+- Manual sync of one source (admin token required): `POST /api/sync?mode=daily&scraper=confs.tech` (names: `pretalx.com`, `sessionize.com`, `linkup`, …). Without a server, `runScraper(def, 45_000)` from a `.mts` script does the same against the local DB.
 - Enrichment calls that hit Claude are manual only; unit tests never call the API. A live check: `npx tsx` a script that imports `services/extraction.ts` with `ANTHROPIC_API_KEY` exported (see CHANGELOG 2026-11-02 for what was run).
 - The worktree has no `.env`; export `ANTHROPIC_API_KEY`, `WEB_SEARCH_API_KEY` and a `DATABASE_URL` (`file:…`) and run `npx prisma db push` before running anything live.

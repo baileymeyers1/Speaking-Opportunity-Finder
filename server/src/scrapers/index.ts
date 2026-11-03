@@ -3,12 +3,16 @@ import { type Prisma } from '@prisma/client';
 import { scrapeConfsTech } from './confstech.js';
 import { scrapeJavaConferences } from './javaconferences.js';
 import { scrapeCallingAllPapers } from './callingallpapers.js';
-import { scrapeLinkupCFPs, LINKUP_QUERY_COUNT } from './linkupcfp.js';
+import { scrapeLinkupCFPs } from './linkupcfp.js';
+import { LINKUP_QUERY_COUNT } from './linkupQueries.js';
+import { scrapePretalx } from './pretalx.js';
+import { scrapeSessionize } from './sessionize.js';
 import { scrapeWikiCFP } from './wikicfp.js';
 import { scrapeConferenceAlertsUSA } from './conferenceAlerts.js';
 import { scrapeDevelopersEvents } from './developersEvents.js';
 import { config } from '../config/index.js';
 import { generateDeduplicationKey } from '../services/deduplicationService.js';
+import { promotedLinkupQueries } from '../services/searchLog.js';
 import { decodeHtmlEntities, isJunkResult } from '../services/dataNormalization.js';
 import { computeQualityScore, type ScraperResult } from './qualityScore.js';
 import { buildCreateData, buildUpdateData } from './persistData.js';
@@ -173,6 +177,8 @@ export interface ScraperDefinition {
 }
 
 const LINKUP_QUERIES_PER_RUN = 6;
+/** Frequent live-search queries appended to each daily Linkup run (see services/searchLog.ts). */
+const PROMOTED_LINKUP_QUERIES_PER_RUN = 2;
 
 /**
  * Linkup has ~90 paid queries that take a few seconds each. Each run takes a
@@ -192,7 +198,17 @@ export const SCRAPERS: ScraperDefinition[] = [
   { name: 'javaconferences.org', cadence: 'daily', run: scrapeJavaConferences },
   { name: 'callingallpapers.com', cadence: 'daily', run: scrapeCallingAllPapers },
   { name: 'developers.events', cadence: 'daily', run: scrapeDevelopersEvents },
-  { name: 'linkup', cadence: 'daily', run: () => scrapeLinkupCFPs(config.scrapers?.webSearch, rotatingLinkupSlice()) },
+  { name: 'pretalx.com', cadence: 'daily', run: scrapePretalx },
+  { name: 'sessionize.com', cadence: 'daily', run: scrapeSessionize },
+  {
+    name: 'linkup',
+    cadence: 'daily',
+    run: async () =>
+      scrapeLinkupCFPs(config.scrapers?.webSearch, {
+        ...rotatingLinkupSlice(),
+        extraQueries: await promotedLinkupQueries(PROMOTED_LINKUP_QUERIES_PER_RUN),
+      }),
+  },
   { name: 'wikicfp.com', cadence: 'weekly', run: scrapeWikiCFP },
   { name: 'conferencealerts.com', cadence: 'weekly', run: scrapeConferenceAlertsUSA },
 ];
