@@ -46,3 +46,6 @@ prisma/*.db-journal
 *.pem
 .cache/
 .vercel
+
+# Prisma 7 generated client (npx prisma generate)
+server/src/generated/

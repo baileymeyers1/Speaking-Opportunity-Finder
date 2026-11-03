@@ -1,4 +1,4 @@
-import type { Prisma } from '@prisma/client';
+import type { Prisma } from '../generated/prisma/client.js';
 import { startOfUtcDay } from '../scrapers/lib/html.js';
 import { computeQualityScore } from '../scrapers/qualityScore.js';
 import { serializeDateConfidence, type MergedOpportunity } from './extraction.js';

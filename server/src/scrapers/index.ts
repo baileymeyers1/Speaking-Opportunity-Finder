@@ -1,5 +1,5 @@
 import { prisma } from '../lib/prisma.js';
-import { type Prisma } from '@prisma/client';
+import { type Prisma } from '../generated/prisma/client.js';
 import { scrapeConfsTech } from './confstech.js';
 import { scrapeJavaConferences } from './javaconferences.js';
 import { scrapeCallingAllPapers } from './callingallpapers.js';
