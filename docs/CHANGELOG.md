@@ -2,6 +2,12 @@
 
 Reverse chronological. Current state lives in `docs/STATUS.md`.
 
+## 2026-11-03 — Lost sessions redirect to login; Vercel proxy trusted
+
+- **Stale session handling.** The session cookie was only checked on mount, so a logout in another tab, a cookie swap or an expiry left the app believing it was signed in and the admin dashboard rendered "Could not load sources: Authentication required" per section. `apiClient` now dispatches `api:unauthorized` on any 401 outside `/auth/*`; `AuthProvider` clears the user and user-scoped queries on it, and protected pages redirect to login as they already did for a missing user. Tests in `client/src/api/client.test.ts`.
+- **`trust proxy` on Vercel.** Express did not trust `X-Forwarded-For`, so express-rate-limit logged a `ValidationError` on every request and keyed all clients together.
+- Confirmed the team is on Vercel Pro: the 5-minute enrichment cron runs as declared.
+
 ## 2026-11-03 — Admin dashboard rebuilt around source health and pipeline state
 
 - **Four purpose-built endpoints** replace the six-way analytics bundle and the in-process enrichment controls. `GET /api/admin/analytics/sources` joins the scraper registry with `ScraperRun` (last run, consecutive zero-row/error runs, 14-day found-per-run series, rows active/enriched/verified/closed per source; unregistered sources show as retired, `Live Search` as manual). `GET …/pipeline` reads the queues from the DB (unenriched backlog, claimed and stale claims, failed after 3 attempts, today's `EnrichmentUsage` against the 200 cap, rows due per the `verification.ts` windows, verification errors, low-confidence dates, when each cron last showed life, last 10 events merged from runs, `enrichedAt` and `verifiedAt`). `GET …/catalogue` (active totals by format, top 15 industries, 7/30/90-day deadline buckets, closed this week, remote vs in person) and `GET …/demand` (saved-search counts and most common saved filters, plus the live-search log: 7/30-day totals and top queries). `GET …/search-log` (from PR #7) now lives in `analytics/searchLog.ts`. `POST /api/admin/enrichment/run` runs one batch with a 25s budget. Removed `/enrichment/start|stop|reset-stats|status` and the old `/analytics*` routes. Code in `server/src/services/analytics/`; types in `shared/admin.ts`.

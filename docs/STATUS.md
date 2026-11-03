@@ -28,7 +28,7 @@ Current state only. History lives in `docs/CHANGELOG.md`. Full review: `docs/pla
 ## Deploy Gotchas
 - Two Prisma schema files are maintained by hand; keep them identical except for `provider` (`diff prisma/schema.prisma prisma/schema.production.prisma`).
 - Env vars live in the Vercel dashboard: `DATABASE_URL`, `JWT_SECRET`, `CRON_SECRET`, `ANTHROPIC_API_KEY`, `WEB_SEARCH_API_KEY`. No `CLAUDE_MODEL` override is set; if you add one it must be a current model (the request sends `output_config.effort`).
-- `vercel.json` declares three crons including a 5-minute one. Confirm the Vercel plan allows that cadence; on Hobby, crons are limited and the enrichment cron would not run as declared.
+- The team is on Vercel Pro, so the 5-minute enrichment cron runs as declared (verified 2026-11-03: ~12 invocations/hour in runtime logs). Express trusts Vercel's proxy (`trust proxy` when `VERCEL` is set) so rate limiting keys on the real client address.
 - The `prisma/dev.db` SQLite file is local only and has been through several `db push` runs today.
 
 ## What's Next (decided 2026-11-03; reasoning in the roadmap)
@@ -41,6 +41,7 @@ Current state only. History lives in `docs/CHANGELOG.md`. Full review: `docs/pla
 7. Client follow-ups: custom pickers hardcode `bg-white` and put checkboxes in `role="listbox"`; Saved-page actions are hover-only; the admin Sources table scrolls sideways on phones rather than stacking.
 
 ## Known Issues & Tech Debt
+- A 401 from any protected endpoint now clears the signed-in user and sends protected pages to login (`api:unauthorized` event from `client/src/api/client.ts`); the in-app browser pane shares one localhost cookie jar across sessions, so a stale `token` cookie from another worktree's test login is the usual cause of a surprise logout in dev.
 - Live search Claude calls (up to 8 per request) are not counted against the daily enrichment budget; only the worker's are.
 - Verification spends whatever budget enrichment leaves each day; with ~1,400 cron slots/day and a 200-call cap, the cap is the real limit.
 - `express-rate-limit` uses the in-memory store, which does nothing on serverless.
