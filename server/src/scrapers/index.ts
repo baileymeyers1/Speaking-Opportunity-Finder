@@ -3,7 +3,10 @@ import { type Prisma } from '@prisma/client';
 import { scrapeConfsTech } from './confstech.js';
 import { scrapeJavaConferences } from './javaconferences.js';
 import { scrapeCallingAllPapers } from './callingallpapers.js';
-import { scrapeLinkupCFPs, LINKUP_QUERY_COUNT } from './linkupcfp.js';
+import { scrapeLinkupCFPs } from './linkupcfp.js';
+import { LINKUP_QUERY_COUNT } from './linkupQueries.js';
+import { scrapePretalx } from './pretalx.js';
+import { scrapeSessionize } from './sessionize.js';
 import { scrapeWikiCFP } from './wikicfp.js';
 import { scrapeConferenceAlertsUSA } from './conferenceAlerts.js';
 import { scrapeDevelopersEvents } from './developersEvents.js';
@@ -192,6 +195,8 @@ export const SCRAPERS: ScraperDefinition[] = [
   { name: 'javaconferences.org', cadence: 'daily', run: scrapeJavaConferences },
   { name: 'callingallpapers.com', cadence: 'daily', run: scrapeCallingAllPapers },
   { name: 'developers.events', cadence: 'daily', run: scrapeDevelopersEvents },
+  { name: 'pretalx.com', cadence: 'daily', run: scrapePretalx },
+  { name: 'sessionize.com', cadence: 'daily', run: scrapeSessionize },
   { name: 'linkup', cadence: 'daily', run: () => scrapeLinkupCFPs(config.scrapers?.webSearch, rotatingLinkupSlice()) },
   { name: 'wikicfp.com', cadence: 'weekly', run: scrapeWikiCFP },
   { name: 'conferencealerts.com', cadence: 'weekly', run: scrapeConferenceAlertsUSA },
