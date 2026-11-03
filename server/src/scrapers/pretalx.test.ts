@@ -75,6 +75,27 @@ describe('parsePretalxCfpPage', () => {
     expect(page.cfpDeadline).toBeUndefined();
   });
 
+  it('reads the deadline from localized status lines', () => {
+    // Japanese locale: English wording, slash dates.
+    const tokyo = parsePretalxCfpPage(cfpHtml('juliacon-local-tokyo-2026'));
+    expect(tokyo.status).toBe('open');
+    expect(tokyo.cfpDeadline?.toISOString()).toBe('2026-11-15T00:00:00.000Z');
+    expect(tokyo.title).toBe('JuliaCon Local Tokyo 2026');
+
+    // German locale: "Einreichungen sind bis 28.02.2027 23:59 (Europe/Berlin) möglich".
+    const bonn = parsePretalxCfpPage(cfpHtml('dvrw-2027'));
+    expect(bonn.status).toBe('open');
+    expect(bonn.cfpDeadline?.toISOString()).toBe('2027-02-28T00:00:00.000Z');
+    expect(bonn.description).not.toMatch(/Einreichungen sind bis/);
+  });
+
+  it('treats an empty status line as open with no deadline', () => {
+    const page = parsePretalxCfpPage(cfpHtml('tit2026te'));
+    expect(page.status).toBe('open');
+    expect(page.cfpDeadline).toBeUndefined();
+    expect(page.opensAt).toBeUndefined();
+  });
+
   it('keeps the description to the CFP text', () => {
     const page = parsePretalxCfpPage(cfpHtml('bsidessf-2027'));
     expect(page.status).toBe('open');

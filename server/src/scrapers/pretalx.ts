@@ -3,6 +3,7 @@ import {
   fetchWithTimeout,
   htmlToLines,
   mapWithConcurrency,
+  parseHumanDate,
   startOfUtcDay,
   stripTags,
   utcDate,
@@ -112,23 +113,41 @@ function metaContent(html: string, property: string): string | undefined {
   return value || undefined;
 }
 
-/** Parse a public `/{slug}/cfp` page. */
+/**
+ * The status line ("Submissions close on …", "Einreichungen sind bis … möglich")
+ * is the `<strong>` right before the submit buttons. Its wording and date format
+ * follow the event's locale, so the date is parsed in every format seen live.
+ */
+const STATUS_LINE = /<strong>([^<]*)<\/strong>\s*(?=<div class=["']?url-links)/i;
+
+function parseStatusDate(text: string): Date | undefined {
+  const yearFirst = text.match(/(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
+  if (yearFirst) return utcDate(Number(yearFirst[1]), Number(yearFirst[2]) - 1, Number(yearFirst[3]));
+  const dotted = text.match(/(\d{1,2})\.(\d{1,2})\.(\d{4})/);
+  if (dotted) return utcDate(Number(dotted[3]), Number(dotted[2]) - 1, Number(dotted[1]));
+  return parseHumanDate(text);
+}
+
+/**
+ * Parse a public `/{slug}/cfp` page. Open or closed comes from the submit
+ * button (disabled when proposals are not accepted), which does not depend on
+ * the page language; the status line supplies the deadline.
+ */
 export function parsePretalxCfpPage(html: string): PretalxCfpPage {
   const submitButton = html.match(/<a\b[^>]*class=["']([^"']*)["'][^>]*href=["']?\/[\w-]+\/submit\/["']?[^>]*>/i);
   const buttonDisabled = !submitButton || /\bdisabled\b/.test(submitButton[1]);
-  const closesOn = html.match(/Submissions close on (\d{4})-(\d{2})-(\d{2})/);
-  const opensOn = html.match(/Submissions open on (\d{4})-(\d{2})-(\d{2})/);
-  const closedOn = /Submissions closed on|Proposals are closed/.test(html);
+  const statusText = html.match(STATUS_LINE)?.[1]?.trim() ?? '';
+  const statusDate = parseStatusDate(statusText);
 
   let status: PretalxCfpStatus;
-  if (!buttonDisabled && !closedOn) status = 'open';
-  else if (opensOn && !/Submissions closed on/.test(html)) status = 'not-yet-open';
+  if (!buttonDisabled) status = 'open';
+  else if (/Submissions open on/i.test(statusText)) status = 'not-yet-open';
   else status = 'closed';
 
   const main = html.match(/<main\b[^>]*>([\s\S]*?)<\/main>/i)?.[1] ?? '';
   const body = main
     .replace(/<div class=["']?page-heading["']?>[\s\S]*?<\/div>/i, '')
-    .replace(/<strong>\s*Submissions (?:close|open|closed) on[^<]*<\/strong>/gi, '')
+    .replace(STATUS_LINE, '')
     .replace(/<div class=["']?url-links["']?>[\s\S]*$/i, '');
   const description = htmlToLines(body).join(' ').slice(0, DESCRIPTION_MAX_CHARS).trim() || undefined;
 
@@ -138,8 +157,8 @@ export function parsePretalxCfpPage(html: string): PretalxCfpPage {
   return {
     title: ogTitle || (heading ? stripTags(heading) : undefined),
     status,
-    cfpDeadline: closesOn ? utcDate(Number(closesOn[1]), Number(closesOn[2]) - 1, Number(closesOn[3])) : undefined,
-    opensAt: opensOn ? utcDate(Number(opensOn[1]), Number(opensOn[2]) - 1, Number(opensOn[3])) : undefined,
+    cfpDeadline: status === 'open' ? statusDate : undefined,
+    opensAt: status === 'not-yet-open' ? statusDate : undefined,
     description,
     canonicalUrl: metaContent(html, 'og:url'),
   };
