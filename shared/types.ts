@@ -246,3 +246,6 @@ export interface PaginationParams {
 }
 
 export type OpportunitiesResponse<T = Opportunity> = ApiResponse<PaginatedResponse<T>>;
+
+// Admin analytics responses live in their own file; they are part of the same wire contract.
+export type * from './admin';

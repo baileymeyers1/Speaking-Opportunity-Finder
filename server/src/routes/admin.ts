@@ -9,22 +9,15 @@ const router = Router();
 router.use(authMiddleware);
 router.use(adminMiddleware);
 
-// Get all analytics data
-router.get('/analytics', adminController.getAnalytics);
-
-// Get individual analytics sections
-router.get('/analytics/scraper-health', adminController.getScraperHealth);
-router.get('/analytics/scraper-runs', adminController.getScraperRuns);
+// One endpoint per dashboard section
+router.get('/analytics/sources', adminController.getSources);
+router.get('/analytics/pipeline', adminController.getPipeline);
+router.get('/analytics/catalogue', adminController.getCatalogue);
+router.get('/analytics/demand', adminController.getDemand);
+// The live-search log on its own (the demand section includes its top queries)
 router.get('/analytics/search-log', adminController.getSearchLog);
-router.get('/analytics/source-quality', adminController.getSourceQuality);
-router.get('/analytics/database-stats', adminController.getDatabaseStats);
-router.get('/analytics/live-search', adminController.getLiveSearchAnalytics);
-router.get('/analytics/system-health', adminController.getSystemHealth);
 
-// Background enrichment control
-router.get('/enrichment/status', adminController.getEnrichmentStatus);
-router.post('/enrichment/start', adminController.startEnrichment);
-router.post('/enrichment/stop', adminController.stopEnrichment);
-router.post('/enrichment/reset-stats', adminController.resetEnrichmentStats);
+// Manual enrichment batch (the cron's work, on demand). Scrapers run through POST /api/sync.
+router.post('/enrichment/run', adminController.runEnrichmentBatch);
 
 export default router;
