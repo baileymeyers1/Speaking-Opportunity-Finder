@@ -25,12 +25,12 @@ Current state only. History lives in `docs/CHANGELOG.md`. Full review: `docs/pla
 - `vercel.json` declares three crons including a 5-minute one. Confirm the Vercel plan allows that cadence; on Hobby, crons are limited and the enrichment cron would not run as declared.
 - The `prisma/dev.db` SQLite file is local only and has been through several `db push` runs today.
 
-## What's Next (see roadmap for the reasoning)
-1. Surface `ScraperRun` and the verification counters in the admin dashboard (APIs exist; UI does not yet).
-2. Client: show "enriching…" on live cards that were persisted unenriched and refetch once; exclude low-confidence deadlines from "closing soon" styling.
-3. Email provider for saved-search digests and password reset; application tracker + ICS feed.
-4. Single Postgres schema; Prisma 7; Anthropic SDK 1.x; `npm audit fix`.
-5. Client follow-ups: custom pickers hardcode `bg-white` and put checkboxes in `role="listbox"`; Saved-page actions are hover-only; `SavedSearches` stores `page: undefined` in its filters JSON (harmless, but `savedSearchToFilters` ignores it).
+## What's Next (decided 2026-11-03; reasoning in the roadmap)
+1. Speaker profile and explainable match score (roadmap 7), deterministic, no embeddings.
+2. New sources: Pretalx, Sessionize, podcast guest calls and meetup speaker calls (roadmap 9 + 10); `SearchLog` and promotion of frequent live-search queries into the Linkup slice (rest of 8).
+3. Admin dashboard deep rework (roadmap 11).
+4. Deferred: saved-search email digests + password-reset email (soon); application tracker with an in-app deadline calendar, no ICS feed (later).
+5. Single Postgres schema; Prisma 7; Anthropic SDK 1.x; `npm audit fix`.
 
 ## Known Issues & Tech Debt
 - Live search Claude calls (up to 8 per request) are not counted against the daily enrichment budget; only the worker's are.
