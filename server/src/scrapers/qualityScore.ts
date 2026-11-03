@@ -32,6 +32,9 @@ export const TRUSTED_SOURCES = [
   'javaconferences.org',
   'callingallpapers.com',
   'wikicfp.com',
+  // First-party CFP platforms: the listing is the submission form itself.
+  'pretalx.com',
+  'sessionize.com',
 ];
 
 export function computeQualityScore(result: ScraperResult): number {
