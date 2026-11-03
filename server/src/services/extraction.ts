@@ -1,7 +1,8 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { config } from '../config/index.js';
 import { normalizeIndustries } from './dataNormalization.js';
-import { mapWithConcurrency, startOfUtcDay } from '../scrapers/lib/html.js';
+import { mapWithConcurrency } from '../scrapers/lib/html.js';
+import { calendarDate, instantInZone, isDeadlinePast, isValidTimezone } from '../lib/deadlines.js';
 import type { ScraperResult } from '../scrapers/qualityScore.js';
 
 /**
@@ -30,7 +31,10 @@ export interface DateConfidence {
 
 export interface ExtractionResult {
   eventDate: Date | null;
+  /** The instant the call closes: the stated day (and time, when given) in `deadlineTimezone`, AoE when none. */
   cfpDeadline: Date | null;
+  /** IANA zone or `AoE` the page stated the deadline in; null when it stated none. */
+  deadlineTimezone: string | null;
   location: string | null;
   isRemote: boolean;
   isClosed: boolean;
@@ -69,6 +73,8 @@ export const EXTRACTION_SCHEMA = {
   required: [
     'eventDate',
     'cfpDeadline',
+    'cfpDeadlineTime',
+    'deadlineTimezone',
     'location',
     'isRemote',
     'isClosed',
@@ -86,6 +92,15 @@ export const EXTRACTION_SCHEMA = {
     cfpDeadline: {
       ...nullableString,
       description: 'Date proposals must be submitted by, as YYYY-MM-DD. Null when not stated or rolling.',
+    },
+    cfpDeadlineTime: {
+      ...nullableString,
+      description: 'Closing time on the deadline day as 24-hour HH:MM when the page states one (23:59, 17:00). Null when only a date is given.',
+    },
+    deadlineTimezone: {
+      ...nullableString,
+      description:
+        'Timezone the deadline is stated in: an IANA name such as America/New_York, or AoE for Anywhere on Earth. Null when the page states none; never inferred.',
     },
     location: { ...nullableString, description: 'Where the event physically happens, as "City, ST" or "City, Country".' },
     isRemote: { type: 'boolean' },
@@ -123,6 +138,8 @@ Today's date is ${todayStr}. If a date has no year, assume ${thisYear} if that m
 Rules:
 - cfpDeadline is the date speaker proposals or abstracts must be SUBMITTED. eventDate is the START date of the event itself. Never confuse the two: "Proposals due September 21, ${thisYear}" for an event on "May 4-6, ${nextYear}" means cfpDeadline ${thisYear}-09-21 and eventDate ${nextYear}-05-04.
 - A "rolling" or "ongoing" deadline is null. Do not invent dates that are not in the text.
+- cfpDeadlineTime is the closing time on that day when the page states one, as 24-hour HH:MM ("11:59 PM" is 23:59, "5pm" is 17:00). Null when only a date is given.
+- deadlineTimezone is the timezone the deadline is stated in, as an IANA name ("America/New_York", "Europe/Berlin", "UTC"), or "AoE" when the page says "Anywhere on Earth", "AoE" or "UTC-12". Convert a stated abbreviation to the IANA name it denotes ("PST" is America/Los_Angeles, "CET" is Europe/Berlin); null when the abbreviation is ambiguous. Null when the page states no timezone: never infer it from the venue, the organizer or the country.
 - location is where the event physically takes place, not the organizer's headquarters. Null when fully online or not stated.
 - isRemote is true when the event is virtual or offers remote attendance or remote speaking.
 - isClosed is true when the call for speakers is explicitly closed or no longer accepting submissions, when the event is cancelled or already past, when the deadline is before ${todayStr}, or when the page is an error or "not found" page.
@@ -175,6 +192,19 @@ function optionalString(value: unknown): string | null {
   return trimmed === '' || trimmed.toLowerCase() === 'null' ? null : trimmed;
 }
 
+/**
+ * The deadline instant from the model's date, optional time and zone. The
+ * calendar day is validated like every other date; a time the model got wrong
+ * falls back to end of day rather than losing the deadline. Null when absent,
+ * undefined when the date is impossible.
+ */
+function parseDeadline(date: unknown, time: string | null, zone: string | null): Date | null | undefined {
+  const day = parseIsoDate(date);
+  if (!day) return day;
+  const dateOnly = calendarDate(day);
+  return instantInZone(dateOnly, time, zone) ?? instantInZone(dateOnly, null, zone) ?? undefined;
+}
+
 function confidenceOf(value: unknown): Confidence {
   return CONFIDENCE_LEVELS.includes(value as Confidence) ? (value as Confidence) : 'low';
 }
@@ -193,7 +223,9 @@ export function parseExtractionOutput(raw: unknown): ParsedExtraction {
   const data = raw as Record<string, unknown>;
 
   const eventDate = parseIsoDate(data.eventDate);
-  const cfpDeadline = parseIsoDate(data.cfpDeadline);
+  const statedZone = optionalString(data.deadlineTimezone);
+  const deadlineTimezone = isValidTimezone(statedZone) ? statedZone : null;
+  const cfpDeadline = parseDeadline(data.cfpDeadline, optionalString(data.cfpDeadlineTime), deadlineTimezone);
   const confidence = (data.confidence && typeof data.confidence === 'object'
     ? data.confidence
     : {}) as Record<string, unknown>;
@@ -213,6 +245,7 @@ export function parseExtractionOutput(raw: unknown): ParsedExtraction {
     result: {
       eventDate: eventDate ?? null,
       cfpDeadline: cfpDeadline ?? null,
+      deadlineTimezone: cfpDeadline ? deadlineTimezone : null,
       location: optionalString(data.location),
       isRemote: data.isRemote === true,
       isClosed: data.isClosed === true,
@@ -305,7 +338,10 @@ export interface MergedOpportunity extends ScraperResult {
  * Claude read the actual page, so its non-null values overwrite scraped or
  * regex-derived ones; a null means "not stated" and keeps what we had.
  * Industries are replaced when the model returned any. The listing is closed
- * when the model says so or when the merged deadline is already past.
+ * when the model says so or when the merged deadline instant is already past
+ * (a legacy midnight-UTC deadline is read as AoE end of day, see
+ * lib/deadlines.ts). The deadline's zone travels with the deadline: an
+ * extracted deadline brings its own zone (or none), a kept one keeps its own.
  * Low-confidence dates are kept; the confidence is returned so the UI can
  * show them as approximate.
  */
@@ -315,7 +351,8 @@ export function mergeExtraction(
   now: Date = new Date()
 ): MergedOpportunity {
   const cfpDeadline = extraction.cfpDeadline ?? existing.cfpDeadline;
-  const deadlinePassed = !!cfpDeadline && cfpDeadline.getTime() < startOfUtcDay(now).getTime();
+  const deadlineTimezone = extraction.cfpDeadline ? extraction.deadlineTimezone : (existing.deadlineTimezone ?? null);
+  const deadlinePassed = isDeadlinePast({ cfpDeadline, deadlineTimezone }, now);
 
   return {
     ...existing,
@@ -325,6 +362,7 @@ export function mergeExtraction(
     isRemote: extraction.isRemote,
     eventDate: extraction.eventDate ?? existing.eventDate,
     cfpDeadline,
+    deadlineTimezone,
     format: extraction.format,
     industries: extraction.industries.length > 0 ? extraction.industries : existing.industries,
     compensationType: extraction.compensationType ?? existing.compensationType,
