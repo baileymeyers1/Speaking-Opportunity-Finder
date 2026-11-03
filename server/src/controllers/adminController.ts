@@ -1,204 +1,46 @@
 import { type Request, type Response, type NextFunction } from 'express';
+import type {
+  AdminCatalogueResponse,
+  AdminDemandResponse,
+  AdminEnrichmentBatchResult,
+  AdminPipelineResponse,
+  AdminSourcesResponse,
+  ApiResponse,
+} from 'shared';
 import * as analyticsService from '../services/analyticsService.js';
-import {
-  getBackgroundEnrichmentState,
-  startBackgroundEnrichment,
-  stopBackgroundEnrichment,
-  resetBackgroundEnrichmentStats,
-} from '../services/backgroundEnrichment.js';
+import { processNextBatch } from '../services/backgroundEnrichment.js';
 
-export async function getAnalytics(
-  _req: Request,
-  res: Response,
-  next: NextFunction
-): Promise<void> {
+/** Rows per manual batch and the wall-clock it may use; well inside the 60s function limit. */
+const MANUAL_BATCH_SIZE = 5;
+const MANUAL_BATCH_BUDGET_MS = 25_000;
+
+type Handler<T> = (req: Request, res: Response<ApiResponse<T>>, next: NextFunction) => Promise<void>;
+
+function section<T>(load: () => Promise<T>): Handler<T> {
+  return async (_req, res, next) => {
+    try {
+      res.json({ success: true, data: await load() });
+    } catch (error) {
+      next(error);
+    }
+  };
+}
+
+export const getSources: Handler<AdminSourcesResponse> = section(() => analyticsService.getSources());
+export const getPipeline: Handler<AdminPipelineResponse> = section(() => analyticsService.getPipeline());
+export const getCatalogue: Handler<AdminCatalogueResponse> = section(() => analyticsService.getCatalogue());
+export const getDemand: Handler<AdminDemandResponse> = section(() => analyticsService.getDemand());
+
+/**
+ * Run one enrichment batch now, the same work the 5-minute cron does, with a
+ * shorter budget so the response arrives well inside the function limit.
+ */
+export const runEnrichmentBatch: Handler<AdminEnrichmentBatchResult> = async (_req, res, next) => {
   try {
-    const analytics = await analyticsService.getAllAnalytics();
-
-    res.json({
-      success: true,
-      data: analytics,
-    });
+    const startedAt = Date.now();
+    const result = await processNextBatch(MANUAL_BATCH_SIZE, { timeBudgetMs: MANUAL_BATCH_BUDGET_MS });
+    res.json({ success: true, data: { ...result, durationMs: Date.now() - startedAt } });
   } catch (error) {
     next(error);
   }
-}
-
-export async function getScraperRuns(
-  _req: Request,
-  res: Response,
-  next: NextFunction
-): Promise<void> {
-  try {
-    const runs = await analyticsService.getScraperRuns();
-    res.json({ success: true, data: runs });
-  } catch (error) {
-    next(error);
-  }
-}
-
-export async function getSearchLog(
-  _req: Request,
-  res: Response,
-  next: NextFunction
-): Promise<void> {
-  try {
-    const searchLog = await analyticsService.getSearchLogAnalytics();
-    res.json({ success: true, data: searchLog });
-  } catch (error) {
-    next(error);
-  }
-}
-
-export async function getScraperHealth(
-  _req: Request,
-  res: Response,
-  next: NextFunction
-): Promise<void> {
-  try {
-    const health = await analyticsService.getScraperHealth();
-
-    res.json({
-      success: true,
-      data: health,
-    });
-  } catch (error) {
-    next(error);
-  }
-}
-
-export async function getSourceQuality(
-  _req: Request,
-  res: Response,
-  next: NextFunction
-): Promise<void> {
-  try {
-    const quality = await analyticsService.getSourceQuality();
-
-    res.json({
-      success: true,
-      data: quality,
-    });
-  } catch (error) {
-    next(error);
-  }
-}
-
-export async function getDatabaseStats(
-  _req: Request,
-  res: Response,
-  next: NextFunction
-): Promise<void> {
-  try {
-    const stats = await analyticsService.getDatabaseStats();
-
-    res.json({
-      success: true,
-      data: stats,
-    });
-  } catch (error) {
-    next(error);
-  }
-}
-
-export async function getLiveSearchAnalytics(
-  _req: Request,
-  res: Response,
-  next: NextFunction
-): Promise<void> {
-  try {
-    const analytics = await analyticsService.getLiveSearchAnalytics();
-
-    res.json({
-      success: true,
-      data: analytics,
-    });
-  } catch (error) {
-    next(error);
-  }
-}
-
-export async function getSystemHealth(
-  _req: Request,
-  res: Response,
-  next: NextFunction
-): Promise<void> {
-  try {
-    const health = await analyticsService.getSystemHealth();
-
-    res.json({
-      success: true,
-      data: health,
-    });
-  } catch (error) {
-    next(error);
-  }
-}
-
-export function getEnrichmentStatus(
-  _req: Request,
-  res: Response,
-  next: NextFunction
-): void {
-  try {
-    const state = getBackgroundEnrichmentState();
-
-    res.json({
-      success: true,
-      data: state,
-    });
-  } catch (error) {
-    next(error);
-  }
-}
-
-export function startEnrichment(
-  _req: Request,
-  res: Response,
-  next: NextFunction
-): void {
-  try {
-    startBackgroundEnrichment();
-
-    res.json({
-      success: true,
-      message: 'Background enrichment started',
-    });
-  } catch (error) {
-    next(error);
-  }
-}
-
-export function stopEnrichment(
-  _req: Request,
-  res: Response,
-  next: NextFunction
-): void {
-  try {
-    stopBackgroundEnrichment();
-
-    res.json({
-      success: true,
-      message: 'Background enrichment stopped',
-    });
-  } catch (error) {
-    next(error);
-  }
-}
-
-export function resetEnrichmentStats(
-  _req: Request,
-  res: Response,
-  next: NextFunction
-): void {
-  try {
-    resetBackgroundEnrichmentStats();
-
-    res.json({
-      success: true,
-      message: 'Enrichment statistics reset',
-    });
-  } catch (error) {
-    next(error);
-  }
-}
+};
