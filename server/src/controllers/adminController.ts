@@ -37,6 +37,19 @@ export async function getScraperRuns(
   }
 }
 
+export async function getSearchLog(
+  _req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    const searchLog = await analyticsService.getSearchLogAnalytics();
+    res.json({ success: true, data: searchLog });
+  } catch (error) {
+    next(error);
+  }
+}
+
 export async function getScraperHealth(
   _req: Request,
   res: Response,

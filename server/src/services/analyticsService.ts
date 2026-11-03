@@ -550,6 +550,49 @@ export async function getAllAnalytics() {
   };
 }
 
+export interface SearchLogAnalytics {
+  total7d: number;
+  total30d: number;
+  distinctQueries30d: number;
+  /** Most searched queries of the last 30 days. */
+  topQueries: Array<{ query: string; count: number; averageResults: number; lastSearchedAt: Date | null }>;
+}
+
+/**
+ * What people search for live, for the admin dashboard. The same log feeds the
+ * daily Linkup run's promoted queries (services/searchLog.ts).
+ */
+export async function getSearchLogAnalytics(limit = 25): Promise<SearchLogAnalytics> {
+  const now = Date.now();
+  const sevenDaysAgo = new Date(now - 7 * 24 * 60 * 60 * 1000);
+  const thirtyDaysAgo = new Date(now - 30 * 24 * 60 * 60 * 1000);
+
+  const [total7d, total30d, groups] = await Promise.all([
+    prisma.searchLog.count({ where: { createdAt: { gte: sevenDaysAgo } } }),
+    prisma.searchLog.count({ where: { createdAt: { gte: thirtyDaysAgo } } }),
+    prisma.searchLog.groupBy({
+      by: ['query'],
+      where: { createdAt: { gte: thirtyDaysAgo }, query: { not: '' } },
+      _count: { query: true },
+      _avg: { resultCount: true },
+      _max: { createdAt: true },
+      orderBy: { _count: { query: 'desc' } },
+    }),
+  ]);
+
+  return {
+    total7d,
+    total30d,
+    distinctQueries30d: groups.length,
+    topQueries: groups.slice(0, limit).map((group) => ({
+      query: group.query,
+      count: group._count.query,
+      averageResults: Math.round(group._avg.resultCount ?? 0),
+      lastSearchedAt: group._max.createdAt,
+    })),
+  };
+}
+
 export interface ScraperRunRecord {
   id: string;
   scraper: string;
