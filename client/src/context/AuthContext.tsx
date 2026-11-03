@@ -1,6 +1,6 @@
 import { createContext, useState, useEffect, type ReactNode } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { apiClient } from '../api/client';
+import { apiClient, onUnauthorized } from '../api/client';
 import { queryKeys } from '../hooks/queryKeys';
 import type { User } from '../types';
 
@@ -59,6 +59,20 @@ export function AuthProvider({ children }: AuthProviderProps) {
     return () => {
       active = false;
     };
+  }, []);
+
+  // A 401 from any protected endpoint means the cookie is gone (logged out in
+  // another tab, expired, or replaced). Drop the user so protected pages
+  // redirect to login instead of rendering per-section auth errors.
+  useEffect(() => {
+    return onUnauthorized(() => {
+      setUser((current) => {
+        if (current) resetUserScopedQueries();
+        return null;
+      });
+    });
+    // resetUserScopedQueries only touches the stable queryClient.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const login = async (email: string, password: string) => {
