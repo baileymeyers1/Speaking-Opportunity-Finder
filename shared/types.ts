@@ -27,9 +27,51 @@ export interface DateConfidence {
   location: Confidence;
 }
 
-export type SortBy = 'quality' | 'deadline' | 'eventDate';
+/** `match` is only meaningful for a signed-in user with a speaker profile. */
+export type SortBy = 'quality' | 'deadline' | 'eventDate' | 'match';
 
 export type SavedCategory = 'interested' | 'applied' | 'accepted' | 'rejected';
+
+// ---------------------------------------------------------------------------
+// Speaker profile and match score
+// ---------------------------------------------------------------------------
+
+export type SpeakerSeniority = 'new' | 'experienced' | 'keynote';
+export type TravelRadius = 'local' | 'country' | 'international';
+export type RemotePreference = 'remote_only' | 'prefer_remote' | 'either' | 'prefer_in_person';
+export type CompensationRequirement = 'any' | 'travel_covered' | 'paid';
+
+/** Body of `PUT /api/profile`: every field is sent, the server stores the whole thing. */
+export interface SpeakerProfileInput {
+  /** Free-text tags such as "healthcare" or "developer experience". */
+  topics: string[];
+  bio: string;
+  seniority: SpeakerSeniority;
+  homeCity: string | null;
+  homeCountry: string | null;
+  travelRadius: TravelRadius;
+  remotePreference: RemotePreference;
+  compensationRequirement: CompensationRequirement;
+  preferredFormats: OpportunityFormat[];
+}
+
+/** `GET /api/profile` returns this, or `null` while the user has not saved one. */
+export interface SpeakerProfile extends SpeakerProfileInput {
+  id: string;
+  userId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** The explainable score attached to an opportunity for one profile. */
+export interface MatchExplanation {
+  /** 0..100, deterministic for the same profile, row and date. */
+  score: number;
+  /** Short reasons the row fits, such as "matches: healthcare" or "travel covered". */
+  reasons: string[];
+  /** Short reasons it does not, such as "in-person in Berlin, you prefer remote". */
+  misses: string[];
+}
 
 // ---------------------------------------------------------------------------
 // Users
@@ -87,6 +129,10 @@ export interface OpportunityBase<DateType> {
   verificationError?: string | null;
   /** Confidence per extracted date field; low-confidence dates render as approximate. */
   dateConfidence?: DateConfidence | null;
+  /** Match against the signed-in user's speaker profile, 0..100. Absent without a profile. */
+  matchScore?: number;
+  matchReasons?: string[];
+  matchMisses?: string[];
 }
 
 /** An opportunity as the client receives it. */

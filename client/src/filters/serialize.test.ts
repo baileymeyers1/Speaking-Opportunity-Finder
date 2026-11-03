@@ -65,6 +65,13 @@ describe('filtersToSearchParams / searchParamsToFilters', () => {
     expect(searchParamsToFilters(new URLSearchParams('remote=true'))).toEqual({ isRemote: true });
   });
 
+  it('round-trips the best-match sort', () => {
+    const params = filtersToSearchParams({ sortBy: 'match' });
+    expect(params.toString()).toBe('sort=match');
+    expect(searchParamsToFilters(params)).toEqual({ sortBy: 'match' });
+    expect(filtersToApiQuery({ sortBy: 'match' }).get('sortBy')).toBe('match');
+  });
+
   it('trims search text and ignores blank repeated values', () => {
     const params = new URLSearchParams('q=%20ai%20&industries=&industries=%20health%20');
     expect(searchParamsToFilters(params)).toEqual({ search: 'ai', industries: ['health'] });

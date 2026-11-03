@@ -1,39 +1,26 @@
 import { prisma } from '../lib/prisma.js';
-import { Prisma } from '@prisma/client';
 import { AppError } from '../middleware/errorHandler.js';
 import { parseDateConfidence } from './extraction.js';
-import type { CompensationType, OpportunityFormat, OpportunityWithDates } from 'shared';
+import { MATCH_SORT_CANDIDATE_CAP, scoreOpportunities, type MatchProfile } from './matchScore.js';
+import {
+  buildOpportunityOrderBy,
+  buildOpportunityWhere,
+  computeSearchRelevance,
+  type OpportunityFilters,
+} from './opportunityQuery.js';
+import type { CompensationType, OpportunityFormat, OpportunityWithDates, PaginatedResponse } from 'shared';
 
-export interface OpportunityFilters {
-  search?: string;
-  format?: string[];
-  industries?: string[];
-  isRemote?: boolean;
-  location?: string;
-  compensationType?: string[];
-  compensationMin?: number;
-  compensationMax?: number;
-  cfpDeadlineBefore?: Date;
-  cfpDeadlineAfter?: Date;
-  sortBy?: 'quality' | 'deadline' | 'eventDate';
-  qualityMin?: number;
-}
+export type { OpportunityFilters } from './opportunityQuery.js';
 
 export interface PaginationParams {
   page?: number;
   pageSize?: number;
 }
 
-/**
- * Case-insensitive `contains`. SQLite's LIKE is case-insensitive by default,
- * Postgres's is not, so production needs `mode: 'insensitive'`. The dev client
- * is generated from the SQLite schema and has no `mode` in its types, hence
- * the cast.
- */
-const isPostgres = (process.env.DATABASE_URL || '').startsWith('postgres');
-type ContainsFilter = Prisma.StringFilter & Prisma.StringNullableFilter;
-function containsInsensitive(value: string): ContainsFilter {
-  return (isPostgres ? { contains: value, mode: 'insensitive' } : { contains: value }) as ContainsFilter;
+export interface ListOptions {
+  /** The signed-in user's speaker profile; when set, every row gets a match score. */
+  profile?: MatchProfile | null;
+  now?: Date;
 }
 
 function parseJsonArray(value: string): string[] {
@@ -42,38 +29,6 @@ function parseJsonArray(value: string): string[] {
   } catch {
     return [];
   }
-}
-
-function computeSearchRelevance(opportunity: any, query: string): number {
-  const q = query.toLowerCase();
-  let score = 0;
-
-  // Title match is strongest signal
-  const title = (opportunity.title || '').toLowerCase();
-  if (title === q) score += 100;
-  else if (title.startsWith(q)) score += 80;
-  else if (title.includes(q)) score += 50;
-
-  // Organization match
-  const org = (opportunity.organization || '').toLowerCase();
-  if (org.includes(q)) score += 30;
-
-  // Industry match
-  try {
-    const industries = JSON.parse(opportunity.industries || '[]');
-    if (industries.some((ind: string) => ind.toLowerCase().includes(q))) score += 40;
-  } catch {
-    // Malformed JSON contributes nothing to the score.
-  }
-
-  // Description match (weakest — any tech conf could mention "entertainment" in passing)
-  const desc = (opportunity.description || '').toLowerCase();
-  if (desc.includes(q)) score += 10;
-
-  // Bonus for quality
-  score += (opportunity.qualityScore || 0) * 0.1;
-
-  return score;
 }
 
 function transformOpportunity(opp: {
@@ -97,6 +52,8 @@ function transformOpportunity(opp: {
   createdAt: Date;
   updatedAt: Date;
   dateConfidence?: string | null;
+  verifiedAt?: Date | null;
+  verificationError?: string | null;
 }): OpportunityWithDates {
   // The database stores these as plain strings; the wire type narrows them.
   return {
@@ -108,166 +65,20 @@ function transformOpportunity(opp: {
   };
 }
 
-export async function getOpportunities(
-  filters: OpportunityFilters = {},
-  pagination: PaginationParams = {}
-) {
-  const { page = 1, pageSize = 20 } = pagination;
+/** Adds `matchScore` / reasons / misses when there is a profile to score against. */
+export function withMatchScores(
+  items: OpportunityWithDates[],
+  options: ListOptions,
+  sort = false
+): OpportunityWithDates[] {
+  if (!options.profile) return items;
+  return scoreOpportunities(options.profile, items, options.now, { sort });
+}
+
+function paginate<T>(items: T[], page: number, pageSize: number, total: number): PaginatedResponse<T> {
   const skip = (page - 1) * pageSize;
-
-  const where: Prisma.OpportunityWhereInput = {
-    // Default: only show opportunities with future deadlines (or no deadline set)
-    OR: [
-      { cfpDeadline: { gte: new Date() } },
-      { cfpDeadline: null },
-    ],
-    // Hide very low quality results (base score is 5; < 15 means almost no useful metadata)
-    qualityScore: { gte: 15 },
-    // Enrichment flags: closed CFPs and non-speaking pages never surface
-    isClosed: false,
-    isRelevant: true,
-  };
-  const andConditions: Prisma.OpportunityWhereInput[] = [];
-
-  // Text search (OR across fields, but AND with other filters)
-  if (filters.search) {
-    andConditions.push({
-      OR: [
-        { title: containsInsensitive(filters.search) },
-        { organization: containsInsensitive(filters.search) },
-        { description: containsInsensitive(filters.search) },
-      ],
-    });
-  }
-
-  // Format filter
-  if (filters.format && filters.format.length > 0) {
-    where.format = { in: filters.format };
-  }
-
-  // Industry filter (OR logic - match ANY selected industry)
-  if (filters.industries && filters.industries.length > 0) {
-    andConditions.push({
-      // industries is a JSON-encoded array; match the quoted token so "ai"
-      // does not match "retail".
-      OR: filters.industries.map((industry) => ({
-        industries: containsInsensitive(`"${industry}"`),
-      })),
-    });
-  }
-
-  // Apply AND conditions if any exist
-  if (andConditions.length > 0) {
-    where.AND = andConditions;
-  }
-
-  // Remote filter
-  if (filters.isRemote !== undefined) {
-    where.isRemote = filters.isRemote;
-  }
-
-  // Location filter (supports multiple pipe-separated locations, fuzzy contains)
-  if (filters.location) {
-    const locations = filters.location.split('|').map((l) => l.trim()).filter(Boolean);
-    if (locations.length === 1) {
-      andConditions.push({
-        location: containsInsensitive(locations[0]),
-      });
-    } else if (locations.length > 1) {
-      andConditions.push({
-        OR: locations.map((loc) => ({
-          location: containsInsensitive(loc),
-        })),
-      });
-    }
-  }
-
-  // Compensation type filter
-  if (filters.compensationType && filters.compensationType.length > 0) {
-    where.compensationType = { in: filters.compensationType };
-  }
-
-  // Compensation amount range filter
-  if (filters.compensationMin !== undefined || filters.compensationMax !== undefined) {
-    where.compensationAmount = {};
-    if (filters.compensationMin !== undefined) {
-      where.compensationAmount.gte = filters.compensationMin;
-    }
-    if (filters.compensationMax !== undefined) {
-      where.compensationAmount.lte = filters.compensationMax;
-    }
-  }
-
-  if (filters.qualityMin !== undefined) {
-    where.qualityScore = { gte: Math.max(filters.qualityMin, 15) };
-  }
-
-  // CFP deadline filters
-  if (filters.cfpDeadlineBefore || filters.cfpDeadlineAfter) {
-    where.cfpDeadline = {};
-    if (filters.cfpDeadlineBefore) {
-      where.cfpDeadline.lte = filters.cfpDeadlineBefore;
-    }
-    if (filters.cfpDeadlineAfter) {
-      where.cfpDeadline.gte = filters.cfpDeadlineAfter;
-    }
-  }
-
-  const orderBy: Prisma.OpportunityOrderByWithRelationInput[] =
-    filters.sortBy === 'quality'
-      ? [
-          { qualityScore: Prisma.SortOrder.desc },
-          { cfpDeadline: Prisma.SortOrder.asc },
-        ]
-      : filters.sortBy === 'eventDate'
-        ? [
-            { eventDate: Prisma.SortOrder.asc },
-            { cfpDeadline: Prisma.SortOrder.asc },
-          ]
-        : [{ cfpDeadline: Prisma.SortOrder.asc }];
-
-  // When a search query is active, fetch all matches so we can sort by relevance globally
-  // before paginating. Without this, we'd only re-sort within a single DB page.
-  if (filters.search) {
-    const [allMatches, total] = await Promise.all([
-      prisma.opportunity.findMany({
-        where,
-        orderBy,
-      }),
-      prisma.opportunity.count({ where }),
-    ]);
-
-    // Score and sort by relevance descending
-    const scored = allMatches
-      .map((item) => ({
-        item,
-        relevance: computeSearchRelevance(item, filters.search!),
-      }))
-      .sort((a, b) => b.relevance - a.relevance);
-
-    const paginatedItems = scored.slice(skip, skip + pageSize).map((s) => s.item);
-
-    return {
-      items: paginatedItems.map(transformOpportunity),
-      total,
-      page,
-      pageSize,
-      totalPages: Math.ceil(total / pageSize),
-    };
-  }
-
-  const [items, total] = await Promise.all([
-    prisma.opportunity.findMany({
-      where,
-      skip,
-      take: pageSize,
-      orderBy,
-    }),
-    prisma.opportunity.count({ where }),
-  ]);
-
   return {
-    items: items.map(transformOpportunity),
+    items: items.slice(skip, skip + pageSize),
     total,
     page,
     pageSize,
@@ -275,14 +86,63 @@ export async function getOpportunities(
   };
 }
 
-export async function getOpportunityById(id: string) {
+export async function getOpportunities(
+  filters: OpportunityFilters = {},
+  pagination: PaginationParams = {},
+  options: ListOptions = {}
+): Promise<PaginatedResponse<OpportunityWithDates>> {
+  const { page = 1, pageSize = 20 } = pagination;
+  const where = buildOpportunityWhere(filters, options.now);
+  const orderBy = buildOpportunityOrderBy(filters.sortBy);
+  const sortByMatch = filters.sortBy === 'match' && Boolean(options.profile);
+
+  // A search term is ranked by keyword relevance across every match before
+  // paginating; a page-sized DB slice would only re-sort within itself.
+  if (filters.search) {
+    const [allMatches, total] = await Promise.all([
+      prisma.opportunity.findMany({ where, orderBy }),
+      prisma.opportunity.count({ where }),
+    ]);
+    const search = filters.search;
+    const ranked = allMatches
+      .map((item) => ({ item, relevance: computeSearchRelevance(item, search) }))
+      .sort((a, b) => b.relevance - a.relevance)
+      .map((entry) => transformOpportunity(entry.item));
+    return paginate(withMatchScores(ranked, options, sortByMatch), page, pageSize, total);
+  }
+
+  // Best match has no column to order by: score a capped candidate set in memory.
+  if (sortByMatch) {
+    const [candidates, count] = await Promise.all([
+      prisma.opportunity.findMany({ where, orderBy, take: MATCH_SORT_CANDIDATE_CAP }),
+      prisma.opportunity.count({ where }),
+    ]);
+    const ranked = withMatchScores(candidates.map(transformOpportunity), options, true);
+    return paginate(ranked, page, pageSize, Math.min(count, MATCH_SORT_CANDIDATE_CAP));
+  }
+
+  const [items, total] = await Promise.all([
+    prisma.opportunity.findMany({ where, skip: (page - 1) * pageSize, take: pageSize, orderBy }),
+    prisma.opportunity.count({ where }),
+  ]);
+
+  return {
+    items: withMatchScores(items.map(transformOpportunity), options),
+    total,
+    page,
+    pageSize,
+    totalPages: Math.ceil(total / pageSize),
+  };
+}
+
+export async function getOpportunityById(id: string, options: ListOptions = {}) {
   const opportunity = await prisma.opportunity.findUnique({ where: { id } });
 
   if (!opportunity) {
     throw new AppError(404, 'Opportunity not found');
   }
 
-  return transformOpportunity(opportunity);
+  return withMatchScores([transformOpportunity(opportunity)], options)[0];
 }
 
 export interface OpportunityCreateInput {

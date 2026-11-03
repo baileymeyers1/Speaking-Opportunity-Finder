@@ -8,6 +8,7 @@ import { getDeadlineBadge, getQualityColor, getQualityLabel } from '../lib/oppor
 import { SaveOpportunityMenu } from './SaveOpportunityMenu';
 import { approximate, isLowConfidence } from '../utils/verification';
 import { ApproximateHint, DateWithConfidence, VerifiedBadge } from './VerificationHints';
+import { MatchPill } from './MatchHints';
 import { cn } from '@/lib/utils';
 
 import { Card, CardHeader, CardContent, CardFooter } from '@/components/ui/card';
@@ -90,7 +91,9 @@ export function OpportunityCard({ opportunity, showSave = true, isPast }: Opport
               {current.title}
             </Link>
           </h3>
-          <div className="flex items-center gap-1.5 flex-shrink-0">
+          {/* Badges wrap under each other on narrow cards instead of pushing past the edge */}
+          <div className="flex flex-wrap items-center justify-end gap-1.5">
+            <MatchPill opportunity={current} />
             {isPastDeadline && (
               <Badge variant="secondary" className="text-[11px] px-1.5 py-0">
                 Deadline passed

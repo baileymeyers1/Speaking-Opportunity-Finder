@@ -18,6 +18,7 @@ model User {
   createdAt           DateTime           @default(now())
   savedOpportunities  SavedOpportunity[]
   savedSearches       SavedSearch[]
+  speakerProfile      SpeakerProfile?
 }
 
 model Opportunity {
@@ -133,4 +134,24 @@ model SearchLog {
 
   @@index([createdAt])
   @@index([query])
+}
+
+// One per user: what the speaker talks about, where they will go and what
+// they need to be paid. Read by the deterministic match score
+// (server/src/services/matchScore.ts); never by any scraper.
+model SpeakerProfile {
+  id                      String   @id @default(uuid())
+  userId                  String   @unique
+  user                    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  topics                  String   @default("[]") // JSON array of free-text tags stored as string
+  bio                     String   @default("")
+  seniority               String   @default("experienced") // new | experienced | keynote
+  homeCity                String?
+  homeCountry             String?
+  travelRadius            String   @default("international") // local | country | international
+  remotePreference        String   @default("either") // remote_only | prefer_remote | either | prefer_in_person
+  compensationRequirement String   @default("any") // any | travel_covered | paid
+  preferredFormats        String   @default("[]") // JSON array of OpportunityFormat stored as string
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
 }

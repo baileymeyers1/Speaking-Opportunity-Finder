@@ -4,7 +4,7 @@ Current state only. History lives in `docs/CHANGELOG.md`. Full review: `docs/pla
 
 ## Last Updated
 - **Date:** 2026-11-03
-- **Session summary:** New sources: Pretalx (hosted API + per-event CFP pages) and Sessionize (public event pages from the events sitemap), both daily; Linkup queries carry a `format` and now include podcast, meetup, webinar and panel calls; every live search is logged in `SearchLog` and the two most frequent recent queries are promoted into the daily Linkup run; `GET /api/admin/analytics/search-log` (branch `feature/new-sources-search-log`).
+- **Session summary:** Speaker profile and a deterministic, explainable match score: `/profile` page, `GET/PUT /api/profile`, `matchScore` + reasons on every row for a signed-in user with a profile, "Best match" sort (`sort=match`), "N% match" pill on cards and a "Why this matches" block on the detail page (branch `feature/speaker-profile-match-score`). Before that: verified listings + structured extraction (PR #3), client data flow on URL filters + TanStack Query (PR #4). Same day, merged first as PR #7: New sources: Pretalx (hosted API + per-event CFP pages) and Sessionize (public event pages from the events sitemap), both daily; Linkup queries carry a `format` and now include podcast, meetup, webinar and panel calls; every live search is logged in `SearchLog` and the two most frequent recent queries are promoted into the daily Linkup run; `GET /api/admin/analytics/search-log` (branch `feature/new-sources-search-log`).
 
 ## What's Working
 - Browse, filters, saved opportunities, saved searches, auth (JWT cookie), admin dashboard.
@@ -22,6 +22,7 @@ Current state only. History lives in `docs/CHANGELOG.md`. Full review: `docs/pla
 - One shared Prisma client (`server/src/lib/prisma.ts`). Search is case-insensitive on Postgres; industry filter matches the exact JSON token.
 - **Client data flow:** the URL is the only filter state (`client/src/filters/serialize.ts`); TanStack Query owns fetching and caching (`client/src/hooks/`), with public lists persisted to localStorage for instant cold starts. Same URL = same cache key, so back navigation restores the prior list and any filter change refetches, live results included. Live search is a mutation that replaces the list entry for its filters.
 - **Shared wire types** in `shared/types.ts`, re-exported by the client and used to type the server's opportunity responses. `npm run lint` (ESLint 9, root `eslint.config.js`) passes; client unit tests run under `TZ=America/Los_Angeles` so UTC date formatting is asserted.
+- **Speaker profile and match score.** `SpeakerProfile` (one per user: topics, bio, seniority, home city/country, travel radius, remote preference, compensation requirement, preferred formats) is edited at `/profile` and stored via `GET/PUT /api/profile` (zod-validated, `services/profileService.ts`). `services/matchScore.ts` scores a row 0..100 from the profile alone, no model call: topic overlap (whole-word, case-insensitive, plural-tolerant, against industries + title + description), location fit (remote preference, same city/country, travel radius; "City, ST" counts as US), compensation fit, format fit, each counted only when the profile states it; 20% quality blended in; small penalties for a deadline inside 3 days, a low-confidence deadline and an unverified row. Reasons ("matches: devops", "in Denver", "travel covered") and misses ("in-person in Berlin, you prefer remote") travel with the row. The list and detail routes read an optional token; `sort=match` scores a quality-first candidate set of up to 500 rows in memory and paginates it. Client: "N% match" popover on cards, "Why this matches" on the detail page, "Best match" in the sort select once a profile exists; login/logout/profile save drop cached lists so scores never leak between users.
 
 ## Deploy Gotchas
 - Two Prisma schema files are maintained by hand; keep them identical except for `provider` (`diff prisma/schema.prisma prisma/schema.production.prisma`).
@@ -30,7 +31,7 @@ Current state only. History lives in `docs/CHANGELOG.md`. Full review: `docs/pla
 - The `prisma/dev.db` SQLite file is local only and has been through several `db push` runs today.
 
 ## What's Next (decided 2026-11-03; reasoning in the roadmap)
-1. Speaker profile and explainable match score (roadmap 7), deterministic, no embeddings.
+1. ~~Speaker profile and explainable match score (roadmap 7)~~ shipped on `feature/speaker-profile-match-score`; seniority is stored but not yet scored (no opportunity field to compare it with).
 2. ~~New sources and search log (roadmap 9 + 10 + rest of 8)~~ shipped on `feature/new-sources-search-log`; the admin dashboard still needs to render `search-log`.
 3. Admin dashboard deep rework (roadmap 11).
 4. Deferred: saved-search email digests + password-reset email (soon); application tracker with an in-app deadline calendar, no ICS feed (later).
@@ -50,6 +51,8 @@ Current state only. History lives in `docs/CHANGELOG.md`. Full review: `docs/pla
 - The daily cron now has 7 daily sources for a 50s budget; the least-recently-run ordering means a slow day skips one or two, which run first the next day.
 - Rows enriched before verification shipped have `verifiedAt = null` and are picked up by the weekly sweep, oldest first.
 - `server/src/scripts/promoteAdmin.ts` still creates its own PrismaClient (standalone script, acceptable).
+- Match scores live in the opportunity list responses, which are cached under the filter key and persisted to localStorage for anonymous visitors. A returning user whose cookie is still valid and whose persisted list is under 5 minutes old sees that list without scores until it refetches. Login, logout and a profile save invalidate the lists.
+- `sort=match` with a search term ranks all search matches by score (no 500 cap); without one it caps the candidate set at 500 quality-first rows, so `total` is capped too.
 
 ## Environment Notes
 - Dev: SQLite at `prisma/dev.db`; run `npx prisma db push` after pulling schema changes.

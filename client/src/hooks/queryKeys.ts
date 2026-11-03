@@ -12,4 +12,5 @@ export const queryKeys = {
   saved: {
     all: ['saved'] as const,
   },
+  profile: ['profile'] as const,
 };

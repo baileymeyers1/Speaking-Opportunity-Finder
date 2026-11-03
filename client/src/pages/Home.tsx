@@ -17,8 +17,9 @@ import {
 import { useAuth } from '../hooks/useAuth';
 import { useOpportunities } from '../hooks/useOpportunities';
 import { useLiveSearch } from '../hooks/useLiveSearch';
+import { useProfile } from '../hooks/useProfile';
 import { Button } from '@/components/ui/button';
-import { AlertCircle, Loader2, X } from 'lucide-react';
+import { AlertCircle, Loader2, Sparkles, X } from 'lucide-react';
 
 const BANNER_DISMISSED_KEY = 'loginBannerDismissed';
 
@@ -47,6 +48,9 @@ export function Home() {
   const { filters, page, updateFilters, setPage } = useBrowseFilters();
   const query = useOpportunities(filters);
   const liveSearch = useLiveSearch(filters);
+  const profileQuery = useProfile({ enabled: isAuthenticated });
+  const hasProfile = Boolean(profileQuery.data);
+  const needsProfile = isAuthenticated && profileQuery.isSuccess && profileQuery.data === null;
   // The dismissal is remembered per filter set, so a new search shows the notice again.
   const [rateLimitDismissedFor, setRateLimitDismissedFor] = useState<string | null>(null);
   const rateLimitDismissed = rateLimitDismissedFor === serializeFilters(filters);
@@ -109,6 +113,7 @@ export function Home() {
             onFiltersChange={handleFiltersChange}
             onLiveSearch={handleLiveSearch}
             isSearching={liveSearch.isSearching}
+            matchSortAvailable={hasProfile}
           />
         </div>
         {isAuthenticated && (
@@ -129,6 +134,16 @@ export function Home() {
           <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
           Showing cached results while loading fresh data...
         </div>
+      )}
+
+      {needsProfile && (
+        <p className="flex items-center gap-2 rounded-lg border bg-muted/50 px-4 py-3 text-sm text-muted-foreground">
+          <Sparkles className="h-4 w-4 flex-shrink-0 text-primary" aria-hidden="true" />
+          <span>
+            <Link to="/profile" className="font-medium text-primary hover:underline">Set up your speaker profile</Link>
+            {' '}to see a match score on every opportunity and sort by best match.
+          </span>
+        </p>
       )}
 
       {!isAuthenticated && !bannerDismissed && (
