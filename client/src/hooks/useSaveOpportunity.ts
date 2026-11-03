@@ -25,6 +25,7 @@ function toSaveLivePayload(opportunity: Opportunity) {
     isRemote: opportunity.isRemote,
     eventDate: opportunity.eventDate,
     cfpDeadline: opportunity.cfpDeadline,
+    deadlineTimezone: opportunity.deadlineTimezone ?? null,
     format: opportunity.format,
     industries: opportunity.industries,
     compensationType: opportunity.compensationType,

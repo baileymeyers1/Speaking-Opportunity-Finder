@@ -1,4 +1,4 @@
-import { daysUntil, formatDate } from './dates';
+import { daysUntilDeadline, formatDeadline, type DeadlineFields } from './dates';
 
 export interface DeadlineBadge {
   label: string;
@@ -6,11 +6,12 @@ export interface DeadlineBadge {
   className?: string;
 }
 
-export function getDeadlineBadge(dateString: string | null): DeadlineBadge {
-  if (!dateString) {
+/** The card pill: "No deadline", "Closed", "3d left" or the closing day in the deadline's own zone. */
+export function getDeadlineBadge(opportunity: DeadlineFields, now: Date = new Date()): DeadlineBadge {
+  const daysLeft = daysUntilDeadline(opportunity, now);
+  if (daysLeft === null) {
     return { label: 'No deadline', variant: 'secondary' };
   }
-  const daysLeft = daysUntil(dateString);
   if (daysLeft <= 0) {
     return { label: 'Closed', variant: 'destructive' };
   }
@@ -25,7 +26,7 @@ export function getDeadlineBadge(dateString: string | null): DeadlineBadge {
         'border-amber-400 bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-400 dark:border-amber-700',
     };
   }
-  return { label: formatDate(dateString)!, variant: 'secondary' };
+  return { label: formatDeadline(opportunity)!.date, variant: 'secondary' };
 }
 
 export function getQualityColor(score: number): string {

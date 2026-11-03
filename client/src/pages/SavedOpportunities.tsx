@@ -8,7 +8,7 @@ import {
 } from '../hooks/useSavedOpportunities';
 import { OpportunityCard } from '../components/OpportunityCard';
 import type { SavedOpportunity, SavedCategory } from '../types';
-import { isPastDate } from '../lib/dates';
+import { isDeadlinePast } from '../lib/dates';
 
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
@@ -87,7 +87,7 @@ export function SavedOpportunities() {
   };
 
   const isOpportunityPast = (item: SavedOpportunity): boolean =>
-    isPastDate(item.opportunity?.cfpDeadline);
+    item.opportunity ? isDeadlinePast(item.opportunity) : false;
 
   const sortedItems = (items: SavedOpportunity[]) =>
     [...items].sort((a, b) => {
