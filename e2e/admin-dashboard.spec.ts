@@ -124,7 +124,12 @@ const demand = {
     topLocations: [],
     topFormats: [{ label: 'conference', count: 3 }],
   },
-  searchLog: { available: false },
+  searchLog: {
+    total7d: 12,
+    total30d: 40,
+    distinctQueries30d: 9,
+    topQueries: [{ query: 'devops conference', count: 7, averageResults: 11, lastSearchedAt: ago(HOUR) }],
+  },
   generatedAt: ago(0),
 };
 
@@ -196,7 +201,7 @@ test('sections render from their own endpoints with accessible status text', asy
   await expect(pipelineSection.getByRole('list', { name: 'Recent pipeline events' }).getByRole('listitem')).toHaveCount(2);
 
   await expect(page.getByRole('region', { name: 'Catalogue' })).toContainText('Closing within 7 days');
-  await expect(page.getByRole('region', { name: 'Demand' })).toContainText('Not available yet');
+  await expect(page.getByRole('region', { name: 'Demand' })).toContainText('devops conference (avg 11 results)');
 });
 
 test('the strip reads all clear when nothing needs attention', async ({ page }) => {

@@ -1,8 +1,9 @@
 import { prisma } from '../../lib/prisma.js';
-import type { AdminDemandResponse, AdminSavedSearchDemand, AdminSearchLogDemand } from 'shared';
+import type { AdminDemandResponse, AdminSavedSearchDemand } from 'shared';
+import { getSearchLogAnalytics } from './searchLog.js';
 import { daysAgo, topCounts } from './shared.js';
 
-/** What users ask for: saved searches now, the live-search log once it exists. */
+/** What users ask for: saved searches and the live-search log. */
 
 export const TOP_DEMAND = 10;
 const SAVED_SEARCH_SCAN_LIMIT = 5000;
@@ -72,15 +73,6 @@ export function summarizeSavedSearches(rows: SavedSearchRow[], now: Date): Admin
   };
 }
 
-/**
- * STUB: the `SearchLog` model and `GET /api/admin/analytics/search-log` are
- * being added in a parallel branch. Once they land on main, read the top
- * live-search queries here and drop the `available: false` branch.
- */
-async function getSearchLogDemand(): Promise<AdminSearchLogDemand> {
-  return { available: false };
-}
-
 export async function getDemand(now: Date = new Date()): Promise<AdminDemandResponse> {
   const [rows, searchLog] = await Promise.all([
     prisma.savedSearch.findMany({
@@ -88,7 +80,7 @@ export async function getDemand(now: Date = new Date()): Promise<AdminDemandResp
       orderBy: { createdAt: 'desc' },
       take: SAVED_SEARCH_SCAN_LIMIT,
     }),
-    getSearchLogDemand(),
+    getSearchLogAnalytics(TOP_DEMAND, now),
   ]);
   return {
     savedSearches: summarizeSavedSearches(rows, now),

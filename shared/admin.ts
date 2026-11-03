@@ -174,14 +174,25 @@ export interface AdminSavedSearchDemand {
   topFormats: AdminCount[];
 }
 
-/** Filled once the search log ships; until then the section says so. */
-export type AdminSearchLogDemand =
-  | { available: false }
-  | { available: true; topQueries: AdminCount[]; searchesLast7d: number };
+export interface AdminSearchLogQuery {
+  query: string;
+  count: number;
+  averageResults: number;
+  lastSearchedAt: string | null;
+}
+
+/** `GET /api/admin/analytics/search-log`: what people search for live, last 30 days. */
+export interface AdminSearchLogResponse {
+  total7d: number;
+  total30d: number;
+  distinctQueries30d: number;
+  /** Most frequent first. */
+  topQueries: AdminSearchLogQuery[];
+}
 
 export interface AdminDemandResponse {
   savedSearches: AdminSavedSearchDemand;
-  searchLog: AdminSearchLogDemand;
+  searchLog: AdminSearchLogResponse;
   generatedAt: string;
 }
 

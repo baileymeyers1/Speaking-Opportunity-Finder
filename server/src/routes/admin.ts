@@ -14,6 +14,8 @@ router.get('/analytics/sources', adminController.getSources);
 router.get('/analytics/pipeline', adminController.getPipeline);
 router.get('/analytics/catalogue', adminController.getCatalogue);
 router.get('/analytics/demand', adminController.getDemand);
+// The live-search log on its own (the demand section includes its top queries)
+router.get('/analytics/search-log', adminController.getSearchLog);
 
 // Manual enrichment batch (the cron's work, on demand). Scrapers run through POST /api/sync.
 router.post('/enrichment/run', adminController.runEnrichmentBatch);

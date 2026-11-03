@@ -4,6 +4,7 @@ import type {
   AdminDemandResponse,
   AdminEnrichmentBatchResult,
   AdminPipelineResponse,
+  AdminSearchLogResponse,
   AdminSourcesResponse,
   ApiResponse,
 } from 'shared';
@@ -30,6 +31,7 @@ export const getSources: Handler<AdminSourcesResponse> = section(() => analytics
 export const getPipeline: Handler<AdminPipelineResponse> = section(() => analyticsService.getPipeline());
 export const getCatalogue: Handler<AdminCatalogueResponse> = section(() => analyticsService.getCatalogue());
 export const getDemand: Handler<AdminDemandResponse> = section(() => analyticsService.getDemand());
+export const getSearchLog: Handler<AdminSearchLogResponse> = section(() => analyticsService.getSearchLogAnalytics());
 
 /**
  * Run one enrichment batch now, the same work the 5-minute cron does, with a

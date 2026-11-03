@@ -16,7 +16,7 @@ export function DemandSection({
     <SectionCard
       id="demand"
       title="Demand"
-      description="What users ask for: saved searches today, live-search queries once the search log ships."
+      description="What users ask for: saved searches and the last 30 days of live-search queries."
       icon={Search}
       isPending={isPending}
       error={error}
@@ -49,18 +49,19 @@ export function DemandSection({
             </div>
           </div>
 
-          <div className="rounded-md border border-dashed p-3">
-            <h3 className="text-sm font-semibold text-foreground">Live-search queries</h3>
-            {data.searchLog.available ? (
-              <div className="mt-2">
-                <p className="mb-2 text-xs text-muted-foreground">{data.searchLog.searchesLast7d} searches in 7 days</p>
-                <CountList items={data.searchLog.topQueries} emptyText="No live searches logged yet." />
-              </div>
-            ) : (
-              <p className="mt-1 text-sm text-muted-foreground">
-                Not available yet: the search log lands with the next sources release.
-              </p>
-            )}
+          <div>
+            <h3 className="mb-2 text-sm font-semibold text-foreground">Live-search queries</h3>
+            <div className="mb-3 grid grid-cols-2 gap-3 md:grid-cols-4">
+              <StatTile label="Searches in 7 days" value={data.searchLog.total7d} />
+              <StatTile label="Searches in 30 days" value={data.searchLog.total30d} note={`${data.searchLog.distinctQueries30d} distinct queries`} />
+            </div>
+            <CountList
+              items={data.searchLog.topQueries.map((entry) => ({
+                label: `${entry.query} (avg ${entry.averageResults} results)`,
+                count: entry.count,
+              }))}
+              emptyText="No live searches logged yet."
+            />
           </div>
         </div>
       )}
