@@ -1,28 +1,16 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useParams, Link, useNavigate, useLocation } from 'react-router-dom';
-import { apiClient } from '../api/client';
 import { useAuth } from '../hooks/useAuth';
-import type { Opportunity, SavedOpportunity, SavedCategory } from '../types';
-import { getLiveResultById, removeLiveResult } from '../utils/liveResultsCache';
-import { approximate, formatVerifiedAgo, isLowConfidence, LOW_CONFIDENCE_HINT } from '../utils/verification';
+import { useOpportunity } from '../hooks/useOpportunity';
+import { useSaveOpportunity } from '../hooks/useSaveOpportunity';
+import type { SavedCategory } from '../types';
+import { OpportunityDetailSkeleton } from '../components/OpportunityDetailSkeleton';
+import { DateWithConfidence, VerifiedBadge } from '../components/VerificationHints';
 
 import { Card, CardHeader, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
-import { Skeleton } from '@/components/ui/skeleton';
-import {
-  Select,
-  SelectTrigger,
-  SelectValue,
-  SelectContent,
-  SelectItem,
-} from '@/components/ui/select';
-import {
-  Tooltip,
-  TooltipTrigger,
-  TooltipContent,
-} from '@/components/ui/tooltip';
 
 import {
   ArrowLeft,
@@ -35,199 +23,38 @@ import {
   Zap,
   Star,
   AlertCircle,
-  Bookmark,
-  BookmarkCheck,
-  ShieldCheck,
 } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { SaveOpportunitySelect } from '../components/SaveOpportunitySelect';
 
 export function OpportunityDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const location = useLocation();
   const { isAuthenticated } = useAuth();
-  const [opportunity, setOpportunity] = useState<Opportunity | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [savedCategory, setSavedCategory] = useState<SavedCategory | null>(
-    null
-  );
-  const [isSaving, setIsSaving] = useState(false);
+  const { data: opportunity, isPending: isLoading, error: loadError } = useOpportunity(id);
+  const save = useSaveOpportunity();
+  const [savedCategory, setSavedCategory] = useState<SavedCategory | null>(null);
+  const isSaving = save.isPending;
+  const error = loadError ? loadError.message : null;
 
-  useEffect(() => {
-    const fetchOpportunity = async () => {
-      if (!id) return;
-
-      setIsLoading(true);
-      try {
-        if (id.startsWith('live-')) {
-          const cached = getLiveResultById(id);
-          if (cached) {
-            setOpportunity(cached);
-            return;
-          }
-        }
-
-        const response = await apiClient.get<Opportunity>(`/opportunities/${id}`);
-        if (response.data) setOpportunity(response.data);
-      } catch (err) {
-        if (id.startsWith('live-')) {
-          setError('This live search result is no longer cached. Please search again to find it.');
-        } else {
-          setError(err instanceof Error ? err.message : 'Failed to load');
-        }
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchOpportunity();
-  }, [id]);
-
-  const handleSave = async (category: SavedCategory) => {
+  const handleSave = (category: SavedCategory) => {
     if (!id || !isAuthenticated || !opportunity) return;
-
-    setIsSaving(true);
-    try {
-      let opportunityId = id;
-      let target = opportunity;
-
-      if (opportunity.isLiveResult) {
-        const saved = await apiClient.post<Opportunity>('/opportunities/save-live', {
-          title: opportunity.title,
-          organization: opportunity.organization,
-          description: opportunity.description,
-          location: opportunity.location,
-          isRemote: opportunity.isRemote,
-          eventDate: opportunity.eventDate,
-          cfpDeadline: opportunity.cfpDeadline,
-          format: opportunity.format,
-          industries: opportunity.industries,
-          compensationType: opportunity.compensationType,
-          compensationAmount: opportunity.compensationAmount,
-          compensationDetails: opportunity.compensationDetails,
-          qualityScore: opportunity.qualityScore,
-          applyUrl: opportunity.applyUrl,
-          liveSearchUrl: opportunity.liveSearchUrl,
-        });
-
-        if (saved.data) {
-          target = { ...saved.data, isLiveResult: false };
-          setOpportunity(target);
-          opportunityId = saved.data.id;
-          removeLiveResult(id);
-        }
+    save.mutate(
+      { opportunity, category },
+      {
+        onSuccess: (result) => {
+          setSavedCategory(category);
+          if (result.opportunity.id !== id) {
+            navigate(`/opportunities/${result.opportunity.id}`, { replace: true, state: location.state });
+          }
+        },
+        onError: (saveError) => console.error('Failed to save:', saveError),
       }
-
-      await apiClient.post<SavedOpportunity>('/saved', {
-        opportunityId,
-        category,
-      });
-
-      setSavedCategory(category);
-
-      if (target.id !== id) {
-        navigate(`/opportunities/${target.id}`, { replace: true });
-      }
-    } catch (err) {
-      console.error('Failed to save:', err);
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const formatDate = (dateString: string | null) => {
-    if (!dateString) return null;
-    return new Date(dateString).toLocaleDateString('en-US', {
-      weekday: 'long',
-      month: 'long',
-      day: 'numeric',
-      year: 'numeric',
-    });
+    );
   };
 
   if (isLoading) {
-    return (
-      <div className="max-w-3xl mx-auto space-y-4">
-        {/* Back button */}
-        <Skeleton className="h-9 w-48" />
-
-        <Card>
-          <CardHeader className="space-y-4">
-            {/* Title + format badge */}
-            <div className="flex items-start justify-between gap-4">
-              <Skeleton className="h-8 w-3/4" />
-              <Skeleton className="h-6 w-20 rounded-full" />
-            </div>
-
-            {/* Organization */}
-            <Skeleton className="h-5 w-1/2" />
-
-            {/* Metadata badges */}
-            <div className="flex flex-wrap gap-2">
-              <Skeleton className="h-6 w-20 rounded-full" />
-              <Skeleton className="h-6 w-28 rounded-full" />
-              <Skeleton className="h-6 w-36 rounded-full" />
-              <Skeleton className="h-6 w-24 rounded-full" />
-            </div>
-          </CardHeader>
-
-          <CardContent className="space-y-6">
-            {/* Description */}
-            <div className="space-y-2">
-              <Skeleton className="h-4 w-24" />
-              <Skeleton className="h-4 w-full" />
-              <Skeleton className="h-4 w-full" />
-              <Skeleton className="h-4 w-5/6" />
-              <Skeleton className="h-4 w-3/4" />
-            </div>
-
-            <Separator />
-
-            {/* Date details grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-              <div className="flex items-start gap-3">
-                <Skeleton className="h-8 w-8 rounded-md" />
-                <div className="space-y-1.5">
-                  <Skeleton className="h-4 w-20" />
-                  <Skeleton className="h-4 w-44" />
-                </div>
-              </div>
-              <div className="flex items-start gap-3">
-                <Skeleton className="h-8 w-8 rounded-md" />
-                <div className="space-y-1.5">
-                  <Skeleton className="h-4 w-24" />
-                  <Skeleton className="h-4 w-40" />
-                </div>
-              </div>
-            </div>
-
-            <Separator />
-
-            {/* Industries */}
-            <div className="space-y-3">
-              <Skeleton className="h-4 w-20" />
-              <div className="flex flex-wrap gap-2">
-                <Skeleton className="h-6 w-24 rounded-full" />
-                <Skeleton className="h-6 w-20 rounded-full" />
-                <Skeleton className="h-6 w-28 rounded-full" />
-              </div>
-            </div>
-
-            <Separator />
-
-            {/* Action buttons */}
-            <div className="flex flex-col sm:flex-row gap-3">
-              <Skeleton className="h-11 flex-1 rounded-md" />
-              <Skeleton className="h-11 w-[160px] rounded-md" />
-            </div>
-
-            {/* Source */}
-            <Skeleton className="h-3 w-32" />
-          </CardContent>
-        </Card>
-      </div>
-    );
+    return <OpportunityDetailSkeleton />;
   }
 
   if (error || !opportunity) {
@@ -254,25 +81,7 @@ export function OpportunityDetail() {
 
   const hasQualityScore =
     opportunity.qualityScore !== undefined && opportunity.qualityScore !== null;
-  const verifiedLabel = formatVerifiedAgo(opportunity);
 
-  const renderDate = (value: string | null, field: 'eventDate' | 'cfpDeadline') => {
-    if (!value) return 'Not listed';
-    const label = formatDate(value)!;
-    if (!isLowConfidence(opportunity, field)) return label;
-    return (
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <span className="cursor-help underline decoration-dotted underline-offset-2">
-            {approximate(label, true)}
-          </span>
-        </TooltipTrigger>
-        <TooltipContent>
-          <p>{LOW_CONFIDENCE_HINT}</p>
-        </TooltipContent>
-      </Tooltip>
-    );
-  };
 
   return (
     <div className="max-w-3xl mx-auto space-y-4">
@@ -342,19 +151,7 @@ export function OpportunityDetail() {
                 Quality {opportunity.qualityScore}/100
               </Badge>
             )}
-            {verifiedLabel && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Badge variant="outline" className="gap-1 cursor-default text-emerald-700 border-emerald-300 dark:text-emerald-400 dark:border-emerald-700">
-                    <ShieldCheck className="h-3 w-3" aria-hidden="true" />
-                    {verifiedLabel}
-                  </Badge>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>Dates and status were checked against the event page on {formatDate(opportunity.verifiedAt!)}.</p>
-                </TooltipContent>
-              </Tooltip>
-            )}
+            <VerifiedBadge opportunity={opportunity} variant="badge" />
           </div>
         </CardHeader>
 
@@ -384,7 +181,7 @@ export function OpportunityDetail() {
                   Event Date
                 </p>
                 <p className="text-sm text-muted-foreground">
-                  {renderDate(opportunity.eventDate, 'eventDate')}
+                  <DateWithConfidence opportunity={opportunity} field="eventDate" style="long" fallback="Not listed" />
                 </p>
               </div>
             </div>
@@ -397,7 +194,7 @@ export function OpportunityDetail() {
                   CFP Deadline
                 </p>
                 <p className="text-sm text-muted-foreground">
-                  {renderDate(opportunity.cfpDeadline, 'cfpDeadline')}
+                  <DateWithConfidence opportunity={opportunity} field="cfpDeadline" style="long" fallback="Not listed" />
                 </p>
               </div>
             </div>
@@ -462,37 +259,7 @@ export function OpportunityDetail() {
 
             {isAuthenticated && (
               <div className="flex items-center gap-2">
-                {savedCategory ? (
-                  <div className="flex items-center gap-2 px-4 py-2 rounded-md bg-primary/5 border border-primary/20">
-                    <BookmarkCheck className="h-4 w-4 text-primary" />
-                    <span className="text-sm font-medium text-primary capitalize">
-                      Saved as {savedCategory}
-                    </span>
-                  </div>
-                ) : (
-                  <Select
-                    onValueChange={(value) =>
-                      handleSave(value as SavedCategory)
-                    }
-                    disabled={isSaving}
-                  >
-                    <SelectTrigger
-                      className={cn(
-                        'w-[160px]',
-                        isSaving && 'opacity-50 cursor-not-allowed'
-                      )}
-                    >
-                      <Bookmark className="h-4 w-4 mr-2" />
-                      <SelectValue placeholder="Save to..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="interested">Interested</SelectItem>
-                      <SelectItem value="applied">Applied</SelectItem>
-                      <SelectItem value="accepted">Accepted</SelectItem>
-                      <SelectItem value="rejected">Rejected</SelectItem>
-                    </SelectContent>
-                  </Select>
-                )}
+                <SaveOpportunitySelect savedCategory={savedCategory} isSaving={isSaving} onSave={handleSave} />
               </div>
             )}
           </div>

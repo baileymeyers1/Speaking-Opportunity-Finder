@@ -66,7 +66,7 @@ test.describe('Browse page', () => {
 
     // Clicking it expands the advanced filters section
     await filtersButton.click();
-    await expect(page.getByText('Format')).toBeVisible();
-    await expect(page.getByText('Location')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Format', exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Location', exact: true })).toBeVisible();
   });
 });

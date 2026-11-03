@@ -1,10 +1,13 @@
 import { lazy, Suspense, useEffect } from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { QueryClientProvider } from '@tanstack/react-query';
+import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
 import { ThemeProvider } from './context/ThemeContext';
 import { AuthProvider } from './context/AuthContext';
 import { TooltipProvider } from './components/ui/tooltip';
 import { Layout } from './components/Layout';
 import { apiClient } from './api/client';
+import { persistOptions, queryClient, removeLegacyCaches } from './lib/queryClient';
 
 const Home = lazy(() => import('./pages/Home'));
 const OpportunityDetail = lazy(() => import('./pages/OpportunityDetail'));
@@ -16,8 +19,9 @@ const ForgotPassword = lazy(() => import('./pages/ForgotPassword'));
 const ResetPassword = lazy(() => import('./pages/ResetPassword'));
 
 function AppContent() {
-  // Fire-and-forget health ping to wake Render instance on app load
+  // Fire-and-forget health ping to warm the serverless function on app load
   useEffect(() => {
+    removeLegacyCaches();
     apiClient.get('/health').catch(() => {});
   }, []);
 
@@ -45,17 +49,31 @@ function AppContent() {
   );
 }
 
+/** Restores persisted queries from localStorage when storage is available. */
+function QueryProvider({ children }: { children: React.ReactNode }) {
+  if (persistOptions) {
+    return (
+      <PersistQueryClientProvider client={queryClient} persistOptions={persistOptions}>
+        {children}
+      </PersistQueryClientProvider>
+    );
+  }
+  return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
+}
+
 function App() {
   return (
-    <ThemeProvider>
-      <AuthProvider>
-        <TooltipProvider delayDuration={300}>
-          <BrowserRouter>
-            <AppContent />
-          </BrowserRouter>
-        </TooltipProvider>
-      </AuthProvider>
-    </ThemeProvider>
+    <QueryProvider>
+      <ThemeProvider>
+        <AuthProvider>
+          <TooltipProvider delayDuration={300}>
+            <BrowserRouter>
+              <AppContent />
+            </BrowserRouter>
+          </TooltipProvider>
+        </AuthProvider>
+      </ThemeProvider>
+    </QueryProvider>
   );
 }
 

@@ -1,9 +1,14 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Link, Navigate } from 'react-router-dom';
-import { apiClient } from '../api/client';
 import { useAuth } from '../hooks/useAuth';
+import {
+  useRemoveSavedOpportunity,
+  useSavedOpportunities,
+  useUpdateSavedCategory,
+} from '../hooks/useSavedOpportunities';
 import { OpportunityCard } from '../components/OpportunityCard';
 import type { SavedOpportunity, SavedCategory } from '../types';
+import { isPastDate } from '../lib/dates';
 
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
@@ -29,54 +34,24 @@ const categories: { value: SavedCategory | 'all'; label: string }[] = [
 
 export function SavedOpportunities() {
   const { isAuthenticated, isLoading: authLoading } = useAuth();
-  const [savedItems, setSavedItems] = useState<SavedOpportunity[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [activeCategory, setActiveCategory] = useState<SavedCategory | 'all'>(
-    'all'
-  );
+  const [activeCategory, setActiveCategory] = useState<SavedCategory | 'all'>('all');
+  const savedQuery = useSavedOpportunities({ enabled: isAuthenticated });
+  const removeSaved = useRemoveSavedOpportunity();
+  const updateCategory = useUpdateSavedCategory();
+  const savedItems = savedQuery.data ?? [];
+  const isLoading = savedQuery.isPending;
 
-  useEffect(() => {
-    const fetchSaved = async () => {
-      if (!isAuthenticated) return;
-
-      setIsLoading(true);
-      try {
-        const params =
-          activeCategory !== 'all' ? `?category=${activeCategory}` : '';
-        const response =
-          await apiClient.get<SavedOpportunity[]>(`/saved${params}`);
-
-        if (response.data) {
-          setSavedItems(response.data);
-        }
-      } catch (error) {
-        console.error('Failed to fetch saved opportunities:', error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchSaved();
-  }, [isAuthenticated, activeCategory]);
-
-  const handleRemove = async (id: string) => {
-    try {
-      await apiClient.delete(`/saved/${id}`);
-      setSavedItems((items) => items.filter((item) => item.id !== id));
-    } catch (error) {
-      console.error('Failed to remove:', error);
-    }
+  const handleRemove = (id: string) => {
+    removeSaved.mutate(id, {
+      onError: (error) => console.error('Failed to remove:', error),
+    });
   };
 
-  const handleUpdateCategory = async (id: string, category: SavedCategory) => {
-    try {
-      await apiClient.patch(`/saved/${id}`, { category });
-      setSavedItems((items) =>
-        items.map((item) => (item.id === id ? { ...item, category } : item))
-      );
-    } catch (error) {
-      console.error('Failed to update:', error);
-    }
+  const handleUpdateCategory = (id: string, category: SavedCategory) => {
+    updateCategory.mutate(
+      { savedId: id, category },
+      { onError: (error) => console.error('Failed to update:', error) }
+    );
   };
 
   if (authLoading) {
@@ -91,10 +66,10 @@ export function SavedOpportunities() {
     return <Navigate to="/login" replace />;
   }
 
-  const getCategoryCount = (cat: SavedCategory | 'all') => {
-    if (cat === 'all') return savedItems.length;
-    return savedItems.filter((item) => item.category === cat).length;
-  };
+  const itemsFor = (cat: SavedCategory | 'all') =>
+    cat === 'all' ? savedItems : savedItems.filter((item) => item.category === cat);
+
+  const getCategoryCount = (cat: SavedCategory | 'all') => itemsFor(cat).length;
 
   const getEmptyMessage = (cat: SavedCategory | 'all') => {
     switch (cat) {
@@ -111,10 +86,8 @@ export function SavedOpportunities() {
     }
   };
 
-  const isOpportunityPast = (item: SavedOpportunity): boolean => {
-    const deadline = item.opportunity?.cfpDeadline;
-    return !!deadline && new Date(deadline) < new Date();
-  };
+  const isOpportunityPast = (item: SavedOpportunity): boolean =>
+    isPastDate(item.opportunity?.cfpDeadline);
 
   const sortedItems = (items: SavedOpportunity[]) =>
     [...items].sort((a, b) => {
@@ -242,9 +215,9 @@ export function SavedOpportunities() {
           <TabsContent key={cat.value} value={cat.value}>
             {isLoading
               ? renderSkeletons()
-              : savedItems.length === 0
+              : itemsFor(cat.value).length === 0
                 ? renderEmpty(cat.value)
-                : renderGrid(savedItems)}
+                : renderGrid(itemsFor(cat.value))}
           </TabsContent>
         ))}
       </Tabs>

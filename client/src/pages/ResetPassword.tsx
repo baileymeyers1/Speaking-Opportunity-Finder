@@ -24,7 +24,7 @@ export function ResetPassword() {
       <div className="max-w-md mx-auto mt-8">
         <Card>
           <CardHeader className="text-center">
-            <CardTitle className="text-2xl">Invalid reset link</CardTitle>
+            <CardTitle className="text-2xl" role="heading" aria-level={1}>Invalid reset link</CardTitle>
             <CardDescription>
               This password reset link is invalid or has expired.
             </CardDescription>
@@ -73,7 +73,7 @@ export function ResetPassword() {
     <div className="max-w-md mx-auto mt-8">
       <Card>
         <CardHeader className="text-center">
-          <CardTitle className="text-2xl">Reset your password</CardTitle>
+          <CardTitle className="text-2xl" role="heading" aria-level={1}>Reset your password</CardTitle>
           <CardDescription>
             Enter a new password for your account
           </CardDescription>

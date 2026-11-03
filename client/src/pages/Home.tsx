@@ -1,375 +1,138 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { FilterPanel } from '../components/FilterPanel';
-import { OpportunityList } from '../components/OpportunityList';
+import { OpportunityGrid } from '../components/OpportunityGrid';
+import { LiveSearchBanner } from '../components/LiveSearchBanner';
 import { SavedSearches } from '../components/SavedSearches';
-import { apiClient } from '../api/client';
-import type { Opportunity, OpportunityFilters, OpportunityFormat, PaginatedResponse } from '../types';
-import { useDebounce } from '../hooks/useDebounce';
+import { isRateLimitError } from '../api/client';
+import type { OpportunityFilters } from '../types';
+import {
+  canLiveSearch,
+  filtersToSearchParams,
+  savedSearchToFilters,
+  searchParamsToFilters,
+  serializeFilters,
+  type BrowseFilters,
+} from '../filters/serialize';
 import { useAuth } from '../hooks/useAuth';
-import { upsertLiveResults } from '../utils/liveResultsCache';
+import { useOpportunities } from '../hooks/useOpportunities';
+import { useLiveSearch } from '../hooks/useLiveSearch';
 import { Button } from '@/components/ui/button';
-import { AlertCircle, ChevronLeft, ChevronRight, Clock, Loader2, X } from 'lucide-react';
-
-const CACHE_KEY = 'cachedOpportunities';
-const CACHE_MAX_AGE = 24 * 60 * 60 * 1000; // 24 hours
-const LIVE_SEARCH_CACHE_KEY = 'liveSearchCache';
-
-function loadCache(): { items: Opportunity[]; totalPages: number; timestamp: number } | null {
-  try {
-    const raw = localStorage.getItem(CACHE_KEY);
-    if (!raw) return null;
-    const cached = JSON.parse(raw);
-    if (Date.now() - cached.timestamp > CACHE_MAX_AGE) {
-      localStorage.removeItem(CACHE_KEY);
-      return null;
-    }
-    return cached;
-  } catch {
-    return null;
-  }
-}
-
-function parseFiltersFromParams(searchParams: URLSearchParams): OpportunityFilters {
-  const filters: OpportunityFilters = {};
-  const q = searchParams.get('q');
-  if (q) filters.search = q;
-  const industries = searchParams.getAll('industries');
-  if (industries.length) filters.industries = industries;
-  const locations = searchParams.getAll('locations');
-  if (locations.length) filters.locations = locations;
-  const types = searchParams.getAll('types');
-  if (types.length) filters.format = types as OpportunityFormat[];
-  const sort = searchParams.get('sort');
-  if (sort) filters.sortBy = sort as OpportunityFilters['sortBy'];
-  return filters;
-}
-
-function filtersToParams(filters: OpportunityFilters, page: number): URLSearchParams {
-  const params = new URLSearchParams();
-  if (filters.search) params.set('q', filters.search);
-  if (filters.sortBy) params.set('sort', filters.sortBy);
-  if (page > 1) params.set('page', String(page));
-  filters.industries?.forEach((i) => params.append('industries', i));
-  filters.locations?.forEach((l) => params.append('locations', l));
-  filters.format?.forEach((f) => params.append('types', f));
-  return params;
-}
+import { AlertCircle, Loader2, X } from 'lucide-react';
 
 const BANNER_DISMISSED_KEY = 'loginBannerDismissed';
 
+/** Filters and page live in the URL; this is the only place that writes them. */
+function useBrowseFilters() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const filters = useMemo(() => searchParamsToFilters(searchParams), [searchParams]);
+  const updateFilters = useCallback(
+    (updater: (previous: BrowseFilters) => BrowseFilters) => {
+      setSearchParams(
+        (previous) => filtersToSearchParams(updater(searchParamsToFilters(previous))),
+        { replace: true }
+      );
+    },
+    [setSearchParams]
+  );
+  const setPage = useCallback(
+    (nextPage: number) => updateFilters((previous) => ({ ...previous, page: nextPage })),
+    [updateFilters]
+  );
+  return { filters, page: filters.page ?? 1, updateFilters, setPage };
+}
+
 export function Home() {
   const { isAuthenticated } = useAuth();
-  const [searchParams, setSearchParams] = useSearchParams();
-  const [opportunities, setOpportunities] = useState<Opportunity[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isStale, setIsStale] = useState(false);
-  const [isSearching, setIsSearching] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [rateLimitWarning, setRateLimitWarning] = useState<string | null>(null);
-  const [filters, setFilters] = useState<OpportunityFilters>(() => parseFiltersFromParams(searchParams));
-  const debouncedFilters = useDebounce(filters, 400);
-  const [page, setPage] = useState(() => {
-    const p = searchParams.get('page');
-    return p ? Math.max(1, parseInt(p, 10)) : 1;
-  });
-  const [totalPages, setTotalPages] = useState(1);
-  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
-  const [liveResultCount, setLiveResultCount] = useState(0);
-  // Store all live search results so we can re-sort/filter client-side
-  const allLiveResults = useRef<Opportunity[]>([]);
-  const cacheLoaded = useRef(false);
-  const skipNextFetch = useRef(false);
-  const filtersHydrated = useRef(true);
+  const { filters, page, updateFilters, setPage } = useBrowseFilters();
+  const query = useOpportunities(filters);
+  const liveSearch = useLiveSearch(filters);
+  // The dismissal is remembered per filter set, so a new search shows the notice again.
+  const [rateLimitDismissedFor, setRateLimitDismissedFor] = useState<string | null>(null);
+  const rateLimitDismissed = rateLimitDismissedFor === serializeFilters(filters);
   const [bannerDismissed, setBannerDismissed] = useState(
     () => sessionStorage.getItem(BANNER_DISMISSED_KEY) === 'true'
   );
 
-  // Load cached results on first mount (before API call)
+  const data = query.data;
+  const opportunities = data?.items ?? [];
+  const liveResultCount = data?.liveResultCount ?? 0;
+  const isLoading = data === undefined && query.isPending;
+  const isRefreshing = data !== undefined && query.isFetching;
+  const lastUpdated =
+    data !== undefined && !query.isPlaceholderData && query.dataUpdatedAt > 0
+      ? new Date(query.dataUpdatedAt)
+      : null;
+
+  const rateLimited =
+    !rateLimitDismissed && (isRateLimitError(query.error) || isRateLimitError(liveSearch.error));
+  const loadError = Boolean(query.error) && data === undefined && !isRateLimitError(query.error);
+  const liveSearchFailed = Boolean(liveSearch.error) && !isRateLimitError(liveSearch.error);
+
+  // Clamp page to the valid range when the result count shrinks
   useEffect(() => {
-    // Check if we have live search results cached for the current URL params
-    try {
-      const liveRaw = sessionStorage.getItem(LIVE_SEARCH_CACHE_KEY);
-      if (liveRaw) {
-        const liveCached = JSON.parse(liveRaw);
-        // Restore if cache is fresh (< 5 min) and params match current URL
-        const currentParams = new URLSearchParams();
-        if (filters.search) currentParams.set('search', filters.search);
-        filters.locations?.forEach((l) => currentParams.append('locations', l));
-        filters.industries?.forEach((i) => currentParams.append('industries', i));
-        currentParams.set('liveSearch', 'true');
-        currentParams.set('page', '1');
-
-        if (Date.now() - liveCached.timestamp < 5 * 60 * 1000) {
-          setOpportunities(liveCached.items);
-          allLiveResults.current = liveCached.items;
-          setTotalPages(liveCached.totalPages);
-          setLiveResultCount(liveCached.liveResultCount);
-          setLastUpdated(new Date(liveCached.timestamp));
-          setIsLoading(false);
-          setIsStale(false);
-          cacheLoaded.current = true;
-          skipNextFetch.current = true;
-          return;
-        }
-      }
-    } catch { /* ignore */ }
-
-    const cached = loadCache();
-    if (cached) {
-      setOpportunities(cached.items);
-      setTotalPages(cached.totalPages);
-      setLastUpdated(new Date(cached.timestamp));
-      setIsLoading(false);
-      setIsStale(true);
-      cacheLoaded.current = true;
+    if (data && data.totalPages > 0 && page > data.totalPages) {
+      setPage(data.totalPages);
     }
-  }, []);
+  }, [data, page, setPage]);
 
-  const fetchOpportunities = useCallback(async (liveSearch = false) => {
-    if (!filtersHydrated.current) return;
-    // Skip the automatic re-fetch if we just restored from live cache
-    if (skipNextFetch.current && !liveSearch) {
-      skipNextFetch.current = false;
-      return;
-    }
-    // If we have active live results and this is a non-live fetch (sort/filter change),
-    // re-sort the existing results client-side instead of losing them
-    if (!liveSearch && allLiveResults.current.length > 0) {
-      const sortBy = debouncedFilters.sortBy || 'deadline';
-      const sorted = [...allLiveResults.current].sort((a, b) => {
-        const dateVal = (v: string | null) => {
-          if (!v) return Number.MAX_SAFE_INTEGER;
-          const d = new Date(v).getTime();
-          return isNaN(d) ? Number.MAX_SAFE_INTEGER : d;
-        };
-        if (sortBy === 'quality') return (b.qualityScore || 0) - (a.qualityScore || 0);
-        if (sortBy === 'eventDate') return dateVal(a.eventDate) - dateVal(b.eventDate);
-        return dateVal(a.cfpDeadline) - dateVal(b.cfpDeadline);
-      });
-      setOpportunities(sorted);
-      return;
-    }
-    if (!cacheLoaded.current && !liveSearch) {
-      setIsLoading(true);
-    }
-    if (liveSearch) {
-      setIsSearching(true);
-    }
-    setError(null);
-    setRateLimitWarning(null);
-    try {
-      const params = new URLSearchParams();
-      params.set('page', String(page));
-
-      if (debouncedFilters.search) params.set('search', debouncedFilters.search);
-      if (debouncedFilters.isRemote) params.set('isRemote', 'true');
-      if (debouncedFilters.compensationMin) params.set('compensationMin', String(debouncedFilters.compensationMin));
-      if (debouncedFilters.compensationMax) params.set('compensationMax', String(debouncedFilters.compensationMax));
-      if (debouncedFilters.sortBy) params.set('sortBy', debouncedFilters.sortBy);
-      if (debouncedFilters.qualityMin !== undefined) params.set('qualityMin', String(debouncedFilters.qualityMin));
-
-      debouncedFilters.locations?.forEach((loc) => params.append('locations', loc));
-      debouncedFilters.format?.forEach((f) => params.append('format', f));
-      debouncedFilters.industries?.forEach((i) => params.append('industries', i));
-      debouncedFilters.compensationType?.forEach((c) => params.append('compensationType', c));
-
-      if (liveSearch) {
-        params.set('liveSearch', 'true');
-      }
-
-      const response = await apiClient.get<PaginatedResponse<Opportunity>>(
-        `/opportunities?${params.toString()}`
-      );
-
-      if (response.data) {
-        setOpportunities(response.data.items);
-        setTotalPages(response.data.totalPages);
-        setLiveResultCount(response.data.liveResultCount || 0);
-        setLastUpdated(new Date());
-        setIsStale(false);
-
-        // Store all results when live search is active so we can re-sort client-side
-        if (liveSearch && (response.data.liveResultCount ?? 0) > 0) {
-          allLiveResults.current = response.data.items;
-        }
-
-        // Cache live results so detail page can find them
-        const liveItems = response.data.items.filter((item) => item.isLiveResult);
-        if (liveItems.length > 0) {
-          upsertLiveResults(liveItems);
-        }
-
-        // Cache live search results for back-navigation restoration
-        if (liveSearch && (response.data.liveResultCount ?? 0) > 0) {
-          try {
-            sessionStorage.setItem(LIVE_SEARCH_CACHE_KEY, JSON.stringify({
-              params: params.toString(),
-              items: response.data.items,
-              totalPages: response.data.totalPages,
-              liveResultCount: response.data.liveResultCount,
-              timestamp: Date.now(),
-            }));
-          } catch { /* ignore storage errors */ }
-        }
-
-        // Cache the default (unfiltered, page 1) response
-        if (page === 1 && Object.keys(debouncedFilters).length === 0 && !liveSearch) {
-          localStorage.setItem(CACHE_KEY, JSON.stringify({
-            items: response.data.items,
-            totalPages: response.data.totalPages,
-            timestamp: Date.now(),
-          }));
-        }
-      }
-    } catch (err) {
-      console.error('Failed to fetch opportunities:', err);
-      const errorMessage = err instanceof Error ? err.message : '';
-      const isRateLimit = errorMessage.toLowerCase().includes('too many');
-      if (isRateLimit) {
-        setRateLimitWarning('Search limit reached. Showing cached results. Try again in a moment.');
-      } else if (!cacheLoaded.current && opportunities.length === 0) {
-        setError('Failed to load opportunities. Please check your connection and try again.');
-      }
-    } finally {
-      setIsLoading(false);
-      setIsSearching(false);
-      cacheLoaded.current = false;
-    }
-  }, [debouncedFilters, page]);
-
-  // Fetch DB results on filter/page changes
-  useEffect(() => {
-    fetchOpportunities(false);
-  }, [fetchOpportunities]);
-
-  // Clamp page to valid range when totalPages changes
-  useEffect(() => {
-    if (totalPages > 0 && page > totalPages) {
-      setPage(totalPages);
-    }
-  }, [totalPages, page]);
-
-  // Sync filters + page to URL search params
-  useEffect(() => {
-    if (!filtersHydrated.current) return;
-    const newParams = filtersToParams(filters, page);
-    setSearchParams(newParams, { replace: true });
-  }, [filters, page, setSearchParams]);
-
-  const handleFiltersChange = (newFilters: OpportunityFilters) => {
-    setFilters(newFilters);
-    setPage(1);
-    // Don't clear live results on filter/sort changes — we re-sort client-side
-    if (allLiveResults.current.length === 0) {
-      setLiveResultCount(0);
-    }
-    setRateLimitWarning(null);
+  const handleFiltersChange = (next: OpportunityFilters) => updateFilters(() => ({ ...next, page: 1 }));
+  const handleClearFilters = () => updateFilters(() => ({}));
+  const handleLiveSearch = (effective: OpportunityFilters) => {
+    if (!canLiveSearch(effective)) return;
+    updateFilters(() => ({ ...effective, page: 1 }));
+    liveSearch.run(effective);
   };
-
-  const handleClearFilters = () => {
-    setFilters({});
-    setPage(1);
-    setLiveResultCount(0);
-  };
-
-  const handleLiveSearch = async () => {
-    if (!filters.search && !filters.industries?.length) {
-      alert('Please enter a search term or select an industry to perform a live search.');
-      return;
-    }
-    fetchOpportunities(true);
-  };
-
-  const handleClearLiveResults = () => {
-    setLiveResultCount(0);
-    allLiveResults.current = [];
-    sessionStorage.removeItem(LIVE_SEARCH_CACHE_KEY);
-    fetchOpportunities(false);
-  };
-
+  const handleApplySavedSearch = (savedQuery: string, savedFilters: Record<string, unknown>) =>
+    updateFilters(() => savedSearchToFilters(savedQuery, savedFilters));
   const handleDismissBanner = () => {
     setBannerDismissed(true);
     sessionStorage.setItem(BANNER_DISMISSED_KEY, 'true');
   };
 
-  const handleRetry = () => {
-    setError(null);
-    fetchOpportunities(false);
-  };
-
-  const handleApplySavedSearch = (query: string, savedFilters: Record<string, unknown>) => {
-    const applied: OpportunityFilters = {};
-    if (query) applied.search = query;
-    if (Array.isArray(savedFilters.industries)) applied.industries = savedFilters.industries as string[];
-    if (Array.isArray(savedFilters.locations)) applied.locations = savedFilters.locations as string[];
-    if (Array.isArray(savedFilters.format)) applied.format = savedFilters.format as OpportunityFormat[];
-    if (Array.isArray(savedFilters.compensationType)) applied.compensationType = savedFilters.compensationType as OpportunityFilters['compensationType'];
-    if (savedFilters.sortBy) applied.sortBy = savedFilters.sortBy as OpportunityFilters['sortBy'];
-    if (savedFilters.isRemote) applied.isRemote = savedFilters.isRemote as boolean;
-    if (typeof savedFilters.compensationMin === 'number') applied.compensationMin = savedFilters.compensationMin;
-    if (typeof savedFilters.compensationMax === 'number') applied.compensationMax = savedFilters.compensationMax;
-    if (typeof savedFilters.qualityMin === 'number') applied.qualityMin = savedFilters.qualityMin;
-    setFilters(applied);
-    setPage(1);
-  };
+  const hasLocationFilter = Boolean(filters.locations && filters.locations.length > 0);
 
   return (
     <div className="space-y-6">
-      {/* Page header */}
       <div>
-        <h1 className="text-3xl font-bold tracking-tight text-foreground">
-          Find Speaking Opportunities
-        </h1>
+        <h1 className="text-3xl font-bold tracking-tight text-foreground">Find Speaking Opportunities</h1>
         <p className="text-muted-foreground mt-1">
           Discover conferences, meetups, and events looking for speakers
         </p>
       </div>
 
-      <div className="flex items-start gap-3">
-        <div className="flex-1">
+      {/* Saved Searches sits beside the filters on wide screens and under them on phones */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
+        <div className="flex-1 min-w-0">
           <FilterPanel
             filters={filters}
             onFiltersChange={handleFiltersChange}
             onLiveSearch={handleLiveSearch}
-            isSearching={isSearching}
+            isSearching={liveSearch.isSearching}
           />
         </div>
         {isAuthenticated && (
           <SavedSearches
             currentQuery={filters.search || ''}
-            currentFilters={filters as Record<string, unknown>}
+            currentFilters={{ ...filters, page: undefined } as Record<string, unknown>}
             onApplySearch={handleApplySavedSearch}
           />
         )}
       </div>
 
-      {/* Stale cache indicator */}
-      {isStale && (
-        <div className="flex items-center gap-2 rounded-md border border-border bg-muted/50 px-4 py-2 text-sm text-muted-foreground" role="status" aria-live="polite">
+      {isRefreshing && (
+        <div
+          className="flex items-center gap-2 rounded-md border border-border bg-muted/50 px-4 py-2 text-sm text-muted-foreground"
+          role="status"
+          aria-live="polite"
+        >
           <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
           Showing cached results while loading fresh data...
         </div>
       )}
 
-      {/* Rate limit warning banner */}
-      {rateLimitWarning && (
-        <div className="flex items-center gap-2 rounded-md border border-amber-300 bg-amber-50 px-4 py-2 text-sm text-amber-800 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-300" role="status" aria-live="polite">
-          <Clock className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
-          {rateLimitWarning}
-          <button
-            onClick={() => setRateLimitWarning(null)}
-            className="ml-auto rounded-full p-0.5 hover:bg-amber-200 dark:hover:bg-amber-800 transition-colors"
-            aria-label="Dismiss rate limit warning"
-          >
-            <X className="h-3.5 w-3.5" />
-          </button>
-        </div>
-      )}
-
-      {/* Log in to save banner */}
       {!isAuthenticated && !bannerDismissed && (
-        <div className="flex items-center justify-between rounded-lg border bg-muted/50 px-4 py-3">
+        <div className="flex items-center justify-between gap-2 rounded-lg border bg-muted/50 px-4 py-3">
           <p className="text-sm text-muted-foreground">
             <Link to="/register" className="font-medium text-primary hover:underline">Sign up</Link>
             {' '}or{' '}
@@ -382,141 +145,53 @@ export function Home() {
         </div>
       )}
 
-      {/* Error state */}
-      {error && !isLoading && (
-        <div role="alert" className="flex flex-col items-center justify-center rounded-lg border border-destructive/20 bg-destructive/5 py-12 text-center">
+      {loadError ? (
+        <div
+          role="alert"
+          className="flex flex-col items-center justify-center rounded-lg border border-destructive/20 bg-destructive/5 py-12 text-center"
+        >
           <div className="rounded-full bg-destructive/10 p-3 mb-4">
             <AlertCircle className="h-6 w-6 text-destructive" />
           </div>
-          <h3 className="text-lg font-semibold text-foreground">
-            Something went wrong
-          </h3>
+          <h3 className="text-lg font-semibold text-foreground">Something went wrong</h3>
           <p className="text-sm text-muted-foreground mt-1 max-w-md">
-            {error}
+            Failed to load opportunities. Please check your connection and try again.
           </p>
-          <Button variant="outline" className="mt-4" onClick={handleRetry}>
+          <Button variant="outline" className="mt-4" onClick={() => query.refetch()}>
             Try again
           </Button>
         </div>
-      )}
-
-      {/* Results header + list (only when no error) */}
-      {!error && (
+      ) : (
         <>
-          {/* Results header */}
-          {!isLoading && opportunities.length > 0 && (
-            <div className="flex items-center justify-between" aria-live="polite">
-              <p className="text-sm text-muted-foreground">
-                Showing {opportunities.length} result{opportunities.length !== 1 ? 's' : ''}
-                {filters.locations && filters.locations.length > 0 && (
-                  <span className="ml-1">
-                    ({opportunities.filter(o => o.matchesLocationFilter).length} in your area)
-                  </span>
-                )}
-                {liveResultCount > 0 && (
-                  <span className="ml-1">
-                    ({liveResultCount} from live search)
-                  </span>
-                )}
-              </p>
-              <div className="flex items-center gap-3">
-                {liveResultCount > 0 && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={handleClearLiveResults}
-                    className="text-muted-foreground"
-                  >
-                    <X className="h-4 w-4" aria-hidden="true" />
-                    Clear live results
-                  </Button>
-                )}
-                {lastUpdated && !isStale && liveResultCount === 0 && (
-                  <span className="text-xs text-muted-foreground">
-                    Updated {lastUpdated.toLocaleTimeString()}
-                  </span>
-                )}
-              </div>
-            </div>
+          {!isLoading && (
+            <LiveSearchBanner
+              resultCount={opportunities.length}
+              liveResultCount={liveResultCount}
+              locationMatchedCount={
+                hasLocationFilter ? opportunities.filter((item) => item.matchesLocationFilter).length : null
+              }
+              lastUpdated={lastUpdated}
+              isRefreshing={isRefreshing}
+              rateLimited={rateLimited}
+              liveSearchFailed={liveSearchFailed}
+              onClearLiveResults={() => query.refetch()}
+              onDismissRateLimit={() => {
+                setRateLimitDismissedFor(serializeFilters(filters));
+                liveSearch.reset();
+              }}
+              onDismissLiveError={() => liveSearch.reset()}
+            />
           )}
-
-          {(() => {
-            const hasLocationFilter = filters.locations && filters.locations.length > 0;
-            const locationMatched = hasLocationFilter
-              ? opportunities.filter(o => o.matchesLocationFilter)
-              : opportunities;
-            const otherResults = hasLocationFilter
-              ? opportunities.filter(o => !o.matchesLocationFilter)
-              : [];
-
-            return (
-              <>
-                {/* Location-matched results (or all results when no location filter) */}
-                {locationMatched.length > 0 ? (
-                  <OpportunityList
-                    opportunities={locationMatched}
-                    isLoading={isLoading}
-                    onClearFilters={handleClearFilters}
-                  />
-                ) : hasLocationFilter && !isLoading ? (
-                  <p className="text-sm text-muted-foreground py-4">
-                    No results found in {filters.locations!.join(', ')}
-                  </p>
-                ) : (
-                  <OpportunityList
-                    opportunities={[]}
-                    isLoading={isLoading}
-                    onClearFilters={handleClearFilters}
-                  />
-                )}
-
-                {otherResults.length > 0 && !isLoading && (
-                  <>
-                    <div className="flex items-center gap-3 pt-6 pb-2">
-                      <div className="h-px flex-1 bg-border" />
-                      <p className="text-sm font-medium text-muted-foreground whitespace-nowrap">
-                        More Speaking Opportunities
-                      </p>
-                      <div className="h-px flex-1 bg-border" />
-                    </div>
-                    <OpportunityList
-                      opportunities={otherResults}
-                      isLoading={false}
-                    />
-                  </>
-                )}
-              </>
-            );
-          })()}
-
-          {/* Pagination */}
-          {totalPages > 1 && !isLoading && liveResultCount === 0 && (
-            <nav aria-label="Pagination" className="flex items-center justify-center gap-2 pt-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                disabled={page === 1}
-                aria-label="Go to previous page"
-              >
-                <ChevronLeft className="h-4 w-4" aria-hidden="true" />
-                Previous
-              </Button>
-              <span className="px-3 text-sm text-muted-foreground">
-                Page {page} of {totalPages}
-              </span>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                disabled={page === totalPages}
-                aria-label="Go to next page"
-              >
-                Next
-                <ChevronRight className="h-4 w-4" aria-hidden="true" />
-              </Button>
-            </nav>
-          )}
+          <OpportunityGrid
+            opportunities={opportunities}
+            isLoading={isLoading}
+            locations={filters.locations}
+            onClearFilters={handleClearFilters}
+            page={page}
+            totalPages={data?.totalPages ?? 1}
+            showPagination={liveResultCount === 0}
+            onPageChange={setPage}
+          />
         </>
       )}
     </div>

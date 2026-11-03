@@ -1,5 +1,5 @@
-import { Request, Response, NextFunction } from 'express';
-import { Opportunity } from '@prisma/client';
+import { type Request, type Response, type NextFunction } from 'express';
+import { type Opportunity } from '@prisma/client';
 import { prisma } from '../lib/prisma.js';
 import { AppError } from '../middleware/errorHandler.js';
 

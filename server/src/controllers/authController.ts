@@ -1,4 +1,4 @@
-import { Request, Response, NextFunction } from 'express';
+import { type Request, type Response, type NextFunction } from 'express';
 import * as authService from '../services/authService.js';
 import { AppError } from '../middleware/errorHandler.js';
 

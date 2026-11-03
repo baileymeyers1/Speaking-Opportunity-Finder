@@ -2,6 +2,25 @@ import type { ApiResponse } from '../types';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
 
+export class ApiError extends Error {
+  readonly status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+  }
+
+  get isRateLimit(): boolean {
+    return this.status === 429 || this.message.toLowerCase().includes('too many');
+  }
+}
+
+export function isRateLimitError(error: unknown): boolean {
+  if (error instanceof ApiError) return error.isRateLimit;
+  return error instanceof Error && error.message.toLowerCase().includes('too many');
+}
+
 class ApiClient {
   private baseUrl: string;
 
@@ -27,7 +46,7 @@ class ApiClient {
     const responseData = await response.json();
 
     if (!response.ok) {
-      throw new Error(responseData.error || 'An error occurred');
+      throw new ApiError(responseData.error || 'An error occurred', response.status);
     }
 
     // Unwrap the data from the API response structure { success: true, data: T }
@@ -39,8 +58,8 @@ class ApiClient {
     };
   }
 
-  async get<T>(endpoint: string): Promise<ApiResponse<T>> {
-    return this.request<T>(endpoint, { method: 'GET' });
+  async get<T>(endpoint: string, options: { signal?: AbortSignal } = {}): Promise<ApiResponse<T>> {
+    return this.request<T>(endpoint, { method: 'GET', signal: options.signal });
   }
 
   async post<T>(endpoint: string, body: unknown): Promise<ApiResponse<T>> {

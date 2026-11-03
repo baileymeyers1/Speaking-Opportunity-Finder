@@ -34,7 +34,7 @@ interface BackgroundEnrichmentState {
   dailyEnrichmentCount: number;
 }
 
-let state: BackgroundEnrichmentState = {
+const state: BackgroundEnrichmentState = {
   isRunning: false,
   processed: 0,
   enriched: 0,

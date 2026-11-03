@@ -1,10 +1,10 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState } from 'react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
 import { Bookmark, Trash2, Save } from 'lucide-react';
-import { apiClient } from '../api/client';
+import { useDeleteSavedSearch, useSaveSearch, useSavedSearches } from '../hooks/useSavedSearches';
 import type { SavedSearch } from '../types';
 
 interface SavedSearchesProps {
@@ -14,55 +14,29 @@ interface SavedSearchesProps {
 }
 
 export function SavedSearches({ currentQuery, currentFilters, onApplySearch }: SavedSearchesProps) {
-  const [searches, setSearches] = useState<SavedSearch[]>([]);
   const [newName, setNewName] = useState('');
-  const [isSaving, setIsSaving] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
+  const { data: searches = [] } = useSavedSearches({ enabled: isOpen });
+  const saveSearch = useSaveSearch();
+  const deleteSearch = useDeleteSavedSearch();
+  const isSaving = saveSearch.isPending;
 
-  const fetchSearches = useCallback(async () => {
-    try {
-      const response = await apiClient.get<SavedSearch[]>('/saved-searches');
-      if (response.data) {
-        setSearches(response.data);
-      }
-    } catch (err) {
-      console.error('Failed to fetch saved searches:', err);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (isOpen) {
-      fetchSearches();
-    }
-  }, [isOpen, fetchSearches]);
-
-  const handleSave = async () => {
+  const handleSave = () => {
     const trimmed = newName.trim();
     if (!trimmed) return;
-
-    setIsSaving(true);
-    try {
-      await apiClient.post('/saved-searches', {
-        name: trimmed,
-        query: currentQuery || null,
-        filters: currentFilters,
-      });
-      setNewName('');
-      await fetchSearches();
-    } catch (err) {
-      console.error('Failed to save search:', err);
-    } finally {
-      setIsSaving(false);
-    }
+    saveSearch.mutate(
+      { name: trimmed, query: currentQuery || null, filters: currentFilters },
+      {
+        onSuccess: () => setNewName(''),
+        onError: (error) => console.error('Failed to save search:', error),
+      }
+    );
   };
 
-  const handleDelete = async (id: string) => {
-    try {
-      await apiClient.delete(`/saved-searches/${id}`);
-      setSearches((prev) => prev.filter((s) => s.id !== id));
-    } catch (err) {
-      console.error('Failed to delete saved search:', err);
-    }
+  const handleDelete = (id: string) => {
+    deleteSearch.mutate(id, {
+      onError: (error) => console.error('Failed to delete saved search:', error),
+    });
   };
 
   const handleApply = (search: SavedSearch) => {

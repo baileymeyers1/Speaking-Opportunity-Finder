@@ -1,5 +1,5 @@
 import { prisma } from '../lib/prisma.js';
-import { Response, NextFunction } from 'express';
+import { type Response, type NextFunction } from 'express';
 import { AppError } from './errorHandler.js';
 
 export async function adminMiddleware(req: any, res: Response, next: NextFunction) {

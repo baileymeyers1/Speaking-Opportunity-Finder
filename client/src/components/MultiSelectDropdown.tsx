@@ -18,6 +18,12 @@ export function MultiSelectDropdown({
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState('');
   const containerRef = useRef<HTMLDivElement>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
+
+  // Move focus into the search box when the user opens the list
+  useEffect(() => {
+    if (isOpen) searchRef.current?.focus();
+  }, [isOpen]);
 
   // Close on outside click
   useEffect(() => {
@@ -84,7 +90,7 @@ export function MultiSelectDropdown({
               onChange={(e) => setSearch(e.target.value)}
               aria-label={`Search ${label}`}
               className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-              autoFocus
+              ref={searchRef}
             />
           </div>
           <div className="max-h-48 overflow-y-auto px-2 pb-2" role="listbox" aria-label={label}>

@@ -1,23 +1,18 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import type { Opportunity } from '../types';
+import type { Opportunity, SavedCategory } from '../types';
 import { useAuth } from '../hooks/useAuth';
-import { apiClient } from '../api/client';
-import { removeLiveResult } from '../utils/liveResultsCache';
-import { approximate, formatVerifiedAgo, isLowConfidence, LOW_CONFIDENCE_HINT } from '../utils/verification';
+import { useSaveOpportunity } from '../hooks/useSaveOpportunity';
+import { isPastDate } from '../lib/dates';
+import { getDeadlineBadge, getQualityColor, getQualityLabel } from '../lib/opportunityDisplay';
+import { SaveOpportunityMenu } from './SaveOpportunityMenu';
+import { approximate, isLowConfidence } from '../utils/verification';
+import { ApproximateHint, DateWithConfidence, VerifiedBadge } from './VerificationHints';
 import { cn } from '@/lib/utils';
 
 import { Card, CardHeader, CardContent, CardFooter } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import {
-  DropdownMenu,
-  DropdownMenuTrigger,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-} from '@/components/ui/dropdown-menu';
 import {
   Tooltip,
   TooltipTrigger,
@@ -30,12 +25,9 @@ import {
   Clock,
   DollarSign,
   Globe,
-  Bookmark,
-  BookmarkCheck,
   ExternalLink,
   Zap,
   Star,
-  ShieldCheck,
 } from 'lucide-react';
 
 interface OpportunityCardProps {
@@ -44,84 +36,19 @@ interface OpportunityCardProps {
   isPast?: boolean;
 }
 
-const SAVE_CATEGORIES = [
-  { value: 'interested', label: 'Interested' },
-  { value: 'applied', label: 'Applied' },
-  { value: 'accepted', label: 'Accepted' },
-  { value: 'rejected', label: 'Rejected' },
-] as const;
-
-function formatDate(dateString: string | null): string | null {
-  if (!dateString) return null;
-  return new Date(dateString).toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  });
-}
-
-function getDeadlineBadge(dateString: string | null): {
-  label: string;
-  variant: 'secondary' | 'destructive' | 'outline';
-  className?: string;
-} {
-  if (!dateString) {
-    return { label: 'No deadline', variant: 'secondary' };
-  }
-
-  const now = new Date();
-  const deadline = new Date(dateString);
-  const daysLeft = Math.ceil(
-    (deadline.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
-  );
-
-  if (daysLeft <= 0) {
-    return { label: 'Closed', variant: 'destructive' };
-  }
-  if (daysLeft <= 3) {
-    return { label: `${daysLeft}d left`, variant: 'destructive' };
-  }
-  if (daysLeft <= 7) {
-    return {
-      label: `${daysLeft}d left`,
-      variant: 'outline',
-      className: 'border-amber-400 bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-400 dark:border-amber-700',
-    };
-  }
-
-  return { label: formatDate(dateString)!, variant: 'secondary' };
-}
-
-function getQualityColor(score: number): string {
-  if (score >= 70) return 'bg-emerald-500';
-  if (score >= 40) return 'bg-amber-500';
-  return 'bg-red-500';
-}
-
-function getQualityLabel(score: number): string {
-  if (score >= 70) return 'High quality';
-  if (score >= 40) return 'Medium quality';
-  return 'Low quality';
-}
-
 export function OpportunityCard({ opportunity, showSave = true, isPast }: OpportunityCardProps) {
   const { isAuthenticated } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const [current, setCurrent] = useState(opportunity);
-  const [isSaving, setIsSaving] = useState(false);
-  const [savedCategory, setSavedCategory] = useState<string>('');
-
-  useEffect(() => {
-    setCurrent(opportunity);
-  }, [opportunity]);
+  const save = useSaveOpportunity();
+  const [savedCategory, setSavedCategory] = useState<SavedCategory | ''>('');
+  const current = opportunity;
+  const isSaving = save.isPending;
 
   const deadlineBadge = getDeadlineBadge(current.cfpDeadline);
-  const deadlineIsApproximate = isLowConfidence(current, 'cfpDeadline');
-  const eventDateIsApproximate = isLowConfidence(current, 'eventDate');
-  const verifiedLabel = formatVerifiedAgo(current);
+  const deadlineIsApproximate = !!current.cfpDeadline && isLowConfidence(current, 'cfpDeadline');
   const isLive = current.isLiveResult;
-  const isPastDeadline = isPast ?? (!!current.cfpDeadline && new Date(current.cfpDeadline) < new Date());
+  const isPastDeadline = isPast ?? isPastDate(current.cfpDeadline);
   const hasCompensation = !!current.compensationType;
   const hasQualityScore =
     current.qualityScore !== undefined && current.qualityScore !== null;
@@ -132,54 +59,18 @@ export function OpportunityCard({ opportunity, showSave = true, isPast }: Opport
       : current.compensationType
     : null;
 
-  const handleSave = async (category: string) => {
-    if (!category) return;
+  const handleSave = (category: SavedCategory) => {
     if (!isAuthenticated) {
       navigate('/login');
       return;
     }
-
-    setIsSaving(true);
-    try {
-      let target = current;
-
-      if (current.isLiveResult) {
-        const saved = await apiClient.post<Opportunity>('/opportunities/save-live', {
-          title: current.title,
-          organization: current.organization,
-          description: current.description,
-          location: current.location,
-          isRemote: current.isRemote,
-          eventDate: current.eventDate,
-          cfpDeadline: current.cfpDeadline,
-          format: current.format,
-          industries: current.industries,
-          compensationType: current.compensationType,
-          compensationAmount: current.compensationAmount,
-          compensationDetails: current.compensationDetails,
-          qualityScore: current.qualityScore,
-          applyUrl: current.applyUrl,
-          liveSearchUrl: current.liveSearchUrl,
-        });
-
-        if (saved.data) {
-          target = { ...saved.data, isLiveResult: false };
-          setCurrent(target);
-          removeLiveResult(current.id);
-        }
+    save.mutate(
+      { opportunity: current, category },
+      {
+        onSuccess: () => setSavedCategory(category),
+        onError: (error) => console.error('Failed to save:', error),
       }
-
-      await apiClient.post('/saved', {
-        opportunityId: target.id,
-        category,
-      });
-
-      setSavedCategory(category);
-    } catch (error) {
-      console.error('Failed to save:', error);
-    } finally {
-      setIsSaving(false);
-    }
+    );
   };
 
   return (
@@ -238,41 +129,21 @@ export function OpportunityCard({ opportunity, showSave = true, isPast }: Opport
           {/* Event date */}
           <div className="flex items-center gap-1.5 text-muted-foreground">
             <Calendar className="h-3.5 w-3.5 flex-shrink-0" aria-hidden="true" />
-            {current.eventDate && eventDateIsApproximate ? (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <span className="truncate cursor-help underline decoration-dotted underline-offset-2">
-                    {approximate(formatDate(current.eventDate)!, true)}
-                  </span>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>{LOW_CONFIDENCE_HINT}</p>
-                </TooltipContent>
-              </Tooltip>
-            ) : (
-              <span className="truncate">
-                {current.eventDate ? formatDate(current.eventDate) : 'Date TBD'}
-              </span>
-            )}
+            <DateWithConfidence opportunity={current} field="eventDate" fallback="Date TBD" className="truncate" />
           </div>
 
           {/* Deadline */}
           <div className="flex items-center gap-1.5">
             <Clock className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" aria-hidden="true" />
-            {current.cfpDeadline && deadlineIsApproximate ? (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Badge
-                    variant={deadlineBadge.variant}
-                    className={cn('text-[11px] px-1.5 py-0 cursor-help', deadlineBadge.className)}
-                  >
-                    {approximate(deadlineBadge.label, true)}
-                  </Badge>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>{LOW_CONFIDENCE_HINT}</p>
-                </TooltipContent>
-              </Tooltip>
+            {deadlineIsApproximate ? (
+              <ApproximateHint>
+                <Badge
+                  variant={deadlineBadge.variant}
+                  className={cn('text-[11px] px-1.5 py-0 cursor-help', deadlineBadge.className)}
+                >
+                  {approximate(deadlineBadge.label, true)}
+                </Badge>
+              </ApproximateHint>
             ) : (
               <Badge
                 variant={deadlineBadge.variant}
@@ -314,19 +185,7 @@ export function OpportunityCard({ opportunity, showSave = true, isPast }: Opport
           )}
 
           {/* Last checked against the event page */}
-          {verifiedLabel && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <div className="flex items-center gap-1.5 text-muted-foreground cursor-default">
-                  <ShieldCheck className="h-3.5 w-3.5 flex-shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
-                  <span className="truncate">{verifiedLabel}</span>
-                </div>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>Dates and status were checked against the event page on {formatDate(current.verifiedAt!)}.</p>
-              </TooltipContent>
-            </Tooltip>
-          )}
+          <VerifiedBadge opportunity={current} variant="line" />
         </div>
 
         {/* Industry tags -- show ALL, wrap naturally */}
@@ -381,47 +240,7 @@ export function OpportunityCard({ opportunity, showSave = true, isPast }: Opport
         {/* Actions */}
         <div className="flex items-center gap-2">
           {showSave && (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  disabled={isSaving}
-                  className={cn(
-                    'h-8 px-2',
-                    savedCategory && 'text-primary'
-                  )}
-                >
-                  {savedCategory ? (
-                    <BookmarkCheck className="h-4 w-4" />
-                  ) : (
-                    <Bookmark className="h-4 w-4" />
-                  )}
-                  <span className="sr-only">
-                    {savedCategory ? `Saved as ${savedCategory}` : 'Save opportunity'}
-                  </span>
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuLabel>Save to...</DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                {SAVE_CATEGORIES.map((cat) => (
-                  <DropdownMenuItem
-                    key={cat.value}
-                    onClick={() => handleSave(cat.value)}
-                    className={cn(
-                      'cursor-pointer',
-                      savedCategory === cat.value && 'font-semibold text-primary'
-                    )}
-                  >
-                    {cat.label}
-                    {savedCategory === cat.value && (
-                      <span className="ml-auto text-xs text-primary">Saved</span>
-                    )}
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
+            <SaveOpportunityMenu savedCategory={savedCategory} isSaving={isSaving} onSave={handleSave} />
           )}
 
           <Button variant="default" size="sm" className="h-8" asChild>

@@ -59,7 +59,7 @@ export function Register() {
     <div className="max-w-md mx-auto mt-8">
       <Card>
         <CardHeader className="text-center">
-          <CardTitle className="text-2xl">Create an account</CardTitle>
+          <CardTitle className="text-2xl" role="heading" aria-level={1}>Create an account</CardTitle>
           <CardDescription>
             Sign up to save opportunities and track applications
           </CardDescription>

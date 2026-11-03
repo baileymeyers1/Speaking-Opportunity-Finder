@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { computeQualityScore, ScraperResult } from './index.js';
+import { computeQualityScore, type ScraperResult } from './index.js';
 
 function makeResult(overrides: Partial<ScraperResult> = {}): ScraperResult {
   return {
