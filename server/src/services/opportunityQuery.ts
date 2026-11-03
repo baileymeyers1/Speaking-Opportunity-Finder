@@ -1,4 +1,4 @@
-import { Prisma } from '@prisma/client';
+import { Prisma } from '../generated/prisma/client.js';
 import type { SortBy } from 'shared';
 
 /** Filters accepted by `getOpportunities`, as the controller builds them from the query string. */
@@ -20,16 +20,9 @@ export interface OpportunityFilters {
 /** Rows with almost no metadata (base score 5) never surface. */
 const MIN_QUALITY_SCORE = 15;
 
-/**
- * Case-insensitive `contains`. SQLite's LIKE is case-insensitive by default,
- * Postgres's is not, so production needs `mode: 'insensitive'`. The dev client
- * is generated from the SQLite schema and has no `mode` in its types, hence
- * the cast.
- */
-const isPostgres = (process.env.DATABASE_URL || '').startsWith('postgres');
-type ContainsFilter = Prisma.StringFilter & Prisma.StringNullableFilter;
-export function containsInsensitive(value: string): ContainsFilter {
-  return (isPostgres ? { contains: value, mode: 'insensitive' } : { contains: value }) as ContainsFilter;
+/** Case-insensitive `contains` (Postgres `ILIKE`). */
+export function containsInsensitive(value: string): Prisma.StringFilter {
+  return { contains: value, mode: 'insensitive' };
 }
 
 /** The Prisma `where` for a filter set: future or missing deadline, visible, plus every active filter. */
