@@ -2,6 +2,9 @@ import { type Request, type Response, type NextFunction } from 'express';
 import * as opportunityService from '../services/opportunityService.js';
 import * as liveSearchService from '../services/liveSearchService.js';
 import { recordSearch } from '../services/searchLog.js';
+import * as profileService from '../services/profileService.js';
+import { scoreOpportunities } from '../services/matchScore.js';
+import { buildFilters } from './opportunityFilters.js';
 import { AppError } from '../middleware/errorHandler.js';
 import type {
   ApiResponse,
@@ -14,92 +17,6 @@ import type {
   SaveLiveOpportunityInput,
   SerializableOpportunity,
 } from 'shared';
-
-/**
- * Build OpportunityFilters from raw query params.
- * Extracted so both getOpportunities and any future callers can reuse it.
- */
-function buildFilters(query: Record<string, any>): opportunityService.OpportunityFilters {
-  const {
-    search,
-    format,
-    industries,
-    isRemote,
-    locations: location,
-    compensationType,
-    compensationMin,
-    compensationMax,
-    cfpDeadlineBefore,
-    cfpDeadlineAfter,
-    sortBy,
-    qualityMin,
-  } = query;
-
-  const filters: opportunityService.OpportunityFilters = {};
-
-  if (search) {
-    filters.search = String(search);
-  }
-
-  if (format) {
-    filters.format = Array.isArray(format)
-      ? format.map(String)
-      : [String(format)];
-  }
-
-  if (industries) {
-    filters.industries = Array.isArray(industries)
-      ? industries.map(String)
-      : [String(industries)];
-  }
-
-  if (isRemote !== undefined) {
-    filters.isRemote = isRemote === 'true';
-  }
-
-  // Handle multiple locations (use | as delimiter since locations contain commas)
-  if (location) {
-    const locations = Array.isArray(location)
-      ? location.map(String)
-      : [String(location)];
-    filters.location = locations.join('|');
-  }
-
-  if (compensationType) {
-    filters.compensationType = Array.isArray(compensationType)
-      ? compensationType.map(String)
-      : [String(compensationType)];
-  }
-
-  if (compensationMin) {
-    filters.compensationMin = parseInt(String(compensationMin), 10);
-  }
-
-  if (compensationMax) {
-    filters.compensationMax = parseInt(String(compensationMax), 10);
-  }
-
-  if (cfpDeadlineBefore) {
-    filters.cfpDeadlineBefore = new Date(String(cfpDeadlineBefore));
-  }
-
-  if (cfpDeadlineAfter) {
-    filters.cfpDeadlineAfter = new Date(String(cfpDeadlineAfter));
-  }
-
-  if (sortBy && ['quality', 'deadline', 'eventDate'].includes(String(sortBy))) {
-    filters.sortBy = String(sortBy) as 'quality' | 'deadline' | 'eventDate';
-  }
-
-  if (qualityMin !== undefined) {
-    const value = parseInt(String(qualityMin), 10);
-    if (!isNaN(value)) {
-      filters.qualityMin = value;
-    }
-  }
-
-  return filters;
-}
 
 export async function getOpportunities(
   req: Request,
@@ -115,8 +32,12 @@ export async function getOpportunities(
       pageSize: pageSize ? parseInt(String(pageSize), 10) : undefined,
     };
 
+    // A signed-in user with a speaker profile gets a match score on every row.
+    const profile = req.user ? await profileService.getMatchProfile(req.user.userId) : null;
+    const listOptions: opportunityService.ListOptions = { profile };
+
     // Always fetch DB results
-    const dbResults = await opportunityService.getOpportunities(filters, pagination);
+    const dbResults = await opportunityService.getOpportunities(filters, pagination, listOptions);
 
     // If liveSearch requested, also run live search
     let liveResults: liveSearchService.EnrichedLiveResult[] = [];
@@ -161,7 +82,7 @@ export async function getOpportunities(
       : dbResults.items;
 
     // Convert live results to match the Opportunity response shape
-    const liveOpportunities: Opportunity[] = liveResults.map((r) => ({
+    const liveItems: Opportunity[] = liveResults.map((r) => ({
       id: r.id,
       title: r.title,
       organization: r.organization,
@@ -185,10 +106,11 @@ export async function getOpportunities(
       liveSearchUrl: r.liveSearchUrl,
       matchesLocationFilter: r.matchesLocationFilter,
     }));
+    const liveOpportunities: Opportunity[] = profile ? scoreOpportunities(profile, liveItems) : liveItems;
 
     // Combine and sort
     const combined: SerializableOpportunity[] = [...liveOpportunities, ...dedupedDbItems];
-    const sortBy = filters.sortBy || 'deadline';
+    const sortBy = filters.sortBy === 'match' && !profile ? 'quality' : filters.sortBy || 'deadline';
 
     combined.sort((a, b) => {
       const dateVal = (v: string | Date | null) => {
@@ -197,6 +119,9 @@ export async function getOpportunities(
         return isNaN(d) ? Number.MAX_SAFE_INTEGER : d;
       };
 
+      if (sortBy === 'match') {
+        return (b.matchScore ?? -1) - (a.matchScore ?? -1) || dateVal(a.cfpDeadline) - dateVal(b.cfpDeadline);
+      }
       if (sortBy === 'quality') return (b.qualityScore || 0) - (a.qualityScore || 0);
       if (sortBy === 'eventDate') return dateVal(a.eventDate) - dateVal(b.eventDate);
       return dateVal(a.cfpDeadline) - dateVal(b.cfpDeadline);
@@ -223,7 +148,8 @@ export async function getOpportunityById(
 ): Promise<void> {
   try {
     const { id } = req.params;
-    const opportunity = await opportunityService.getOpportunityById(id);
+    const profile = req.user ? await profileService.getMatchProfile(req.user.userId) : null;
+    const opportunity = await opportunityService.getOpportunityById(id, { profile });
 
     const payload: ApiResponse<OpportunityWithDates> = { success: true, data: opportunity };
     res.json(payload);
