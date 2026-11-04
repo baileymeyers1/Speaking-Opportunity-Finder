@@ -71,6 +71,31 @@ export const SAME_EVENT_PAIRS: Array<[string, MatchCandidate, MatchCandidate]> =
     row('Workplace Ninjas Norway 2027', 'https://wpninjas.no', '2027-05-19', { location: 'Oslo, Norway' }),
   ],
   [
+    'c0c0n: production dry run, year dropped on one side',
+    row('c0c0n 2026', 'https://www.c0c0n.org/2026', '2026-09-24', { location: 'Kochi, India' }),
+    row('c0c0n', 'https://sessionize.com/c0c0n-2026/', '2026-09-24', { location: 'Kochi, Kerala, India' }),
+  ],
+  [
+    'Power Platform Days Barcelona: production dry run',
+    row('Power Platform Days Barcelona 2026', 'https://sessionize.com/power-platform-days-barcelona-2026/', '2026-12-10', { location: 'Barcelona (Spain)' }),
+    row('Power Platform Days Barcelona', 'https://powerplatformdays.es', '2026-12-10', { location: 'Barcelona, Spain' }),
+  ],
+  [
+    'LEDucation: production dry run',
+    row('LEDucation 2027', 'https://leducation.org', '2027-03-16', { location: 'New York, New York, United States' }),
+    row('LEDucation', 'https://sessionize.com/leducation-2027/', '2027-03-17', { location: 'New York, NY (USA)' }),
+  ],
+  [
+    'Global Gaming Expo: acronym in parentheses on one side only',
+    row('Global Gaming Expo (G2E)', 'https://www.globalgamingexpo.com', '2027-10-05', { location: 'Las Vegas, Nevada, United States' }),
+    row('Global Gaming Expo 2027', 'https://sessionize.com/g2e-2027/', '2027-10-05', { location: 'Las Vegas, NV (USA)' }),
+  ],
+  [
+    'ACMME: an acronym is the whole name',
+    row('ACMME 2027', 'http://www.acmme.org/', '2027-05-14', { organization: 'ACMME', location: 'Tokyo, Japan' }),
+    row('ACMME', 'http://www.wikicfp.com/cfp/servlet/event.showcfp?eventid=999001', '2027-05-14', { organization: 'ACMME 2027', location: 'Tokyo, Japan' }),
+  ],
+  [
     'FOSDEM: last year and this year, same site (synthetic prior edition)',
     row('FOSDEM 2026', 'https://fosdem.org/2026/news/call-for-main-track/', '2026-01-31', { location: 'Brussels (Belgium)' }),
     row('FOSDEM 2027', 'https://fosdem.org/2027/news/call-for-main-track/', '2027-01-30', { location: 'Brussels (Belgium)' }),
@@ -128,6 +153,56 @@ export const DIFFERENT_EVENT_PAIRS: Array<[string, MatchCandidate, MatchCandidat
     'West East Institute: two co-located Miami conferences on the same day',
     row('The WEI International Academic Conference on Technology and Science Education (WEI-TSE-Miami 2027)', 'https://www.westeastinstitute.com/miami-2027-international-conference-on-technology-and-science-education/', '2027-04-13', { organization: 'West East Institute', location: 'Miami, Florida, United States' }),
     row('The WEI International Academic Conference on Education & Humanities, and Social Sciences (WEI-EHSS-Miami 2027)', 'https://www.westeastinstitute.com/miami-2027-international-conference-on-educationhumanities-and-social-sciences/', '2027-04-13', { organization: 'West East Institute', location: 'Miami, United States' }),
+  ],
+  [
+    'Directory rows: Law Conferences in California vs Medical Conferences in California (same site, same city)',
+    row('Law Conferences in California 2026-2027', 'https://www.allconferencealert.com/california/law-conferences.html', null, { organization: 'All Conference Alert', location: 'California, United States' }),
+    row('Medical Conferences in California', 'https://www.allconferencealert.com/california/medical-conferences.html', null, { organization: 'All Conference Alert', location: 'California, United States' }),
+  ],
+  [
+    'Directory rows: Accounting Conferences in New York vs Pharmacy Conferences in New York',
+    row('Accounting Conferences in New York 2026-2027', 'https://www.allconferencealert.com/new-york/accounting-conferences.html', '2027-01-10', { organization: 'All Conference Alert', location: 'New York, United States' }),
+    row('Pharmacy Conferences in New York', 'https://www.allconferencealert.com/new-york/pharmacy-conferences.html', '2027-01-12', { organization: 'All Conference Alert', location: 'New York, United States' }),
+  ],
+  [
+    'Directory rows: Dentistry Conferences in San Francisco vs Nursing Conferences in San Francisco',
+    row('Dentistry Conferences in San Francisco 2026-2027', 'https://www.allconferencealert.com/san-francisco/dentistry-conferences.html', null, { location: 'San Francisco, United States' }),
+    row('Nursing Conferences in San Francisco', 'https://www.allconferencealert.com/san-francisco/nursing-conferences.html', null, { location: 'San Francisco, United States' }),
+  ],
+  [
+    'Directory rows: Tourism Conferences in New York vs Agriculture Conferences in New York',
+    row('Tourism Conferences in New York 2026-2027', 'https://conferencealerts.example/tourism-new-york', null),
+    row('Agriculture Conferences in New York', 'https://conferencealerts.example/agriculture-new-york', null),
+  ],
+  [
+    'Directory rows: Dentistry Conferences in Los Angeles vs Biology Conferences in Los Angeles',
+    row('Dentistry Conferences in Los Angeles 2026-2027', 'https://www.allconferencealert.com/los-angeles/dentistry-conferences.html', null, { location: 'Los Angeles, United States' }),
+    row('Biology Conferences in Los Angeles', 'https://www.allconferencealert.com/los-angeles/biology-conferences.html', null, { location: 'Los Angeles, United States' }),
+  ],
+  [
+    'PREE vs REPE: same words in another order, different acronyms',
+    row('2026 4th International Conference on Power and Renewable Energy Engineering (PREE 2026)', 'http://www.pree.org/', '2026-09-25', { organization: 'PREE', location: 'Shanghai, China' }),
+    row('International Conference on Renewable Energy and Power Engineering (REPE 2026)', 'http://www.repe.org/', '2026-09-26', { organization: 'REPE', location: 'Shanghai, China' }),
+  ],
+  [
+    'Renewable and Clean Energy vs Renewable Energy and Power Engineering',
+    row('2027 17th International Conference on Renewable and Clean Energy (ICRCE 2027)', 'http://www.icrce.org/', '2027-02-05', { organization: 'ICRCE', location: 'Osaka, Japan' }),
+    row('International Conference on Renewable Energy and Power Engineering (REPE 2027)', 'http://www.repe.org/', '2027-02-05', { organization: 'REPE', location: 'Osaka, Japan' }),
+  ],
+  [
+    'ADOH vs Hybrid Dentistry & Oral Health: a longer name with an unexplained extra word and an acronym',
+    row('19th International Conference on Advanced Dentistry and Oral Health (ADOH 2027)', 'https://dentistry.conferenceseries.example/adoh', '2027-06-22', { organization: 'Conference Series', location: 'Paris, France' }),
+    row('International Hybrid Conference on Dentistry & Oral Health', 'https://dentistry.conferenceseries.example/hybrid', '2027-06-22', { organization: 'Conference Series', location: 'Paris, France' }),
+  ],
+  [
+    '"Annual Conference" vs "CAA Annual Conference": nothing distinctive on the short side',
+    row('Annual Conference', 'https://www.caa-annual.example/cfp', '2027-02-17'),
+    row('CAA Annual Conference', 'https://www.caa-annual.example/annual-conference', '2027-02-17', { location: 'New York, NY' }),
+  ],
+  [
+    'AWS Student Community Day 2026 vs AWS Student Community Day Córdoba: city editions',
+    row('AWS Student Community Day 2026', 'https://sessionize.com/aws-student-community-day-2026/', '2026-11-21', { location: 'Mexico City, Mexico' }),
+    row('AWS Student Community Day Córdoba', 'https://sessionize.com/aws-student-community-day-cordoba/', '2026-11-21', { location: 'Córdoba, Argentina' }),
   ],
   [
     'Cloud Native Summit 2027 vs Cloud Native Valencia',

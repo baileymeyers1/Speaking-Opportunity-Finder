@@ -18,6 +18,7 @@ import { assignEvent, type AssignmentResult } from '../services/eventAssignment.
 const DRY_RUN = process.argv.includes('--dry-run');
 const BATCH_SIZE = 200;
 const LOWEST_LINKS_SHOWN = 20;
+const TOP_REVIEW_SHOWN = 15;
 const DRY_RUN_TIMEOUT_MS = 60 * 60 * 1000; // 1826 production rows took over 10 minutes on 2026-11-04
 
 class DryRunRollback extends Error {}
@@ -85,15 +86,28 @@ async function report(db: Db, tally: Tally, before: Awaited<ReturnType<typeof co
       `${tally.unmatchable} rows with no usable name.`
   );
   const lowest = [...tally.links].sort((a, b) => a.score - b.score).slice(0, LOWEST_LINKS_SHOWN);
-  if (lowest.length === 0) return;
-  const events = await db.event.findMany({
-    where: { id: { in: lowest.map((l) => l.eventId!).filter(Boolean) } },
-    select: { id: true, canonicalName: true },
+  const review = await db.opportunity.findMany({
+    where: { possibleEventScore: { not: null } },
+    orderBy: [{ possibleEventScore: 'desc' }, { id: 'asc' }],
+    take: TOP_REVIEW_SHOWN,
+    select: { title: true, source: true, possibleEventId: true, possibleEventScore: true },
   });
+  const eventIds = [...lowest.map((l) => l.eventId!), ...review.map((r) => r.possibleEventId!)].filter(Boolean);
+  const events = eventIds.length
+    ? await db.event.findMany({ where: { id: { in: eventIds } }, select: { id: true, canonicalName: true } })
+    : [];
   const nameOf = new Map(events.map((e) => [e.id, e.canonicalName]));
-  console.log(`Lowest-confidence links (${lowest.length}):`);
-  for (const link of lowest) {
-    console.log(`  ${link.score.toFixed(3)}  "${link.title}" [${link.source}] -> "${nameOf.get(link.eventId!) ?? link.eventId}"`);
+  if (lowest.length > 0) {
+    console.log(`Lowest-confidence links (${lowest.length}):`);
+    for (const link of lowest) {
+      console.log(`  ${link.score.toFixed(3)}  "${link.title}" [${link.source}] -> "${nameOf.get(link.eventId!) ?? link.eventId}"`);
+    }
+  }
+  if (review.length > 0) {
+    console.log(`Highest-scoring pairs left apart for review (${review.length}):`);
+    for (const row of review) {
+      console.log(`  ${row.possibleEventScore!.toFixed(3)}  "${row.title}" [${row.source}] ~ "${nameOf.get(row.possibleEventId!) ?? row.possibleEventId}"`);
+    }
   }
 }
 

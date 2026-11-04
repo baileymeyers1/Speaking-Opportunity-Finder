@@ -71,16 +71,22 @@ function asCandidate(row: AssignableOpportunity): MatchCandidate {
   };
 }
 
-/** The best score of a row against any edition of an event (or the event's own name when it has none). */
+/**
+ * The best score of a row against any edition of an event. Only an event with
+ * no editions left is scored by its own name: an edition carries the city and
+ * acronym the auto-link gate needs, the bare name does not.
+ */
 export function scoreAgainstEvent(row: MatchCandidate, event: CandidateEvent): number {
-  const fromEvent = scoreCandidate(row, {
-    title: event.canonicalName,
-    organization: event.organizer,
-    applyUrl: event.domain ? `https://${event.domain}/` : '',
-    eventDate: null,
-    location: null,
-  });
-  return event.editions.reduce((best, edition) => Math.max(best, scoreCandidate(row, edition)), fromEvent);
+  if (event.editions.length === 0) {
+    return scoreCandidate(row, {
+      title: event.canonicalName,
+      organization: event.organizer,
+      applyUrl: event.domain ? `https://${event.domain}/` : '',
+      eventDate: null,
+      location: null,
+    });
+  }
+  return event.editions.reduce((best, edition) => Math.max(best, scoreCandidate(row, edition)), 0);
 }
 
 async function findCandidates(db: EventDb, row: AssignableOpportunity): Promise<CandidateEvent[]> {
