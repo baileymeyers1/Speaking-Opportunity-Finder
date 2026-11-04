@@ -74,6 +74,31 @@ export interface MatchExplanation {
 }
 
 // ---------------------------------------------------------------------------
+// Canonical events
+// ---------------------------------------------------------------------------
+
+/** An earlier year of the same event, for "last year's CFP opened around …" hints. */
+export interface PreviousEdition<DateType> {
+  year: number;
+  cfpDeadline: DateType | null;
+  eventDate: DateType | null;
+  /** When that edition's call was first stored: the closest thing to when it opened. */
+  firstSeenAt: DateType;
+}
+
+/** One row of an event, as the detail page lists them. */
+export interface EventEdition<DateType> {
+  id: string;
+  year: number | null;
+  title: string;
+  source: string;
+  applyUrl: string;
+  cfpDeadline: DateType | null;
+  eventDate: DateType | null;
+  isClosed: boolean;
+}
+
+// ---------------------------------------------------------------------------
 // Users
 // ---------------------------------------------------------------------------
 
@@ -136,6 +161,16 @@ export interface OpportunityBase<DateType> {
   matchScore?: number;
   matchReasons?: string[];
   matchMisses?: string[];
+  /** The canonical event this row is an edition of; null when no event could be named. */
+  eventId?: string | null;
+  /** The year this row is the edition for, from the event date or the title. */
+  editionYear?: number | null;
+  /** Other sources listing this same edition (a list shows one card per event). */
+  alsoListedOn?: string[];
+  /** Earlier years of the event, newest first. */
+  previousEditions?: PreviousEdition<DateType>[];
+  /** Every stored edition of the event, newest first; present when the event has more than one row. */
+  eventEditions?: EventEdition<DateType>[];
 }
 
 /** An opportunity as the client receives it. */

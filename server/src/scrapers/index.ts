@@ -16,6 +16,7 @@ import { promotedLinkupQueries } from '../services/searchLog.js';
 import { decodeHtmlEntities, isJunkResult } from '../services/dataNormalization.js';
 import { computeQualityScore, type ScraperResult } from './qualityScore.js';
 import { buildCreateData, buildUpdateData } from './persistData.js';
+import { assignEvents, type AssignableOpportunity } from '../services/eventAssignment.js';
 
 export { computeQualityScore } from './qualityScore.js';
 export type { ScraperResult } from './qualityScore.js';
@@ -293,6 +294,7 @@ async function orderByLeastRecentlyRun(defs: ScraperDefinition[]): Promise<Scrap
 async function persistResults(results: ScraperResult[]): Promise<{ added: number; updated: number }> {
   let added = 0;
   let updated = 0;
+  const createdRows: AssignableOpportunity[] = [];
 
   for (const result of results) {
     try {
@@ -356,7 +358,7 @@ async function persistResults(results: ScraperResult[]): Promise<{ added: number
           }
           updated++;
         } else {
-          await prisma.opportunity.create({ data: buildCreateData(result) });
+          createdRows.push(await prisma.opportunity.create({ data: buildCreateData(result) }));
           added++;
         }
       }
@@ -364,6 +366,9 @@ async function persistResults(results: ScraperResult[]): Promise<{ added: number
       console.error(`Error saving opportunity: ${result.title}`, error);
     }
   }
+
+  // New rows join (or start) their canonical event; a matching failure never loses a row.
+  await assignEvents(prisma, createdRows);
 
   return { added, updated };
 }

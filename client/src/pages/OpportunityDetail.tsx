@@ -5,7 +5,9 @@ import { useOpportunity } from '../hooks/useOpportunity';
 import { useSaveOpportunity } from '../hooks/useSaveOpportunity';
 import type { SavedCategory } from '../types';
 import { OpportunityDetailSkeleton } from '../components/OpportunityDetailSkeleton';
-import { DateWithConfidence, VerifiedBadge } from '../components/VerificationHints';
+import { VerifiedBadge } from '../components/VerificationHints';
+import { AlsoListedOn, EventEditionsList } from '../components/EventHints';
+import { DetailDates } from '../components/DetailDates';
 import { hasMatchScore, MatchExplanationBlock } from '../components/MatchHints';
 
 import { Card, CardHeader, CardContent } from '@/components/ui/card';
@@ -15,8 +17,6 @@ import { Separator } from '@/components/ui/separator';
 
 import {
   ArrowLeft,
-  Calendar,
-  Clock,
   MapPin,
   Globe,
   DollarSign,
@@ -154,6 +154,7 @@ export function OpportunityDetail() {
             )}
             <VerifiedBadge opportunity={opportunity} variant="badge" />
           </div>
+          <AlsoListedOn opportunity={opportunity} />
         </CardHeader>
 
         <CardContent className="space-y-6">
@@ -179,35 +180,7 @@ export function OpportunityDetail() {
 
           <Separator />
 
-          {/* Date details */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-            <div className="flex items-start gap-3">
-              <div className="rounded-md bg-muted p-2">
-                <Calendar className="h-4 w-4 text-muted-foreground" />
-              </div>
-              <div>
-                <p className="text-sm font-medium text-foreground">
-                  Event Date
-                </p>
-                <p className="text-sm text-muted-foreground">
-                  <DateWithConfidence opportunity={opportunity} field="eventDate" style="long" fallback="Not listed" />
-                </p>
-              </div>
-            </div>
-            <div className="flex items-start gap-3">
-              <div className="rounded-md bg-muted p-2">
-                <Clock className="h-4 w-4 text-muted-foreground" />
-              </div>
-              <div>
-                <p className="text-sm font-medium text-foreground">
-                  CFP Deadline
-                </p>
-                <p className="text-sm text-muted-foreground">
-                  <DateWithConfidence opportunity={opportunity} field="cfpDeadline" style="long" fallback="Not listed" />
-                </p>
-              </div>
-            </div>
-          </div>
+          <DetailDates opportunity={opportunity} />
 
           {/* Compensation details */}
           {opportunity.compensationDetails && (
@@ -249,6 +222,13 @@ export function OpportunityDetail() {
               )}
             </div>
           </div>
+
+          {opportunity.eventEditions && opportunity.eventEditions.length > 1 && (
+            <>
+              <Separator />
+              <EventEditionsList currentId={opportunity.id} editions={opportunity.eventEditions} />
+            </>
+          )}
 
           <Separator />
 

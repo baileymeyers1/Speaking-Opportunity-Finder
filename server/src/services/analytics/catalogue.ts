@@ -2,6 +2,7 @@ import { prisma } from '../../lib/prisma.js';
 import { startOfUtcDay } from '../../scrapers/lib/html.js';
 import type { AdminCatalogueResponse } from 'shared';
 import { countJsonArrayValues, DAY_MS, daysAgo } from './shared.js';
+import { getEventStats } from './events.js';
 
 /** What the catalogue looks like to a visitor: active rows by format, industry, deadline and location. */
 
@@ -46,6 +47,7 @@ export async function getCatalogue(now: Date = new Date()): Promise<AdminCatalog
     noDeadline,
     closedThisWeek,
     remote,
+    events,
   ] = await Promise.all([
     prisma.opportunity.count(),
     prisma.opportunity.count({ where: active }),
@@ -62,6 +64,7 @@ export async function getCatalogue(now: Date = new Date()): Promise<AdminCatalog
     // There is no closedAt column; a closed row's updatedAt moves when the flag is set.
     prisma.opportunity.count({ where: { isClosed: true, updatedAt: { gte: daysAgo(7, now) } } }),
     prisma.opportunity.count({ where: { ...active, isRemote: true } }),
+    getEventStats(),
   ]);
 
   return {
@@ -77,6 +80,7 @@ export async function getCatalogue(now: Date = new Date()): Promise<AdminCatalog
     closedThisWeek,
     remote,
     inPerson: activeCount - remote,
+    events,
     generatedAt: now.toISOString(),
   };
 }

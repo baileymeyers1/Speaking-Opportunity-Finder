@@ -2,6 +2,7 @@ import { config } from '../config/index.js';
 import { randomUUID } from 'crypto';
 import type { Prisma } from '../generated/prisma/client.js';
 import { prisma } from '../lib/prisma.js';
+import { assignEvents } from './eventAssignment.js';
 import { cleanTitle, extractOrganization, normalizeIndustries, decodeHtmlEntities, isJunkResult } from './dataNormalization.js';
 import {
   extractOpportunitiesBatch,
@@ -984,13 +985,12 @@ export async function persistLiveResults(
   if (fresh.length === 0) return { created: 0, existing: existingUrls.size };
 
   const data = fresh.map((r) => buildLiveCreateData(r, now));
+  let created = 0;
   try {
-    const created = await prisma.opportunity.createMany({ data });
-    return { created: created.count, existing: existingUrls.size };
+    created = (await prisma.opportunity.createMany({ data })).count;
   } catch (error) {
     // A concurrent search may have inserted one of these URLs; fall back to row-by-row.
     console.warn('[LiveSearch] createMany failed, inserting individually:', error instanceof Error ? error.message : error);
-    let created = 0;
     for (const row of data) {
       try {
         await prisma.opportunity.create({ data: row });
@@ -999,6 +999,14 @@ export async function persistLiveResults(
         // already stored
       }
     }
-    return { created, existing: existingUrls.size };
   }
+  if (created > 0) {
+    // Inside the request on purpose: nothing runs after the response on Vercel.
+    const stored = await prisma.opportunity.findMany({
+      where: { applyUrl: { in: fresh.map((r) => r.applyUrl) }, eventId: null },
+      select: { id: true, title: true, organization: true, applyUrl: true, eventDate: true, location: true, eventId: true },
+    });
+    await assignEvents(prisma, stored, now);
+  }
+  return { created, existing: existingUrls.size };
 }
