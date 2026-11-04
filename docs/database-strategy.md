@@ -2,109 +2,48 @@
 
 ## Current Setup
 
-| Environment | Database   | Schema File                        | Connection                  |
-|-------------|------------|------------------------------------|-----------------------------|
-| Development | SQLite     | `prisma/schema.prisma`             | `DATABASE_URL` env var      |
-| Production  | PostgreSQL | `prisma/schema.production.prisma`  | `DATABASE_URL` on Render    |
+| Environment | Database | Where | Connection |
+|-------------|----------|-------|------------|
+| Development | PostgreSQL 16 | `docker-compose.yml` (`docker compose up -d db`), host port 5433 | `DATABASE_URL` in `.env` |
+| Tests | PostgreSQL 16 | same container, database `speaking_finder_test` | `TEST_DATABASE_URL` (default in `server/src/test/testDatabase.ts`) |
+| Production | PostgreSQL | managed, `DATABASE_URL` in the Vercel dashboard | Vercel env var |
 
-SQLite is used locally for zero-config development. Production runs PostgreSQL on Render's free tier.
+One Prisma schema, `prisma/schema.prisma`, with `provider = "postgresql"`. The Prisma CLI reads the connection string from `prisma.config.ts`; the server builds its client on the `pg` driver adapter in `server/src/lib/prisma.ts`. There is no SQLite anywhere any more.
 
 ## Schema Management
 
-Two schema files are maintained in parallel:
+The project uses `prisma db push`, not migrations: the Vercel build pushes the schema to the production database before building the app, so a schema change deploys itself. A preview deployment pushes to the same database, so a branch's schema change reaches production the moment its preview builds; keep schema changes additive.
 
-- **`prisma/schema.prisma`** -- Uses `provider = "sqlite"` for local development.
-- **`prisma/schema.production.prisma`** -- Uses `provider = "postgresql"` for Render.
+### Changing the schema
 
-**Any schema change must be applied to both files.** They should stay identical except for the `datasource.provider` value.
+1. Edit `prisma/schema.prisma`.
+2. `npx prisma generate` (the client is generated into `server/src/generated/prisma`, gitignored).
+3. `npx prisma db push` against the local database; the server test suite pushes to the test database on its own.
+4. Before pushing the branch, confirm the change is what production will receive:
+   ```bash
+   npx prisma migrate diff --from-url "$PRODUCTION_DATABASE_URL" --to-schema prisma/schema.prisma --script
+   ```
+   (`vercel env pull --environment=production` gives you the URL; never commit the pulled file.)
 
-### Applying Changes
-
-- **Dev:** Run `npx prisma db push` to sync the local SQLite database.
-- **Prod:** The Render build command copies the production schema before generating the client:
-  ```bash
-  cp prisma/schema.production.prisma prisma/schema.prisma
-  ```
-  Prisma then generates the client against PostgreSQL at build time.
-
-### Adding a New Model or Field
-
-1. Edit `prisma/schema.prisma` (SQLite version).
-2. Run `npx prisma db push` locally to verify.
-3. Copy the same change into `prisma/schema.production.prisma`.
-4. Commit both files. The next deploy applies the change in production.
+Prisma 7's CLI refuses `db push --accept-data-loss` and `--force-reset` when it detects it is being run by an AI coding agent; run those from your own terminal.
 
 ## Backup Strategy
 
-Render's free tier does not include automatic database backups. You are responsible for your own backups.
-
-### Manual Backup
+The managed Postgres keeps its own backups; a manual copy is still cheap:
 
 ```bash
-pg_dump $DATABASE_URL > backup-$(date +%Y%m%d).sql
+pg_dump "$DATABASE_URL" > backup-$(date +%Y%m%d).sql
+psql "$DATABASE_URL" < backup-YYYYMMDD.sql
 ```
-
-### Recovery
-
-```bash
-psql $DATABASE_URL < backup-YYYYMMDD.sql
-```
-
-### Recommendations
-
-- Set up a weekly `pg_dump` cron job (e.g., via a local machine, GitHub Actions, or a small scheduled task) to keep rolling backups.
-- Alternatively, upgrade to Render's paid tier for automatic daily backups with point-in-time recovery.
-- Store backup files in a durable location (S3 bucket, Google Drive, or a local backup directory outside the project).
 
 ## Data Lifecycle
 
-### Ingestion
+- **Ingestion.** Daily and weekly scrapers (`server/src/scrapers/index.ts`) plus live search persist opportunities; `applyUrl` is unique.
+- **Enrichment and verification.** The 5-minute cron fetches each row's page and runs the one Claude extraction (`services/extraction.ts`); verified rows carry `verifiedAt`. Re-scrapes never overwrite enriched fields.
+- **Quality.** Rows below `qualityScore` 15 never surface. Closed and irrelevant rows are flagged, not deleted; cleanup never deletes a saved row.
+- **Deadlines.** The default list shows only future or missing deadlines.
 
-Opportunities are scraped on two schedules:
+## Deferred
 
-- **Daily:** Fast scrapers (CallingAllPapers, Sessionize, PaperCall, WikiCFP).
-- **Weekly:** Deep scrapers (Linkup with 30 industry queries, Eventbrite, etc.).
-
-New opportunities are deduplicated by `applyUrl` (unique constraint).
-
-### Enrichment
-
-Scraped opportunities are enriched via the Claude API to fill in missing metadata (description, topics, industries). Enrichment status is tracked per opportunity (`enrichmentStatus` field).
-
-### Quality Scoring
-
-Each opportunity receives a `qualityScore` (0-100). Results with a score below 15 are hidden from the browse view. The threshold of 15 filters out entries that have almost no useful metadata beyond a title and URL.
-
-### Deadline Handling
-
-- The default query filter returns only opportunities with future deadlines.
-- Past-deadline opportunities remain in the database and are shown as grayed out for users who saved them.
-
-### Data Retention
-
-There is currently no automatic cleanup of stale data. Past-deadline and low-quality opportunities accumulate indefinitely. Consider adding a retention policy -- for example, deleting unsaved opportunities older than 6 months -- to keep the database size manageable.
-
-## Migration Path
-
-### Current: Render PostgreSQL (Free Tier)
-
-Render's free-tier databases expire after 90 days of inactivity. If the database expires or you need to migrate:
-
-1. Export: `pg_dump $DATABASE_URL > export.sql`
-2. Create a new database (on Render or elsewhere).
-3. Import: `psql $NEW_DATABASE_URL < export.sql`
-4. Update `DATABASE_URL` in the deployment environment.
-
-### Alternative: Vercel Postgres
-
-1. Provision a Vercel Postgres database.
-2. Update `schema.production.prisma` to use the `@vercel/postgres` connection string.
-3. Keep the provider as `postgresql` (Vercel Postgres is standard PostgreSQL).
-4. Update deployment config to use Vercel's `DATABASE_URL`.
-
-### Alternative: Supabase
-
-1. Create a free-tier Supabase project (includes PostgreSQL with automatic daily backups).
-2. Use the Supabase connection string as `DATABASE_URL`.
-3. No schema changes needed -- Supabase runs standard PostgreSQL.
-4. Benefits: automatic backups, a web-based SQL editor, and no 90-day expiry on the free tier.
+- `industries`, `topics`, `preferredFormats` and `dateConfidence` are JSON strings in `String` columns; the filters match quoted tokens. Native `String[]` / `Json` columns are the next change, together with the canonical `Event` entity (roadmap item 3).
+- Proper migrations (`prisma migrate`) once more than one person deploys.

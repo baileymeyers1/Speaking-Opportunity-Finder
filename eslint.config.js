@@ -15,6 +15,7 @@ export default tseslint.config(
       'test-results/**',
       'api/**',
       'prisma/**',
+      'server/src/generated/**',
       '**/*.config.{js,ts}',
       '**/*.d.ts',
     ],

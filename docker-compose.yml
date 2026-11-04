@@ -1,0 +1,24 @@
+services:
+  db:
+    image: postgres:16
+    container_name: speaking-finder-db
+    restart: unless-stopped
+    ports:
+      # 5433 on the host so a Postgres already on 5432 does not clash.
+      - "5433:5432"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: speaking_finder
+    volumes:
+      - speaking_finder_pgdata:/var/lib/postgresql/data
+      # Creates the test database on first start (vitest pushes the schema into it).
+      - ./docker/init-test-db.sql:/docker-entrypoint-initdb.d/init-test-db.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d speaking_finder"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  speaking_finder_pgdata:

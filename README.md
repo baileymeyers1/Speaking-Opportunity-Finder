@@ -8,8 +8,8 @@ Aggregates speaking opportunities -- CFPs, conferences, podcasts, and meetups --
 |-------|------------|
 | Frontend | React 18, Vite, TypeScript, Tailwind CSS, shadcn/ui, React Router |
 | Backend | Express, TypeScript, Prisma ORM |
-| Database | SQLite (dev), PostgreSQL (prod) |
-| AI | Anthropic Claude SDK (opportunity enrichment) |
+| Database | PostgreSQL (Docker locally, Vercel-managed in prod), Prisma 7 with the `pg` driver adapter |
+| AI | Anthropic Claude SDK 1.x (opportunity enrichment) |
 | Auth | bcryptjs + JWT |
 | Hosting | Vercel |
 
@@ -17,8 +17,9 @@ Aggregates speaking opportunities -- CFPs, conferences, podcasts, and meetups --
 
 ### Prerequisites
 
-- Node.js 18+
+- Node.js 20.19+ (Prisma 7 requires it; 24 is what the project is developed on)
 - npm
+- Docker (for the local Postgres)
 
 ### Steps
 
@@ -32,9 +33,12 @@ npm install
 cp .env.example .env
 # Edit .env with your values (see Environment Variables below)
 
-# Set up database
-npx prisma db push
+# Start Postgres (creates the speaking_finder and speaking_finder_test databases)
+docker compose up -d db
+
+# Generate the Prisma client and create the tables
 npx prisma generate
+npx prisma db push
 
 # Start dev servers (client on :5173, server on :3001)
 npm run dev
@@ -44,7 +48,8 @@ npm run dev
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `DATABASE_URL` | Yes | `file:./dev.db` | SQLite path (dev) or PostgreSQL connection string (prod) |
+| `DATABASE_URL` | Yes | `postgresql://postgres:postgres@localhost:5433/speaking_finder` | PostgreSQL connection string (the Docker database locally, the managed one in prod) |
+| `TEST_DATABASE_URL` | No | `…localhost:5433/speaking_finder_test` | Database the server test suite pushes the schema into and runs against |
 | `JWT_SECRET` | Prod | `your-super-secret-...` | Secret for signing JWTs. Must change in production. |
 | `JWT_EXPIRES_IN` | No | `7d` | JWT token lifetime |
 | `PORT` | No | `3001` | Server port |
@@ -64,7 +69,7 @@ npm run dev
 client/          React frontend (Vite)
 server/          Express API server
 shared/          Shared TypeScript types
-prisma/          Prisma schema and migrations
+prisma/          Prisma schema and seed (prisma.config.ts at the root points the CLI at it)
 api/             Vercel serverless functions + cron handlers
 ```
 
@@ -95,14 +100,15 @@ Claude API ---- enrichment ---------+
 | `server/src/services/enrichmentService.ts` | Claude-powered enrichment |
 | `server/src/scrapers/` | Scraper registry (`index.ts`) and implementations |
 | `client/src/pages/Home.tsx` | Main opportunity grid with unified results |
-| `prisma/schema.prisma` | Data model (User, Opportunity, SavedOpportunity) |
+| `prisma/schema.prisma` | Data model (User, Opportunity, SavedOpportunity, SavedSearch, EnrichmentUsage, ScraperRun, SearchLog, SpeakerProfile) |
+| `server/src/lib/prisma.ts` | The one PrismaClient, built on the `pg` driver adapter; import the generated client from `server/src/generated/prisma` |
 | `vercel.json` | Deployment config, routing, cron schedules |
 
 ## Deployment
 
 Deployed on Vercel. The `vercel.json` config handles:
 
-- **Build**: Copies production Prisma schema, generates client, pushes schema changes, builds all workspaces
+- **Build**: Generates the Prisma client, pushes schema changes to `DATABASE_URL`, builds all workspaces
 - **Routing**: `/api/*` routes to serverless functions; everything else serves the SPA
 - **Cron jobs**: Daily sync, weekly deep sync, and enrichment runs on schedule
 
@@ -123,8 +129,10 @@ cd server && npm run promote-admin your@email.com
 ## Testing
 
 ```bash
-# Unit tests
+# Unit tests (the server suite needs the Docker Postgres: it pushes the schema
+# into speaking_finder_test first and the *.db.test.ts files query it)
 cd server && npx vitest run
+cd client && npx vitest run
 
 # E2E tests
 npx playwright test
@@ -133,7 +141,9 @@ npx playwright test
 ## Other Useful Commands
 
 ```bash
-npx prisma studio     # Browse the database visually
-npx prisma db push    # Push schema changes to the database
-npm run build         # Build all workspaces
+docker compose up -d db   # Start the local Postgres
+npx prisma generate       # Regenerate the client after a schema change
+npx prisma studio         # Browse the database visually
+npx prisma db push        # Push schema changes to the database
+npm run build             # Build all workspaces
 ```
