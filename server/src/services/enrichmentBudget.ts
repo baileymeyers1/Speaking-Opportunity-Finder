@@ -8,7 +8,21 @@ import { verificationCandidates } from './verification.js';
  * serverless cold starts and across concurrent cron invocations.
  */
 
-export const DAILY_ENRICHMENT_LIMIT = 200;
+export const DEFAULT_DAILY_ENRICHMENT_LIMIT = 600;
+
+/**
+ * Parse `ENRICHMENT_DAILY_LIMIT`: a positive integer, else the default. The
+ * cron processes at most 5 rows every 5 minutes (1440/day), so the cap is the
+ * cost ceiling, not the throughput. Raised from 200 on 2026-11-04 because the
+ * budget was spent by ~03:30 UTC every day and the worker idled after that.
+ */
+export function parseDailyLimit(value: string | undefined, fallback: number = DEFAULT_DAILY_ENRICHMENT_LIMIT): number {
+  if (value === undefined || value.trim() === '') return fallback;
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+export const DAILY_ENRICHMENT_LIMIT = parseDailyLimit(process.env.ENRICHMENT_DAILY_LIMIT);
 export const MAX_ENRICHMENT_ATTEMPTS = 3;
 /** A claim older than this is treated as abandoned (crashed or timed-out worker). */
 export const CLAIM_STALE_MS = 10 * 60 * 1000;
