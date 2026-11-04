@@ -2,6 +2,13 @@
 
 Reverse chronological. Current state lives in `docs/STATUS.md`.
 
+## 2026-11-04 — Event matcher precision after the production dry run
+
+- The production backfill dry run (1,826 rows: 1,644 events, 130 links, 396 review pairs) auto-linked directory index pages ("Law Conferences in California" → "Medical Conferences in California"), academic titles with the same words and different acronyms ("… Power and Renewable Energy Engineering (PREE)" → "… Renewable Energy and Power Engineering (REPE)"), "Annual Conference" → "CAA Annual Conference", and AWS Student Community Day city editions. Every one is now a must-not-link fixture; c0c0n, Power Platform Days Barcelona, LEDucation, Global Gaming Expo (G2E) and ACMME are must-link fixtures.
+- `autoLinkObjection(a, b)` in `eventMatching.ts` gates auto-linking on what the names say, independent of the score: the shorter name's distinctive tokens (no generic, directory or listing words) must all appear in the longer one and must not be empty; every extra token of the longer name must be an acronym it carries or a place one of the rows is in; parenthesised acronyms ("(PREE 2026)", "(EPPC27)", "(G2E)"; "(In-Person)" is not one) must not contradict; the two locations must share a place word (the whole location, since Sessionize writes the venue first; country words do not count). A rejected pair is capped just under 0.80, so it stays in the review band for the admin list. Conference directories (allconferencealert.com, conferenceindex.org, 10times.com, waset.org, …) joined the shared-platform domains.
+- `eventAssignment.ts` checks a slug before inserting instead of catching the unique violation: inside the dry run's transaction a failed insert aborted everything after it (two same-named conferences in different cities, GCBME Los Angeles and Honolulu, now get `…-gcbme` and `…-gcbme-2`). An event is scored by its editions, by its bare name only when it has none, so the gate sees the city and acronym.
+- The backfill report also prints the 15 highest-scoring pairs left for review. Local dev DB (577 rows): 551 events, 575 linked, 24 cross-source links (the two GCBME city instances are now separate), 55 review pairs. Tests: server 361 → 387.
+
 ## 2026-11-04 — Canonical events across sources and years (roadmap 3)
 
 - **Schema.** `Event { canonicalName, slug @unique, organizer?, domain?, aliases String[], nameTokens String[] (GIN index), firstSeenAt, lastSeenAt }` and `Opportunity.eventId` (indexed, `onDelete: SetNull`), `editionYear`, `possibleEventId`, `possibleEventScore`. Additive only; `prisma db push` at the Vercel build creates it. No extension needed: candidate lookup is a native array overlap.
