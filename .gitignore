@@ -49,3 +49,6 @@ prisma/*.db-journal
 
 # Prisma 7 generated client (npx prisma generate)
 server/src/generated/
+
+# Session worktrees the desktop app checks out inside the repo
+.claude/worktrees/
