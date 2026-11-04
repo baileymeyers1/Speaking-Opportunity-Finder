@@ -52,6 +52,14 @@ model Opportunity {
   verificationError   String?
   dateConfidence      String?
   deadlineTimezone    String?            // IANA zone or "AoE"; null = not stated, read as AoE
+  // Canonical event this row is an edition of (services/eventMatching.ts).
+  eventId             String?
+  event               Event?             @relation(fields: [eventId], references: [id], onDelete: SetNull)
+  editionYear         Int?               // From eventDate, else the year in the title
+  // The closest event this row was NOT linked to when the match score fell in
+  // the review band; the admin "possible duplicates" list reads these.
+  possibleEventId     String?
+  possibleEventScore  Float?
   savedBy             SavedOpportunity[]
 
   @@index([cfpDeadline])
@@ -70,6 +78,28 @@ model Opportunity {
   @@index([enrichmentStatus, enrichmentAttempts, enrichmentClaimedAt])
   @@index([verifiedAt])
   @@index([cfpDeadline, verifiedAt])
+  @@index([eventId])
+  @@index([possibleEventScore])
+}
+
+// One conference across sources and years. Opportunity rows are its editions:
+// the same call from several sources in one year, and the calls of past and
+// future years. Created and linked by services/eventMatching.ts; never edited
+// by a scraper directly.
+model Event {
+  id            String        @id @default(uuid())
+  canonicalName String
+  slug          String        @unique
+  organizer     String?
+  domain        String?       // Registrable domain of the event's own site; null when hosted on a shared platform
+  aliases       String[]      @default([]) // Distinct titles seen for this event, year stripped
+  nameTokens    String[]      @default([]) // Normalized name tokens; candidate lookup matches on overlap
+  firstSeenAt   DateTime      @default(now())
+  lastSeenAt    DateTime      @default(now())
+  editions      Opportunity[]
+
+  @@index([domain])
+  @@index([nameTokens], type: Gin)
 }
 
 model SavedOpportunity {
