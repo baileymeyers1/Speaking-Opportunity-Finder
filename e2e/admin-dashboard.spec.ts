@@ -109,6 +109,27 @@ const catalogue = {
   closedThisWeek: 5,
   remote: 60,
   inPerson: 240,
+  events: {
+    events: 280,
+    linkedRows: 318,
+    unlinkedRows: 2,
+    rowsPerEvent: 1.1,
+    multiSourceEvents: 24,
+    multiYearEvents: 3,
+    thresholds: { autoLink: 0.8, review: 0.55 },
+    possibleDuplicates: [
+      {
+        opportunityId: 'opp-asia',
+        title: 'React Summit Asia',
+        source: 'confs.tech',
+        eventDate: '2027-04-15T00:00:00.000Z',
+        ownEvent: 'React Summit Asia',
+        possibleEventId: 'event-react-summit',
+        possibleEvent: 'React Summit',
+        score: 0.645,
+      },
+    ],
+  },
   generatedAt: ago(0),
 };
 

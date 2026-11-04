@@ -3,6 +3,7 @@ import type { AdminCatalogueResponse } from '../../types';
 import { formatCount, percentOf } from './formatters';
 import { SectionCard } from './SectionCard';
 import { CountList, StatTile } from './StatTile';
+import { EventsBlock } from './EventsBlock';
 
 export function CatalogueSection({
   data,
@@ -64,6 +65,8 @@ export function CatalogueSection({
               <CountList items={data.byIndustry} emptyText="No industries tagged." />
             </div>
           </div>
+
+          <EventsBlock events={data.events} />
         </div>
       )}
     </SectionCard>

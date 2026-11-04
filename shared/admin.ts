@@ -135,6 +135,37 @@ export interface AdminCount {
   count: number;
 }
 
+/** A row whose closest event scored in the review band: not linked, listed for threshold tuning. */
+export interface AdminPossibleDuplicate {
+  opportunityId: string;
+  title: string;
+  source: string;
+  eventDate: string | null;
+  /** The event the row was given instead. */
+  ownEvent: string | null;
+  possibleEventId: string;
+  possibleEvent: string | null;
+  /** 0..1, between the review and auto-link thresholds. */
+  score: number;
+}
+
+/** Canonical events across the whole catalogue (services/eventMatching.ts). */
+export interface AdminEventStats {
+  events: number;
+  linkedRows: number;
+  /** Rows no event could be named for (title is nothing but filler). */
+  unlinkedRows: number;
+  /** Linked rows per event, one decimal. */
+  rowsPerEvent: number;
+  /** Events listed by more than one source. */
+  multiSourceEvents: number;
+  /** Events with rows in more than one year. */
+  multiYearEvents: number;
+  thresholds: { autoLink: number; review: number };
+  /** Highest score first, at most 25. */
+  possibleDuplicates: AdminPossibleDuplicate[];
+}
+
 export interface AdminCatalogueResponse {
   totals: {
     all: number;
@@ -159,6 +190,7 @@ export interface AdminCatalogueResponse {
   closedThisWeek: number;
   remote: number;
   inPerson: number;
+  events: AdminEventStats;
   generatedAt: string;
 }
 
