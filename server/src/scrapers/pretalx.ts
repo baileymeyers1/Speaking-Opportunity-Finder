@@ -8,6 +8,7 @@ import {
   stripTags,
   utcDate,
 } from './lib/html.js';
+import { endOfCalendarDay, isValidTimezone } from '../lib/deadlines.js';
 
 /**
  * Pretalx is the CFP platform behind many community and academic conferences.
@@ -40,6 +41,8 @@ export interface PretalxEvent {
   dateFrom: Date;
   dateTo?: Date;
   instanceUrl: string;
+  /** The event's IANA zone from the API; the CFP page states its deadline in this zone. */
+  timezone?: string;
 }
 
 export type PretalxCfpStatus = 'open' | 'not-yet-open' | 'closed';
@@ -66,6 +69,7 @@ interface RawPretalxEvent {
   is_public?: boolean;
   date_from?: string;
   date_to?: string;
+  timezone?: string;
 }
 
 function parseIsoDay(value: string | undefined): Date | undefined {
@@ -100,7 +104,14 @@ export function parsePretalxEventList(data: unknown, now: Date, instanceUrl: str
     const name = localizedName(raw.name);
     const dateFrom = parseIsoDay(raw.date_from);
     if (!slug || !/^[\w-]+$/.test(slug) || !name || !dateFrom || dateFrom < today) continue;
-    events.push({ slug, name, dateFrom, dateTo: parseIsoDay(raw.date_to), instanceUrl });
+    events.push({
+      slug,
+      name,
+      dateFrom,
+      dateTo: parseIsoDay(raw.date_to),
+      instanceUrl,
+      timezone: isValidTimezone(raw.timezone) ? raw.timezone : undefined,
+    });
   }
 
   return events.sort((a, b) => a.dateFrom.getTime() - b.dateFrom.getTime());
@@ -196,7 +207,9 @@ export function buildPretalxResults(
       location: null,
       isRemote: false,
       eventDate: event.dateFrom,
-      cfpDeadline: page.cfpDeadline,
+      // Pretalx closes a CFP at the end of the stated day in the event's own zone.
+      cfpDeadline: endOfCalendarDay(page.cfpDeadline, event.timezone ?? null),
+      deadlineTimezone: page.cfpDeadline ? (event.timezone ?? null) : null,
       format: 'conference',
       industries: [],
       applyUrl: fetched.finalUrl || page.canonicalUrl || pretalxCfpUrl(event),

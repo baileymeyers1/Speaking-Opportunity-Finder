@@ -84,6 +84,11 @@ describe('buildConferenceAlertsResults', () => {
     }
   });
 
+  it('stores a stated day as its end Anywhere on Earth', () => {
+    const policy = results.find((result) => result.sourceUrl?.endsWith('id=271712'))!;
+    expect(policy.cfpDeadline?.toISOString()).toBe('2026-11-11T11:59:59.000Z');
+  });
+
   it('uses each event website as a distinct absolute applyUrl', () => {
     const urls = results.map((result) => result.applyUrl);
     expect(new Set(urls).size).toBe(urls.length);

@@ -1,8 +1,22 @@
 /**
- * Deadlines and event dates are stored as UTC midnight. Formatting them in the
- * viewer's local zone shows the previous day anywhere west of Greenwich, so
- * they are always formatted in UTC.
+ * Event dates and verification stamps are stored as UTC midnight. Formatting
+ * them in the viewer's local zone shows the previous day anywhere west of
+ * Greenwich, so they are always formatted in UTC.
+ *
+ * Deadlines are different: each is an instant with a zone of its own. Their
+ * helpers come from the server's pure deadline module, imported by path
+ * because the server build cannot consume runtime code from `shared/`, so the
+ * card, the detail page and the API share one definition of "closed".
  */
+export {
+  daysUntilDeadline,
+  describeDeadline,
+  formatDeadline,
+  isDeadlinePast,
+  type DeadlineFields,
+  type FormattedDeadline,
+} from '../../../server/src/lib/deadlines';
+
 const SHORT: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' };
 const LONG: Intl.DateTimeFormatOptions = {
   weekday: 'long',
@@ -18,13 +32,4 @@ export function formatDate(dateString: string | null | undefined, style: 'short'
   const date = new Date(dateString);
   if (Number.isNaN(date.getTime())) return null;
   return date.toLocaleDateString('en-US', style === 'long' ? LONG : SHORT);
-}
-
-/** Whole days from now until the date; negative when it has passed. */
-export function daysUntil(dateString: string, now: Date = new Date()): number {
-  return Math.ceil((new Date(dateString).getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-}
-
-export function isPastDate(dateString: string | null | undefined, now: Date = new Date()): boolean {
-  return Boolean(dateString) && new Date(dateString!) < now;
 }

@@ -72,6 +72,7 @@ describe('buildVerificationUpdate', () => {
     expect(update).toMatchObject({
       eventDate: new Date('2027-04-20T00:00:00Z'),
       cfpDeadline: new Date('2027-01-15T00:00:00Z'),
+      deadlineTimezone: null,
       location: 'Denver, CO',
       isRemote: false,
       compensationType: 'travel',

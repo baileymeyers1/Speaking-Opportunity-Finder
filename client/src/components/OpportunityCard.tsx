@@ -3,11 +3,11 @@ import { Link, useNavigate, useLocation } from 'react-router-dom';
 import type { Opportunity, SavedCategory } from '../types';
 import { useAuth } from '../hooks/useAuth';
 import { useSaveOpportunity } from '../hooks/useSaveOpportunity';
-import { isPastDate } from '../lib/dates';
-import { getDeadlineBadge, getQualityColor, getQualityLabel } from '../lib/opportunityDisplay';
+import { isDeadlinePast } from '../lib/dates';
+import { getQualityColor, getQualityLabel } from '../lib/opportunityDisplay';
 import { SaveOpportunityMenu } from './SaveOpportunityMenu';
-import { approximate, isLowConfidence } from '../utils/verification';
-import { ApproximateHint, DateWithConfidence, VerifiedBadge } from './VerificationHints';
+import { DeadlineBadge } from './DeadlineBadge';
+import { DateWithConfidence, VerifiedBadge } from './VerificationHints';
 import { MatchPill } from './MatchHints';
 import { cn } from '@/lib/utils';
 
@@ -46,10 +46,8 @@ export function OpportunityCard({ opportunity, showSave = true, isPast }: Opport
   const current = opportunity;
   const isSaving = save.isPending;
 
-  const deadlineBadge = getDeadlineBadge(current.cfpDeadline);
-  const deadlineIsApproximate = !!current.cfpDeadline && isLowConfidence(current, 'cfpDeadline');
   const isLive = current.isLiveResult;
-  const isPastDeadline = isPast ?? isPastDate(current.cfpDeadline);
+  const isPastDeadline = isPast ?? isDeadlinePast(current);
   const hasCompensation = !!current.compensationType;
   const hasQualityScore =
     current.qualityScore !== undefined && current.qualityScore !== null;
@@ -138,23 +136,7 @@ export function OpportunityCard({ opportunity, showSave = true, isPast }: Opport
           {/* Deadline */}
           <div className="flex items-center gap-1.5">
             <Clock className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" aria-hidden="true" />
-            {deadlineIsApproximate ? (
-              <ApproximateHint>
-                <Badge
-                  variant={deadlineBadge.variant}
-                  className={cn('text-[11px] px-1.5 py-0 cursor-help', deadlineBadge.className)}
-                >
-                  {approximate(deadlineBadge.label, true)}
-                </Badge>
-              </ApproximateHint>
-            ) : (
-              <Badge
-                variant={deadlineBadge.variant}
-                className={cn('text-[11px] px-1.5 py-0', deadlineBadge.className)}
-              >
-                {deadlineBadge.label}
-              </Badge>
-            )}
+            <DeadlineBadge opportunity={current} />
           </div>
 
           {/* Location / Remote */}

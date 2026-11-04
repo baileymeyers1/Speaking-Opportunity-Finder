@@ -28,7 +28,9 @@ describe('parseDevelopersEvents', () => {
   it('maps hyperlink, date[] epoch ms and cfp.untilDate', () => {
     const ffconf = results.find((result) => result.title === 'ffconf');
     expect(ffconf).toBeDefined();
-    expect(ffconf!.cfpDeadline?.toISOString()).toBe('2026-11-13T00:00:00.000Z');
+    // untilDate names Nov 13 with no zone: the call stays open until that day ends Anywhere on Earth.
+    expect(ffconf!.cfpDeadline?.toISOString()).toBe('2026-11-14T11:59:59.000Z');
+    expect(ffconf!.deadlineTimezone).toBeUndefined();
     expect(ffconf!.eventDate).toBeInstanceOf(Date);
     expect(ffconf!.location).toBe('Brighton (UK)');
     expect(ffconf!.sourceUrl).toMatch(/^https?:\/\//);

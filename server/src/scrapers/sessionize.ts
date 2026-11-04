@@ -7,6 +7,7 @@ import {
   startOfUtcDay,
   stripTags,
 } from './lib/html.js';
+import { endOfCalendarDay, fixedOffsetZone } from '../lib/deadlines.js';
 
 /**
  * Sessionize hosts the call for speakers of thousands of conferences and user
@@ -33,6 +34,8 @@ export interface SessionizeEventPage {
   closesAt?: Date;
   /** Single-date events. */
   eventDate?: Date;
+  /** The exact closing instant Sessionize embeds for its "closing time in your timezone" line, with the event's UTC offset. */
+  closing?: { instant: Date; offsetMinutes: number };
   /** Recurring groups list their planned dates instead of one event date. */
   plannedDates: Date[];
   location?: string;
@@ -54,6 +57,17 @@ export function parseSessionizeSitemap(xml: string): string[] {
 function fieldHtml(html: string, label: string): string | undefined {
   const pattern = new RegExp(`${label}\\s*</div>\\s*<h2\\b[^>]*>([\\s\\S]*?)</h2>`, 'i');
   return html.match(pattern)?.[1];
+}
+
+/**
+ * `Closing time in your timezone (…) is <strong data-date="Tue, 17 Nov 2026 04:59:00 GMT|-300">`:
+ * the instant the call closes, plus the event's UTC offset in minutes.
+ */
+function closingInstant(html: string): SessionizeEventPage['closing'] {
+  const match = html.match(/Closing time in your timezone[\s\S]{0,300}?data-date="([^"|]+)\|(-?\d+)"/i);
+  if (!match) return undefined;
+  const instant = new Date(match[1]);
+  return Number.isNaN(instant.getTime()) ? undefined : { instant, offsetMinutes: Number(match[2]) };
 }
 
 /** The `<h2>` after a "Call opens at …" / "Call closes at …" span. */
@@ -112,6 +126,7 @@ export function parseSessionizeEventPage(html: string): SessionizeEventPage {
     isClosed,
     opensAt: callDate(html, 'Call opens at'),
     closesAt: callDate(html, 'Call closes at'),
+    closing: closingInstant(html),
     eventDate: singleDateHtml ? parseHumanDate(stripTags(singleDateHtml)) : undefined,
     plannedDates: plannedHtml ? parseDateList(stripTags(plannedHtml)) : [],
     location: /^online$/i.test(locationText) ? undefined : locationText || undefined,
@@ -157,7 +172,9 @@ export function buildSessionizeResults(pagesByUrl: ReadonlyMap<string, string>, 
       location: page.location ?? null,
       isRemote: page.isRemote,
       eventDate,
-      cfpDeadline: page.closesAt,
+      // The embedded closing instant is exact; without it the displayed day is read as Anywhere on Earth.
+      cfpDeadline: page.closing?.instant ?? endOfCalendarDay(page.closesAt),
+      deadlineTimezone: page.closing ? fixedOffsetZone(page.closing.offsetMinutes) : null,
       format: inferSessionizeFormat(page),
       industries: [],
       applyUrl: url,

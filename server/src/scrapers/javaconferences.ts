@@ -1,5 +1,7 @@
 import type { ScraperResult } from './index.js';
 import { cleanTitle, normalizeIndustries } from '../services/dataNormalization.js';
+import { parseHumanDate } from './lib/html.js';
+import { endOfCalendarDay } from '../lib/deadlines.js';
 
 const JAVA_CONFERENCES_URL = 'https://javaconferences.org/conferences.json';
 
@@ -41,17 +43,9 @@ function parseDate(dateStr: string): Date | undefined {
   return undefined;
 }
 
+/** "30 September 2025", "11 November 2025": a day with no zone, read as Anywhere on Earth. */
 function parseCfpDeadline(dateStr: string): Date | undefined {
-  // Handle formats like "30 September 2025", "11 November 2025"
-  try {
-    const parsed = new Date(dateStr);
-    if (!isNaN(parsed.getTime())) {
-      return parsed;
-    }
-  } catch {
-    // Fall through
-  }
-  return undefined;
+  return endOfCalendarDay(parseHumanDate(dateStr));
 }
 
 function mapToScraperResult(conf: JavaConference): ScraperResult | null {

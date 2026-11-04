@@ -100,6 +100,7 @@ export function buildVerificationUpdate(
   return {
     eventDate: merged.eventDate ?? null,
     cfpDeadline: merged.cfpDeadline ?? null,
+    deadlineTimezone: merged.cfpDeadline ? (merged.deadlineTimezone ?? null) : null,
     location: merged.location ?? null,
     isRemote: merged.isRemote,
     compensationType: merged.compensationType ?? null,

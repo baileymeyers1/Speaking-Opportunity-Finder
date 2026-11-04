@@ -8,6 +8,7 @@ import {
   stripTags,
   utcDate,
 } from './lib/html.js';
+import { endOfCalendarDay } from '../lib/deadlines.js';
 
 /**
  * conferencealerts.com lists academic/professional conferences by country.
@@ -160,7 +161,8 @@ export function buildConferenceAlertsResults(
       location: detail.location || listing.location || null,
       isRemote: listing.isRemote || detail.isRemote === true,
       eventDate: listing.eventDate,
-      cfpDeadline: detail.cfpDeadline,
+      // The site states a day with no zone: read as Anywhere on Earth.
+      cfpDeadline: endOfCalendarDay(detail.cfpDeadline),
       format: 'conference',
       industries: [],
       applyUrl: ownWebsite || listing.detailUrl,

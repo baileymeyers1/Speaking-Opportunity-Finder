@@ -1,5 +1,6 @@
 import type { ScraperResult } from './index.js';
 import { cleanTitle, normalizeIndustries } from '../services/dataNormalization.js';
+import { parseIsoDeadline } from '../lib/deadlines.js';
 
 const API_URL = 'https://api.callingallpapers.com/v1/cfp';
 
@@ -26,13 +27,9 @@ interface CallingAllPapersResponse {
 }
 
 function mapToScraperResult(cfp: CallingAllPapersCFP): ScraperResult | null {
-  // Skip if CFP deadline has passed
-  if (cfp.dateCfpEnd) {
-    const deadline = new Date(cfp.dateCfpEnd);
-    if (deadline < new Date()) {
-      return null;
-    }
-  }
+  // dateCfpEnd is ISO 8601, usually with the organizer's UTC offset; a bare day is read as Anywhere on Earth.
+  const deadline = parseIsoDeadline(cfp.dateCfpEnd);
+  if (deadline && deadline.instant < new Date()) return null;
 
   const applyUrl = cfp.eventUri || cfp.uri || cfp._rel?.cfp_uri;
   if (!applyUrl) return null;
@@ -55,7 +52,8 @@ function mapToScraperResult(cfp: CallingAllPapersCFP): ScraperResult | null {
     location: cfp.location || null,
     isRemote,
     eventDate: cfp.dateEventStart ? new Date(cfp.dateEventStart) : undefined,
-    cfpDeadline: cfp.dateCfpEnd ? new Date(cfp.dateCfpEnd) : undefined,
+    cfpDeadline: deadline?.instant,
+    deadlineTimezone: deadline?.zone,
     format: 'conference',
     industries,
     compensationType: undefined,

@@ -40,6 +40,7 @@ function transformOpportunity(opp: {
   isRemote: boolean;
   eventDate: Date | null;
   cfpDeadline: Date | null;
+  deadlineTimezone?: string | null;
   format: string;
   industries: string;
   compensationType: string | null;
@@ -153,6 +154,7 @@ export interface OpportunityCreateInput {
   isRemote?: boolean;
   eventDate?: Date;
   cfpDeadline?: Date;
+  deadlineTimezone?: string;
   format: string;
   industries?: string[];
   compensationType?: string;

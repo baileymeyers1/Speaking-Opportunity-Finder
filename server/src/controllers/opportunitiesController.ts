@@ -6,6 +6,7 @@ import * as profileService from '../services/profileService.js';
 import { scoreOpportunities } from '../services/matchScore.js';
 import { buildFilters } from './opportunityFilters.js';
 import { AppError } from '../middleware/errorHandler.js';
+import { isValidTimezone } from '../lib/deadlines.js';
 import type {
   ApiResponse,
   CompensationType,
@@ -91,6 +92,7 @@ export async function getOpportunities(
       isRemote: r.isRemote,
       eventDate: r.eventDate,
       cfpDeadline: r.cfpDeadline,
+      deadlineTimezone: r.deadlineTimezone ?? null,
       format: r.format as OpportunityFormat,
       industries: r.industries,
       compensationType: r.compensationType as CompensationType | null,
@@ -257,6 +259,7 @@ export async function saveLiveResult(
       isRemote,
       eventDate,
       cfpDeadline,
+      deadlineTimezone,
       format,
       industries,
       compensationType,
@@ -287,6 +290,7 @@ export async function saveLiveResult(
       isRemote: isRemote || false,
       eventDate: eventDate ? new Date(eventDate) : undefined,
       cfpDeadline: cfpDeadline ? new Date(cfpDeadline) : undefined,
+      deadlineTimezone: cfpDeadline && isValidTimezone(deadlineTimezone) ? deadlineTimezone : undefined,
       format: format || 'conference',
       industries: industries || [],
       compensationType: compensationType || undefined,

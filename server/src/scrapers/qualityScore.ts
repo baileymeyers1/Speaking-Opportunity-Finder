@@ -10,7 +10,10 @@ export interface ScraperResult {
   location?: string | null;
   isRemote: boolean;
   eventDate?: Date;
+  /** The instant the call closes (see lib/deadlines.ts); scrapers build it from the stated day. */
   cfpDeadline?: Date;
+  /** IANA zone or `AoE` the deadline was stated in; null/undefined when unknown (read as AoE). */
+  deadlineTimezone?: string | null;
   format: string;
   industries: string[];
   compensationType?: string;

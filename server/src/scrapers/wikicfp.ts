@@ -7,6 +7,7 @@ import {
   startOfUtcDay,
   stripTags,
 } from './lib/html.js';
+import { endOfCalendarDay } from '../lib/deadlines.js';
 
 /**
  * WikiCFP category RSS feeds (20 most recent CFPs per category). These are
@@ -151,7 +152,8 @@ export async function scrapeWikiCFP(): Promise<ScraperResult[]> {
   // Keep items whose deadline is still open; if the detail page could not be
   // read, keep the item (its event is upcoming) without a deadline.
   const results = candidates
-    .map((result, index) => ({ ...result, cfpDeadline: deadlines[index] }))
+    // WikiCFP states a day with no zone: read as Anywhere on Earth.
+    .map((result, index) => ({ ...result, cfpDeadline: endOfCalendarDay(deadlines[index]) }))
     .filter((result) => !result.cfpDeadline || result.cfpDeadline >= today);
 
   const withDeadline = results.filter((result) => result.cfpDeadline).length;

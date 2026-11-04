@@ -22,6 +22,7 @@ describe('parseHumanDate', () => {
     ['Nov 13, 2026', '2026-11-13'],
     ['September 3 2027', '2027-09-03'],
     ['2026-11-13T00:00:00', '2026-11-13'],
+    ['Deadline: 11/13/2026', '2026-11-13'],
   ])('parses %s', (input, expected) => {
     expect(parseHumanDate(input)?.toISOString().slice(0, 10)).toBe(expected);
   });

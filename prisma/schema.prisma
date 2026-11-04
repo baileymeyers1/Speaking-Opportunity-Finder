@@ -51,6 +51,7 @@ model Opportunity {
   verifiedAt          DateTime?
   verificationError   String?
   dateConfidence      String?
+  deadlineTimezone    String?            // IANA zone or "AoE"; null = not stated, read as AoE
   savedBy             SavedOpportunity[]
 
   @@index([cfpDeadline])

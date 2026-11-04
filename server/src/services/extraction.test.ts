@@ -16,6 +16,8 @@ function fullOutput(overrides: Record<string, unknown> = {}): Record<string, unk
   return {
     eventDate: '2027-05-04',
     cfpDeadline: '2026-12-01',
+    cfpDeadlineTime: null,
+    deadlineTimezone: null,
     location: 'Boston, MA',
     isRemote: false,
     isClosed: false,
@@ -72,6 +74,7 @@ describe('buildExtractionPrompt', () => {
     expect(prompt).toContain("Today's date is 2026-11-02");
     expect(prompt).toContain('assume 2026 if that month has not passed yet, otherwise 2027');
     expect(prompt).toContain('cfpDeadline 2026-09-21 and eventDate 2027-05-04');
+    expect(prompt).toContain('never infer it from the venue');
     expect(prompt).toContain('Title: DevConf');
     expect(prompt).toContain('listing text');
     expect(prompt).toContain('page text');
@@ -91,12 +94,40 @@ describe('parseExtractionOutput', () => {
     expect(parsed.ok).toBe(true);
     if (!parsed.ok) return;
     expect(parsed.result.eventDate?.toISOString()).toBe('2027-05-04T00:00:00.000Z');
-    expect(parsed.result.cfpDeadline?.toISOString()).toBe('2026-12-01T00:00:00.000Z');
+    // A date with no stated zone is read as Anywhere on Earth: it ends at 11:59:59 UTC the next day.
+    expect(parsed.result.cfpDeadline?.toISOString()).toBe('2026-12-02T11:59:59.000Z');
+    expect(parsed.result.deadlineTimezone).toBeNull();
     expect(parsed.result.location).toBe('Boston, MA');
     expect(parsed.result.compensationType).toBe('travel');
     expect(parsed.result.industries).toEqual(['healthcare', 'ai']);
     expect(parsed.result.cleanTitle).toBe('HealthTech Summit 2027');
     expect(parsed.result.confidence).toEqual({ eventDate: 'high', cfpDeadline: 'high', location: 'medium' });
+  });
+
+  it('places the deadline at the stated time in the stated zone', () => {
+    const chicago = parseExtractionOutput(fullOutput({ cfpDeadlineTime: '17:00', deadlineTimezone: 'America/Chicago' }));
+    if (!chicago.ok) throw new Error(chicago.error);
+    expect(chicago.result.cfpDeadline?.toISOString()).toBe('2026-12-01T23:00:00.000Z');
+    expect(chicago.result.deadlineTimezone).toBe('America/Chicago');
+
+    const aoe = parseExtractionOutput(fullOutput({ deadlineTimezone: 'AoE' }));
+    if (!aoe.ok) throw new Error(aoe.error);
+    expect(aoe.result.cfpDeadline?.toISOString()).toBe('2026-12-02T11:59:59.000Z');
+    expect(aoe.result.deadlineTimezone).toBe('AoE');
+  });
+
+  it('drops a zone it cannot resolve and a time it cannot read, keeping the day', () => {
+    const parsed = parseExtractionOutput(fullOutput({ cfpDeadlineTime: '25:99', deadlineTimezone: 'Pacific Time' }));
+    if (!parsed.ok) throw new Error(parsed.error);
+    expect(parsed.result.deadlineTimezone).toBeNull();
+    expect(parsed.result.cfpDeadline?.toISOString()).toBe('2026-12-02T11:59:59.000Z');
+  });
+
+  it('does not report a zone without a deadline', () => {
+    const parsed = parseExtractionOutput(fullOutput({ cfpDeadline: null, deadlineTimezone: 'UTC' }));
+    if (!parsed.ok) throw new Error(parsed.error);
+    expect(parsed.result.cfpDeadline).toBeNull();
+    expect(parsed.result.deadlineTimezone).toBeNull();
   });
 
   it('rejects non-object output', () => {
@@ -169,7 +200,8 @@ describe('mergeExtraction', () => {
     expect(merged.organization).toBe('HealthTech Alliance');
     expect(merged.location).toBe('Boston, MA');
     expect(merged.eventDate?.toISOString()).toBe('2027-05-04T00:00:00.000Z');
-    expect(merged.cfpDeadline?.toISOString()).toBe('2026-12-01T00:00:00.000Z');
+    expect(merged.cfpDeadline?.toISOString()).toBe('2026-12-02T11:59:59.000Z');
+    expect(merged.deadlineTimezone).toBeNull();
     expect(merged.industries).toEqual(['healthcare', 'ai']);
     expect(merged.compensationType).toBe('travel');
     expect(merged.isClosed).toBe(false);
@@ -179,12 +211,18 @@ describe('mergeExtraction', () => {
 
   it('keeps existing values when the extraction returned null', () => {
     const merged = mergeExtraction(
-      scraped({ location: 'Chicago, IL', cfpDeadline: new Date('2026-12-15T00:00:00Z'), compensationType: 'paid' }),
+      scraped({
+        location: 'Chicago, IL',
+        cfpDeadline: new Date('2026-12-16T04:59:59Z'),
+        deadlineTimezone: 'America/Chicago',
+        compensationType: 'paid',
+      }),
       extraction({ location: null, cfpDeadline: null, eventDate: null, cleanTitle: null, cleanOrganization: null, compensationType: null, industries: [] }),
       NOW
     );
     expect(merged.location).toBe('Chicago, IL');
-    expect(merged.cfpDeadline?.toISOString()).toBe('2026-12-15T00:00:00.000Z');
+    expect(merged.cfpDeadline?.toISOString()).toBe('2026-12-16T04:59:59.000Z');
+    expect(merged.deadlineTimezone).toBe('America/Chicago');
     expect(merged.eventDate?.toISOString()).toBe('2026-01-01T00:00:00.000Z');
     expect(merged.title).toBe('HealthTech Summit | Call for Speakers');
     expect(merged.organization).toBe('Unknown');
@@ -192,14 +230,33 @@ describe('mergeExtraction', () => {
     expect(merged.industries).toEqual(['technology']);
   });
 
-  it('marks the listing closed when the merged deadline is already past', () => {
-    const merged = mergeExtraction(scraped(), extraction({ cfpDeadline: new Date('2026-10-01T00:00:00Z'), isClosed: false }), NOW);
+  it('marks the listing closed when the merged deadline instant is already past', () => {
+    const merged = mergeExtraction(
+      scraped(),
+      extraction({ cfpDeadline: new Date('2026-11-02T11:00:00Z'), deadlineTimezone: 'UTC', isClosed: false }),
+      NOW
+    );
     expect(merged.isClosed).toBe(true);
+    expect(mergeExtraction(scraped(), extraction({ cfpDeadline: new Date('2026-10-02T11:59:59Z') }), NOW).isClosed).toBe(true);
   });
 
-  it('treats a deadline on today as still open', () => {
-    const merged = mergeExtraction(scraped(), extraction({ cfpDeadline: new Date('2026-11-02T00:00:00Z') }), NOW);
-    expect(merged.isClosed).toBe(false);
+  it('keeps a deadline open until its instant, and reads a legacy midnight value as AoE end of day', () => {
+    const later = mergeExtraction(scraped(), extraction({ cfpDeadline: new Date('2026-11-02T13:00:00Z'), deadlineTimezone: 'UTC' }), NOW);
+    expect(later.isClosed).toBe(false);
+    // NOW is 12:00 UTC on Nov 2: a bare "Nov 2" deadline still has until 11:59:59 UTC on Nov 3.
+    const legacy = mergeExtraction(scraped({ cfpDeadline: new Date('2026-11-02T00:00:00Z') }), extraction({ cfpDeadline: null }), NOW);
+    expect(legacy.isClosed).toBe(false);
+    expect(legacy.cfpDeadline?.toISOString()).toBe('2026-11-02T00:00:00.000Z');
+  });
+
+  it('replaces the zone together with the deadline', () => {
+    const merged = mergeExtraction(
+      scraped({ cfpDeadline: new Date('2026-12-16T04:59:59Z'), deadlineTimezone: 'America/Chicago' }),
+      extraction({ cfpDeadline: new Date('2027-01-02T11:59:59Z'), deadlineTimezone: null }),
+      NOW
+    );
+    expect(merged.cfpDeadline?.toISOString()).toBe('2027-01-02T11:59:59.000Z');
+    expect(merged.deadlineTimezone).toBeNull();
   });
 
   it('respects an explicit closed flag even with a future deadline', () => {

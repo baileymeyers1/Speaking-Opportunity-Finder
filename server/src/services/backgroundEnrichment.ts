@@ -61,6 +61,7 @@ function toScraperResult(opportunity: OpportunityRow): ScraperResult {
     isRemote: opportunity.isRemote,
     eventDate: opportunity.eventDate || undefined,
     cfpDeadline: opportunity.cfpDeadline || undefined,
+    deadlineTimezone: opportunity.deadlineTimezone,
     format: opportunity.format,
     industries: (() => {
       try {
@@ -192,6 +193,7 @@ async function processNextUnenriched(): Promise<WorkerOutcome> {
           title: mergedResult.title,
           organization: mergedResult.organization,
           cfpDeadline: mergedResult.cfpDeadline || null,
+          deadlineTimezone: mergedResult.cfpDeadline ? (mergedResult.deadlineTimezone ?? null) : null,
           eventDate: mergedResult.eventDate || null,
           industries: JSON.stringify(mergedResult.industries),
           location: mergedResult.location || null,

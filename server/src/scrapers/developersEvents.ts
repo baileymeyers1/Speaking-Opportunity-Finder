@@ -1,6 +1,7 @@
 import type { ScraperResult } from './qualityScore.js';
 import { normalizeIndustries } from '../services/dataNormalization.js';
 import { fetchWithTimeout, startOfUtcDay } from './lib/html.js';
+import { endOfCalendarDay } from '../lib/deadlines.js';
 
 /**
  * developers.events publishes its whole dataset as JSON. all-events.json holds
@@ -110,7 +111,8 @@ export function parseDevelopersEvents(data: unknown, now: Date): ScraperResult[]
       isRemote:
         isOnlineOnly || /online/i.test(rawLocation ?? '') || event.status?.toLowerCase() === 'virtualized',
       eventDate: typeof startMs === 'number' ? new Date(startMs) : undefined,
-      cfpDeadline: new Date(closesAt),
+      // untilDate names the closing day with no zone: read as Anywhere on Earth.
+      cfpDeadline: endOfCalendarDay(new Date(closesAt)),
       format: 'conference',
       industries: industriesFromTags(event.tags),
       applyUrl: link,
