@@ -8,6 +8,7 @@ import { getQualityColor, getQualityLabel } from '../lib/opportunityDisplay';
 import { SaveOpportunityMenu } from './SaveOpportunityMenu';
 import { DeadlineBadge } from './DeadlineBadge';
 import { DateWithConfidence, VerifiedBadge } from './VerificationHints';
+import { EventHintLines } from './EventHints';
 import { MatchPill } from './MatchHints';
 import { cn } from '@/lib/utils';
 
@@ -171,6 +172,9 @@ export function OpportunityCard({ opportunity, showSave = true, isPast }: Opport
 
           {/* Last checked against the event page */}
           <VerifiedBadge opportunity={current} variant="line" />
+
+          {/* Other sources listing this call, and when last year's call appeared */}
+          <EventHintLines opportunity={current} />
         </div>
 
         {/* Industry tags -- show ALL, wrap naturally */}
