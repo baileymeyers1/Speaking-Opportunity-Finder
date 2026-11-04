@@ -2,7 +2,7 @@ import { prisma } from '../lib/prisma.js';
 import { AppError } from '../middleware/errorHandler.js';
 import { parseDateConfidence } from './extraction.js';
 import { assignEvents } from './eventAssignment.js';
-import { attachEventContext, listEventEditions, shadowedEditionIds } from './eventContext.js';
+import { attachEventContext, shadowedEditionIds } from './eventContext.js';
 import { MATCH_SORT_CANDIDATE_CAP, scoreOpportunities, type MatchProfile } from './matchScore.js';
 import {
   buildOpportunityOrderBy,
@@ -61,6 +61,7 @@ function transformOpportunity(opp: {
   editionYear?: number | null;
   alsoListedOn?: string[];
   previousEditions?: OpportunityWithDates['previousEditions'];
+  eventEditions?: OpportunityWithDates['eventEditions'];
 }): OpportunityWithDates {
   // The database stores these as plain strings; the wire type narrows them.
   return {
@@ -157,7 +158,7 @@ export async function getOpportunities(
   };
 }
 
-/** One row with its event context and every edition of its event (the detail page lists them). */
+/** One row with its event context (other sources, earlier years, every edition of its event). */
 export async function getOpportunityById(id: string, options: ListOptions = {}) {
   const opportunity = await prisma.opportunity.findUnique({ where: { id } });
 
@@ -166,7 +167,7 @@ export async function getOpportunityById(id: string, options: ListOptions = {}) 
   }
 
   const [item] = await attachEventContext(withMatchScores([transformOpportunity(opportunity)], options));
-  return { ...item, eventEditions: await listEventEditions(opportunity.eventId) };
+  return item;
 }
 
 export interface OpportunityCreateInput {

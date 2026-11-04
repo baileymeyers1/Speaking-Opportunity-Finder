@@ -105,7 +105,9 @@ describe('one card per event', () => {
     expect(new Set([all.items[0].id, second.items[0].id])).toEqual(new Set([brusselsfestB, lonely]));
   });
 
-  it('returns every edition of the event on the detail response', async () => {
+  it('returns every edition of the event on list items and the detail response', async () => {
+    const page = await getOpportunities({ search: 'Brusselsfest' }, { page: 1, pageSize: 20 }, { now });
+    expect(page.items[0].eventEditions).toHaveLength(4);
     const detail = await getOpportunityById(brusselsfestA, { now });
     expect(detail.eventEditions?.map((e) => e.id).sort()).toHaveLength(4);
     expect(detail.eventEditions?.[0].year).toBe(2027);

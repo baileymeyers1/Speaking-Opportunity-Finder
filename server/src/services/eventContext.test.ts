@@ -67,6 +67,20 @@ describe('buildEventContext', () => {
     expect(context.previousEditions.map((e) => e.year)).toEqual([2026]);
   });
 
+  it('lists every edition newest year first, and only when there is more than one', () => {
+    const context = buildEventContext(me, [
+      edition({ id: 'a' }),
+      edition({ id: 'b', editionYear: 2026, source: 'wikicfp.com', eventDate: d('2026-01-31T00:00:00Z') }),
+      edition({ id: 'c', source: 'confs.tech' }),
+    ]);
+    expect(context.eventEditions?.map((e) => [e.year, e.source])).toEqual([
+      [2027, 'confs.tech'],
+      [2027, 'developers.events'],
+      [2026, 'wikicfp.com'],
+    ]);
+    expect(buildEventContext(me, [edition({ id: 'a' })]).eventEditions).toBeUndefined();
+  });
+
   it('is empty for a row with no event', () => {
     expect(buildEventContext({ ...me, eventId: null }, [])).toEqual({ alsoListedOn: [], previousEditions: [] });
   });

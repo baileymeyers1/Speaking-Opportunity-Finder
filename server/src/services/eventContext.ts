@@ -48,6 +48,8 @@ export interface EventRowLike {
 export interface EventContext {
   alsoListedOn: string[];
   previousEditions: PreviousEdition<Date>[];
+  /** Every row of the event, newest year first; only present when there is more than one. */
+  eventEditions?: EventEdition<Date>[];
 }
 
 const editionSelect = {
@@ -70,7 +72,24 @@ function yearOf(row: { editionYear: number | null; eventDate: Date | null }): nu
   return row.editionYear ?? row.eventDate?.getUTCFullYear() ?? null;
 }
 
-/** Pure: the context of one row given every row of its event. */
+function toEdition(row: EditionRow): EventEdition<Date> {
+  return {
+    id: row.id,
+    year: yearOf(row),
+    title: row.title,
+    source: row.source,
+    applyUrl: row.applyUrl,
+    cfpDeadline: row.cfpDeadline,
+    eventDate: row.eventDate,
+    isClosed: row.isClosed,
+  };
+}
+
+/**
+ * Pure: the context of one row given every row of its event. The editions
+ * ride on list items too, because the detail page renders from the cached
+ * list entry it was opened from and only refetches once that is stale.
+ */
 export function buildEventContext(row: EventRowLike, siblings: EditionRow[]): EventContext {
   const year = yearOf({ editionYear: row.editionYear ?? null, eventDate: row.eventDate });
   const others = siblings.filter((s) => s.id !== row.id);
@@ -96,7 +115,13 @@ export function buildEventContext(row: EventRowLike, siblings: EditionRow[]): Ev
     }
   }
   const previousEditions = [...byYear.values()].sort((a, b) => b.year - a.year);
-  return { alsoListedOn, previousEditions };
+  const context: EventContext = { alsoListedOn, previousEditions };
+  if (siblings.length > 1) {
+    context.eventEditions = siblings
+      .map(toEdition)
+      .sort((a, b) => (b.year ?? 0) - (a.year ?? 0) || a.source.localeCompare(b.source));
+  }
+  return context;
 }
 
 /** Every row of the given events, in one query. */
@@ -120,22 +145,4 @@ export async function attachEventContext<T extends EventRowLike>(items: T[]): Pr
     ...item,
     ...buildEventContext(item, item.eventId ? editions.get(item.eventId) ?? [] : []),
   }));
-}
-
-/** Every stored edition of a row's event, newest year first, for the detail page. */
-export async function listEventEditions(eventId: string | null | undefined): Promise<EventEdition<Date>[]> {
-  if (!eventId) return [];
-  const editions = (await loadEditions([eventId])).get(eventId) ?? [];
-  return editions
-    .map((row) => ({
-      id: row.id,
-      year: yearOf(row),
-      title: row.title,
-      source: row.source,
-      applyUrl: row.applyUrl,
-      cfpDeadline: row.cfpDeadline,
-      eventDate: row.eventDate,
-      isClosed: row.isClosed,
-    }))
-    .sort((a, b) => (b.year ?? 0) - (a.year ?? 0) || a.source.localeCompare(b.source));
 }

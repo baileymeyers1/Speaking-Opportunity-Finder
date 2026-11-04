@@ -169,7 +169,7 @@ export interface OpportunityBase<DateType> {
   alsoListedOn?: string[];
   /** Earlier years of the event, newest first. */
   previousEditions?: PreviousEdition<DateType>[];
-  /** Every stored edition of the event, newest first. Detail responses only. */
+  /** Every stored edition of the event, newest first; present when the event has more than one row. */
   eventEditions?: EventEdition<DateType>[];
 }
 
