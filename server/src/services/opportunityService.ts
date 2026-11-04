@@ -1,6 +1,8 @@
 import { prisma } from '../lib/prisma.js';
 import { AppError } from '../middleware/errorHandler.js';
 import { parseDateConfidence } from './extraction.js';
+import { assignEvents } from './eventAssignment.js';
+import { attachEventContext, listEventEditions, shadowedEditionIds } from './eventContext.js';
 import { MATCH_SORT_CANDIDATE_CAP, scoreOpportunities, type MatchProfile } from './matchScore.js';
 import {
   buildOpportunityOrderBy,
@@ -55,6 +57,10 @@ function transformOpportunity(opp: {
   dateConfidence?: string | null;
   verifiedAt?: Date | null;
   verificationError?: string | null;
+  eventId?: string | null;
+  editionYear?: number | null;
+  alsoListedOn?: string[];
+  previousEditions?: OpportunityWithDates['previousEditions'];
 }): OpportunityWithDates {
   // The database stores these as plain strings; the wire type narrows them.
   return {
@@ -64,6 +70,19 @@ function transformOpportunity(opp: {
     industries: parseJsonArray(opp.industries),
     dateConfidence: parseDateConfidence(opp.dateConfidence),
   };
+}
+
+/**
+ * The visibility `where` plus grouping by event: of an event's visible rows
+ * only the one with the nearest open deadline is listed, the rest are hidden
+ * by id (`eventContext.shadowedEditionIds`). Rows without an event are listed
+ * as they are. The hidden set is small (the duplicates), so `notIn` stays cheap.
+ */
+async function buildGroupedWhere(filters: OpportunityFilters, now: Date | undefined) {
+  const where = buildOpportunityWhere(filters, now);
+  const shadowed = await shadowedEditionIds(now);
+  if (shadowed.length > 0) where.AND = [...(Array.isArray(where.AND) ? where.AND : where.AND ? [where.AND] : []), { id: { notIn: shadowed } }];
+  return where;
 }
 
 /** Adds `matchScore` / reasons / misses when there is a profile to score against. */
@@ -93,7 +112,7 @@ export async function getOpportunities(
   options: ListOptions = {}
 ): Promise<PaginatedResponse<OpportunityWithDates>> {
   const { page = 1, pageSize = 20 } = pagination;
-  const where = buildOpportunityWhere(filters, options.now);
+  const where = await buildGroupedWhere(filters, options.now);
   const orderBy = buildOpportunityOrderBy(filters.sortBy);
   const sortByMatch = filters.sortBy === 'match' && Boolean(options.profile);
 
@@ -109,7 +128,8 @@ export async function getOpportunities(
       .map((item) => ({ item, relevance: computeSearchRelevance(item, search) }))
       .sort((a, b) => b.relevance - a.relevance)
       .map((entry) => transformOpportunity(entry.item));
-    return paginate(withMatchScores(ranked, options, sortByMatch), page, pageSize, total);
+    const result = paginate(withMatchScores(ranked, options, sortByMatch), page, pageSize, total);
+    return { ...result, items: await attachEventContext(result.items) };
   }
 
   // Best match has no column to order by: score a capped candidate set in memory.
@@ -119,7 +139,8 @@ export async function getOpportunities(
       prisma.opportunity.count({ where }),
     ]);
     const ranked = withMatchScores(candidates.map(transformOpportunity), options, true);
-    return paginate(ranked, page, pageSize, Math.min(count, MATCH_SORT_CANDIDATE_CAP));
+    const result = paginate(ranked, page, pageSize, Math.min(count, MATCH_SORT_CANDIDATE_CAP));
+    return { ...result, items: await attachEventContext(result.items) };
   }
 
   const [items, total] = await Promise.all([
@@ -128,7 +149,7 @@ export async function getOpportunities(
   ]);
 
   return {
-    items: withMatchScores(items.map(transformOpportunity), options),
+    items: await attachEventContext(withMatchScores(items.map(transformOpportunity), options)),
     total,
     page,
     pageSize,
@@ -136,6 +157,7 @@ export async function getOpportunities(
   };
 }
 
+/** One row with its event context and every edition of its event (the detail page lists them). */
 export async function getOpportunityById(id: string, options: ListOptions = {}) {
   const opportunity = await prisma.opportunity.findUnique({ where: { id } });
 
@@ -143,7 +165,8 @@ export async function getOpportunityById(id: string, options: ListOptions = {}) 
     throw new AppError(404, 'Opportunity not found');
   }
 
-  return withMatchScores([transformOpportunity(opportunity)], options)[0];
+  const [item] = await attachEventContext(withMatchScores([transformOpportunity(opportunity)], options));
+  return { ...item, eventEditions: await listEventEditions(opportunity.eventId) };
 }
 
 export interface OpportunityCreateInput {
@@ -173,7 +196,8 @@ export async function createOpportunity(data: OpportunityCreateInput) {
       industries: JSON.stringify(data.industries || []),
     },
   });
-  return transformOpportunity(opportunity);
+  const [assigned] = await assignEvents(prisma, [opportunity]);
+  return transformOpportunity({ ...opportunity, eventId: assigned?.eventId ?? null, editionYear: assigned?.editionYear ?? null });
 }
 
 export async function findByApplyUrl(applyUrl: string) {
