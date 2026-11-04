@@ -16,6 +16,24 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * Fired on `window` when any request outside `/auth/*` answers 401. The session
+ * cookie was checked once on mount, so a later logout in another tab, a cookie
+ * swap or an expiry would otherwise leave the app believing it is signed in and
+ * showing raw "Authentication required" errors. `AuthProvider` listens and
+ * clears the user, which sends protected pages back to the login screen.
+ */
+export const UNAUTHORIZED_EVENT = 'api:unauthorized';
+
+export function onUnauthorized(listener: () => void): () => void {
+  window.addEventListener(UNAUTHORIZED_EVENT, listener);
+  return () => window.removeEventListener(UNAUTHORIZED_EVENT, listener);
+}
+
+function isAuthEndpoint(endpoint: string): boolean {
+  return endpoint.startsWith('/auth/');
+}
+
 export function isRateLimitError(error: unknown): boolean {
   if (error instanceof ApiError) return error.isRateLimit;
   return error instanceof Error && error.message.toLowerCase().includes('too many');
@@ -46,6 +64,11 @@ class ApiClient {
     const responseData = await response.json();
 
     if (!response.ok) {
+      // A 401 from /auth/* is the normal "not signed in" or "wrong password" answer;
+      // anywhere else it means the session the app believes in is gone.
+      if (response.status === 401 && !isAuthEndpoint(endpoint)) {
+        window.dispatchEvent(new Event(UNAUTHORIZED_EVENT));
+      }
       throw new ApiError(responseData.error || 'An error occurred', response.status);
     }
 

@@ -11,6 +11,13 @@ import { generalLimiter, searchLimiter } from './middleware/rateLimit.js';
 
 const app = express();
 
+// Vercel terminates TLS and sets X-Forwarded-For; without this Express reports
+// the proxy's address, express-rate-limit logs a ValidationError on every
+// request and keys every client to the same bucket.
+if (process.env.VERCEL) {
+  app.set('trust proxy', 1);
+}
+
 // Security middleware
 app.use(helmet());
 app.use(
