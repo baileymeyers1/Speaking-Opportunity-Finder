@@ -18,7 +18,7 @@ import { assignEvent, type AssignmentResult } from '../services/eventAssignment.
 const DRY_RUN = process.argv.includes('--dry-run');
 const BATCH_SIZE = 200;
 const LOWEST_LINKS_SHOWN = 20;
-const DRY_RUN_TIMEOUT_MS = 10 * 60 * 1000;
+const DRY_RUN_TIMEOUT_MS = 60 * 60 * 1000; // 1826 production rows took over 10 minutes on 2026-11-04
 
 class DryRunRollback extends Error {}
 

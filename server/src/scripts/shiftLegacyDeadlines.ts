@@ -14,6 +14,7 @@ import { AOE, calendarDate, endOfDayInZone, isLegacyMidnightDeadline } from '../
  */
 
 const DRY_RUN = process.argv.includes('--dry-run');
+const WRITE_TIMEOUT_MS = 120_000;
 const BATCH_SIZE = 200;
 const SAMPLE_SIZE = 5;
 
@@ -62,7 +63,10 @@ async function main(): Promise<void> {
           where: { id: row.id },
           data: { cfpDeadline: endOfDayInZone(calendarDate(row.cfpDeadline!), AOE), deadlineTimezone: AOE },
         })
-      )
+      ),
+      // A remote database adds tens of milliseconds per statement; Prisma's
+      // default 5s transaction timeout rolled a 379-row run back on 2026-11-04.
+      { timeout: WRITE_TIMEOUT_MS, maxWait: 10_000 }
     );
     updated += batch.length;
     console.log(`  updated ${updated}/${legacy.length}`);

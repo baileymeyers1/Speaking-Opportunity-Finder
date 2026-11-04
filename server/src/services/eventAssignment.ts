@@ -55,7 +55,7 @@ export interface AssignmentResult {
 }
 
 const CANDIDATE_LIMIT = 200;
-const SLUG_RETRIES = 5;
+const SLUG_RETRIES = 50;
 
 type CandidateEvent = Prisma.EventGetPayload<{
   include: { editions: { select: { title: true; organization: true; applyUrl: true; eventDate: true; location: true } } };
@@ -106,6 +106,21 @@ function isUniqueViolation(error: unknown): boolean {
   return error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002';
 }
 
+/**
+ * Slugs to try, most specific first: the title alone, then the title with the
+ * organizer or the site's domain label (generic titles such as "Annual
+ * Conference" recur across many organizers), then numeric suffixes.
+ */
+function slugCandidates(row: AssignableOpportunity, baseSlug: string): string[] {
+  const domainLabel = eventDomain(row.applyUrl)?.split('.')[0] ?? null;
+  const qualifiers = [organizerOf(row), domainLabel]
+    .map((value) => (value ? slugify(value) : ''))
+    .filter((value) => value && !baseSlug.includes(value));
+  const named = [...new Set(qualifiers)].map((qualifier) => `${baseSlug}-${qualifier}`);
+  const numbered = Array.from({ length: SLUG_RETRIES }, (_, index) => `${baseSlug}-${index + 2}`);
+  return [baseSlug, ...named, ...numbered];
+}
+
 async function createEvent(db: EventDb, row: AssignableOpportunity, now: Date): Promise<{ id: string } | 'collision'> {
   const baseSlug = slugify(row.title);
   const data = {
@@ -117,23 +132,29 @@ async function createEvent(db: EventDb, row: AssignableOpportunity, now: Date): 
     firstSeenAt: now,
     lastSeenAt: now,
   };
-  for (let attempt = 0; attempt < SLUG_RETRIES; attempt++) {
-    const slug = attempt === 0 ? baseSlug : `${baseSlug}-${attempt + 1}`;
+  const candidates = slugCandidates(row, baseSlug);
+  for (let attempt = 0; attempt < candidates.length; attempt++) {
+    const slug = candidates[attempt];
+    // Look before inserting: a unique violation inside a Postgres transaction
+    // aborts the whole transaction (25P02), so the backfill's dry run cannot
+    // recover from one. The catch below only covers a concurrent insert that
+    // lands between the lookup and the create, outside any transaction.
+    const taken = await db.event.findUnique({
+      where: { slug },
+      include: { editions: { select: { title: true, organization: true, applyUrl: true, eventDate: true, location: true } } },
+    });
+    if (taken) {
+      // The slug belongs to the same event: link to it instead of suffixing.
+      if (attempt === 0 && scoreAgainstEvent(asCandidate(row), taken) >= AUTO_LINK_SCORE) return 'collision';
+      continue;
+    }
     try {
       return await db.event.create({ data: { ...data, slug }, select: { id: true } });
     } catch (error) {
       if (!isUniqueViolation(error)) throw error;
-      // Another insert took this slug: if it is the same event, link to it instead of suffixing.
-      if (attempt === 0) {
-        const taken = await db.event.findUnique({
-          where: { slug },
-          include: { editions: { select: { title: true, organization: true, applyUrl: true, eventDate: true, location: true } } },
-        });
-        if (taken && scoreAgainstEvent(asCandidate(row), taken) >= AUTO_LINK_SCORE) return 'collision';
-      }
     }
   }
-  throw new Error(`Could not find a free slug for event "${baseSlug}" after ${SLUG_RETRIES} attempts`);
+  throw new Error(`Could not find a free slug for event "${baseSlug}" after ${candidates.length} attempts`);
 }
 
 async function linkToEvent(db: EventDb, row: AssignableOpportunity, event: CandidateEvent, now: Date): Promise<void> {
