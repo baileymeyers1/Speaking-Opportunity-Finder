@@ -43,6 +43,7 @@ async function reset() {
   await prisma.event.deleteMany({ where: { slug: { startsWith: 'bsides-rocket-city' } } });
   await prisma.event.deleteMany({ where: { slug: { startsWith: 'react-summit' } } });
   await prisma.event.deleteMany({ where: { slug: { startsWith: 'fosdem' } } });
+  await prisma.event.deleteMany({ where: { slug: { startsWith: 'global-conference-on-business' } } });
 }
 
 describe('assignEvent against Postgres', () => {
@@ -111,6 +112,22 @@ describe('assignEvent against Postgres', () => {
     expect(stored.possibleEventScore).toBeCloseTo(second.score, 3);
     const events = await prisma.event.findMany({ where: { slug: { startsWith: 'react-summit' } }, orderBy: { slug: 'asc' } });
     expect(events.map((e) => e.slug)).toEqual(['react-summit', 'react-summit-asia']);
+  });
+
+  it('gives two same-named conferences in different cities separate events with distinct slugs, inside a transaction too', async () => {
+    const la = await storeRow({ title: '187th Global Conference on Business Management and Economics (GCBME)', applyUrl: 'https://globalconference.example/187th', eventDate: '2026-12-05', location: 'Los Angeles, California, United States', organization: 'Global Conference Alliance Inc.' });
+    const honolulu = await storeRow({ title: '189th Global Conference on Business Management and Economics (GCBME)', applyUrl: 'https://globalconference.example/189th', eventDate: '2027-01-30', location: 'Honolulu, Hawaii, United States', organization: 'Global Conference Alliance Inc.' });
+    const results = await prisma.$transaction(async (tx) => [await assignEvent(tx, la, now), await assignEvent(tx, honolulu, now)]);
+
+    expect(results[0].outcome).toBe('created');
+    expect(results[1].outcome).toBe('created-possible');
+    expect(results[1].possibleEventId).toBe(results[0].eventId);
+    const events = await prisma.event.findMany({ where: { slug: { startsWith: 'global-conference-on-business' } }, orderBy: { slug: 'asc' } });
+    // The second slug is qualified with the organizer before any numeric suffix (slugCandidates).
+    expect(events.map((e) => e.slug)).toEqual([
+      'global-conference-on-business-management-and-economics-gcbme',
+      'global-conference-on-business-management-and-economics-gcbme-global-conference-alliance-inc',
+    ]);
   });
 
   it('gives a row with no usable name no event, only an edition year', async () => {

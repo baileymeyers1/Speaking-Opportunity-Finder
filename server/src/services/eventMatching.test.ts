@@ -2,7 +2,10 @@ import { describe, it, expect } from 'vitest';
 import {
   AUTO_LINK_SCORE,
   REVIEW_SCORE,
+  autoLinkObjection,
   classifyScore,
+  distinctiveTokens,
+  parenthesisedAcronyms,
   deriveEditionYear,
   displayName,
   isHostingDomain,
@@ -131,6 +134,56 @@ describe('nameSimilarity', () => {
   });
 });
 
+describe('parenthesisedAcronyms and distinctiveTokens', () => {
+  it('reads acronyms out of parentheses without their year', () => {
+    expect(parenthesisedAcronyms('2026 4th International Conference on Power and Renewable Energy Engineering (PREE 2026)')).toEqual(['PREE']);
+    expect(parenthesisedAcronyms('European Power Platform Conference (EPPC27)')).toEqual(['EPPC']);
+    expect(parenthesisedAcronyms('Global Gaming Expo (G2E)')).toEqual(['G2E']);
+    expect(parenthesisedAcronyms('The WEI International Academic Conference (WEI-TSE-Miami 2027)')).toEqual(['WEI-TSE-MIAMI']);
+    expect(parenthesisedAcronyms('SecretCon 5 (2027)')).toEqual([]);
+    expect(parenthesisedAcronyms('.NET Conf 2026 Pune (In-Person)')).toEqual([]);
+  });
+
+  it('keeps only the words that tell events apart', () => {
+    expect(distinctiveTokens('Law Conferences in California 2026-2027')).toEqual(['law', 'california']);
+    expect(distinctiveTokens('Annual Conference')).toEqual([]);
+    expect(distinctiveTokens('DynamicsCon Regional: Midwest USA 2027')).toEqual(['dynamicscon', 'midwest']);
+  });
+});
+
+describe('autoLinkObjection', () => {
+  const [, law, medical] = DIFFERENT_EVENT_PAIRS.find(([label]) => label.startsWith('Directory rows: Law'))!;
+  const [, pree, repe] = DIFFERENT_EVENT_PAIRS.find(([label]) => label.startsWith('PREE'))!;
+  const [, adoh, hybrid] = DIFFERENT_EVENT_PAIRS.find(([label]) => label.startsWith('ADOH'))!;
+  const [, annual, caa] = DIFFERENT_EVENT_PAIRS.find(([label]) => label.startsWith('"Annual'))!;
+  const [, aws, cordoba] = DIFFERENT_EVENT_PAIRS.find(([label]) => label.startsWith('AWS Student'))!;
+
+  it('names what is wrong with each production false positive', () => {
+    expect(autoLinkObjection(law, medical)).toBe('distinctive words differ');
+    expect(autoLinkObjection(pree, repe)).toBe('acronyms differ');
+    expect(autoLinkObjection(adoh, hybrid)).toMatch(/^extra words: /);
+    expect(autoLinkObjection(annual, caa)).toBe('nothing distinctive');
+    expect(autoLinkObjection(aws, cordoba)).toBe('cities differ');
+  });
+
+  it('accepts an extra word that names the place or the acronym of the same event', () => {
+    const [, ninjas, norway] = SAME_EVENT_PAIRS.find(([label]) => label.startsWith('Workplace Ninjas'))!;
+    const [, g2e, gaming] = SAME_EVENT_PAIRS.find(([label]) => label.startsWith('Global Gaming'))!;
+    const [, midwest, midwestUsa] = [
+      '',
+      row('DynamicsCon Regional Midwest 2027', 'https://sessionize.com/dynamicscon-regional-midwest-USA/', '2027-08-31', { location: 'Columbus, OH (USA)' }),
+      row('DynamicsCon Regional: Midwest USA 2027', 'https://www.eventbrite.com/e/dynamicscon-regional-midwest-usa-tickets-2000484907209', '2027-08-31', { location: 'Columbus, Ohio, United States' }),
+    ];
+    expect(autoLinkObjection(ninjas, norway)).toBeNull();
+    expect(autoLinkObjection(g2e, gaming)).toBeNull();
+    expect(autoLinkObjection(midwest, midwestUsa)).toBeNull();
+  });
+
+  it('lets a city edition link when the other row does not say where it is', () => {
+    expect(autoLinkObjection({ ...aws, location: null }, cordoba)).toBeNull();
+  });
+});
+
 describe('scoreCandidate', () => {
   it.each(SAME_EVENT_PAIRS)('links %s', (_label, a, b) => {
     const score = scoreCandidate(a, b);
@@ -195,6 +248,12 @@ describe('scoreCandidate', () => {
     expect(nameSimilarity(a.title, b.title)).toBeLessThan(0.7);
     // Same organizer, same site, same city, a month apart: still only a review candidate.
     expect(classifyScore(scoreCandidate(a, b))).toBe('review');
+  });
+
+  it('keeps the production false positives in the review band for the admin list', () => {
+    for (const [label, a, b] of DIFFERENT_EVENT_PAIRS.filter(([l]) => /^(Directory rows|PREE|Renewable|ADOH|"Annual|AWS Student)/.test(l))) {
+      expect(classifyScore(scoreCandidate(a, b)), label).toBe('review');
+    }
   });
 
   it('has a review band between the two thresholds', () => {

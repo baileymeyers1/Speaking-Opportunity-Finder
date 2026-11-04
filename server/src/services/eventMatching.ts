@@ -47,6 +47,16 @@ const FILLER_TOKENS = new Set([
 ]);
 
 /**
+ * Tokens that never identify an event on their own: generic words plus the
+ * name-shaped filler of directory pages ("Law Conferences in California").
+ * `distinctiveTokens` drops them before the auto-link gate compares names.
+ */
+const NON_DISTINCTIVE_TOKENS = new Set([
+  'conferences', 'expo', 'exhibition', 'congress', 'meeting', 'seminar', 'symposia', 'workshops', 'conf',
+  'academic', 'scientific', 'research', 'professional', 'regional', 'state', 'usa', 'us', 'uk', 'eu',
+]);
+
+/**
  * Tokens too common to find candidates by: they stay in the name (so
  * "Cloud Native Summit" and "Cloud Native Valencia" still differ) but an
  * overlap on them alone pulls in half the catalogue.
@@ -64,6 +74,11 @@ const HOSTING_DOMAINS = new Set([
   'luma.com', 'lu.ma', 'community.dev', 'advocu.com', 'conference-hall.io', 'wikicfp.com', 'linuxfoundation.org',
   'gitnation.com', 'cfp.dev', 'devopsdays.org', 'papercall.io', 'hopin.com', 'bevy.com', 'confs.tech',
   'callingallpapers.com', 'developers.events', 'conferencealerts.com', 'easychair.org', 'openreview.net',
+  // Conference directories: one site, thousands of unrelated events.
+  'allconferencealert.com', 'conferencealert.com', 'internationalconferencealerts.com', 'conferenceindex.org',
+  'conferencenext.com', 'conference-service.com', 'conferencelists.org', 'academicconferences.org',
+  'allconferences.com', 'clocate.com', '10times.com', 'waset.org', 'scholarsconferences.com', 'conferenceseries.com',
+  'eventsget.com', 'papercrowd.com', 'conferencealerts.co.uk', 'wikicfp.org',
   'cvent.com', 'ti.to', 'tito.io', 'google.com', 'forms.gle', 'typeform.com', 'airtable.com', 'notion.site',
   'notion.so', 'linkedin.com', 'facebook.com', 'x.com', 'twitter.com', 'youtube.com', 'github.com', 'github.io',
   'ieee.org', 'acm.org', 'hubspot.com', 'hsforms.com', 'jotform.com', 'swoogo.com', 'bizzabo.com', 'vfairs.com',
@@ -119,6 +134,30 @@ export function nameTokens(title: string): string[] {
 /** The tokens worth looking candidates up by: name tokens without the generic ones. */
 export function lookupTokens(title: string): string[] {
   return nameTokens(title).filter((token) => !GENERIC_TOKENS.has(token) && token.length > 1);
+}
+
+/** The tokens that actually tell one event from another: no generic, directory or listing words. */
+export function distinctiveTokens(title: string): string[] {
+  return lookupTokens(title).filter((token) => !NON_DISTINCTIVE_TOKENS.has(token));
+}
+
+const ACRONYM_PATTERN = /\(([A-Z][A-Za-z0-9&-]{1,14}?)\s*(?:'?\d{2,4})?\)/g;
+
+/**
+ * Acronyms written in parentheses, uppercased and without a trailing year:
+ * "(PREE 2026)" → "PREE", "(EPPC27)" → "EPPC", "(WEI-TSE-Miami 2027)" → "WEI-TSE-MIAMI".
+ * The strongest identity signal an academic title carries.
+ */
+export function parenthesisedAcronyms(title: string): string[] {
+  const found = new Set<string>();
+  for (const match of title.matchAll(ACRONYM_PATTERN)) {
+    const raw = match[1].replace(/\d+$/, '');
+    // Mostly capitals: "(In-Person)" is a note, "(WEI-TSE-Miami)" an acronym.
+    const letters = raw.replace(/[^A-Za-z0-9]/g, '');
+    const capitals = letters.replace(/[^A-Z0-9]/g, '').length;
+    if (letters.length >= 2 && capitals * 2 >= letters.length) found.add(raw.toUpperCase());
+  }
+  return [...found];
 }
 
 /** `normalizeEventName` joined with hyphens, for `Event.slug`. */
@@ -210,6 +249,68 @@ export function nameSimilarity(a: string, b: string): number {
 
 const LOCATION_FILLER = new Set(['the', 'of', 'and', 'online', 'remote', 'virtual', 'hybrid', 'tbd', 'tba']);
 
+/** Tokens a location may carry for a name token that spells the place differently. */
+const PLACE_SYNONYMS: Record<string, string[]> = {
+  usa: ['united', 'states', 'us', 'america'],
+  us: ['united', 'states', 'usa'],
+  uk: ['united', 'kingdom', 'britain', 'england'],
+  czechia: ['czech'],
+  holland: ['netherlands'],
+};
+
+/** Every token of a location, for checking whether a name token names the place. */
+function locationTokens(location: string | null): Set<string> {
+  if (!location) return new Set();
+  return new Set(fold(location).replace(/[^a-z0-9]+/g, ' ').split(' ').filter((t) => t.length >= 2));
+}
+
+function placeExplains(token: string, locations: Set<string>): boolean {
+  if (locations.has(token)) return true;
+  return (PLACE_SYNONYMS[token] ?? []).some((alias) => locations.has(alias));
+}
+
+/** Words a location shares with every other location in the same country; never evidence of the same place. */
+const COUNTRY_TOKENS = new Set(['united', 'states', 'usa', 'us', 'america', 'kingdom', 'uk', 'republic', 'federation']);
+
+/**
+ * Whether both rows say where they are and share no place word at all. The
+ * whole location counts, not just its first part: Sessionize puts the venue
+ * first ("Moscone Convention Center, San Francisco, California").
+ */
+function citiesDisagree(a: string | null, b: string | null): boolean {
+  const ta = new Set([...locationTokens(a)].filter((t) => t.length >= 3 && !LOCATION_FILLER.has(t) && !COUNTRY_TOKENS.has(t)));
+  const tb = new Set([...locationTokens(b)].filter((t) => t.length >= 3 && !LOCATION_FILLER.has(t) && !COUNTRY_TOKENS.has(t)));
+  return ta.size > 0 && tb.size > 0 && intersectionSize(ta, tb) === 0;
+}
+
+/**
+ * Why a pair may not auto-link however high its score, or null when it may:
+ * the names must agree on what is distinctive. The shorter name's distinctive
+ * tokens must all appear in the longer one; every extra token of the longer
+ * name must be explained (an acronym it carries, or the place either row is
+ * in); parenthesised acronyms must not contradict; the cities must not
+ * differ. The score still lands in the review band, so the admin list shows it.
+ */
+export function autoLinkObjection(a: MatchCandidate, b: MatchCandidate): string | null {
+  const acronymsA = parenthesisedAcronyms(a.title);
+  const acronymsB = parenthesisedAcronyms(b.title);
+  if (acronymsA.length && acronymsB.length && !acronymsA.some((x) => acronymsB.includes(x))) return 'acronyms differ';
+  if (citiesDisagree(a.location, b.location)) return 'cities differ';
+
+  const ta = distinctiveTokens(a.title);
+  const tb = distinctiveTokens(b.title);
+  const [shorter, longer] = ta.length <= tb.length ? [ta, tb] : [tb, ta];
+  if (shorter.length === 0) return 'nothing distinctive';
+  const longerSet = new Set(longer);
+  if (!shorter.every((token) => longerSet.has(token))) return 'distinctive words differ';
+
+  const shorterSet = new Set(shorter);
+  const acronyms = new Set([...acronymsA, ...acronymsB].map((x) => x.toLowerCase().replace(/[^a-z0-9]/g, '')));
+  const places = new Set([...locationTokens(a.location), ...locationTokens(b.location)]);
+  const unexplained = longer.filter((token) => !shorterSet.has(token) && !acronyms.has(token) && !placeExplains(token, places));
+  return unexplained.length > 0 ? `extra words: ${unexplained.join(', ')}` : null;
+}
+
 /** The city part of a location: what comes before the first comma or bracket. */
 function cityTokens(location: string): Set<string> {
   const city = fold(location).split(/[,([|/]/)[0];
@@ -251,7 +352,8 @@ function domainSignal(a: string, b: string): number {
  * both have different sites of their own), the organizer (+0.05), the event
  * dates (+0.1 within 45 days, +0.07 about a whole number of years apart,
  * −0.05 otherwise) and the city (±0.05) adjust it. A name below
- * `AUTO_NAME_FLOOR` is capped just under the auto-link threshold.
+ * `AUTO_NAME_FLOOR`, or a pair `autoLinkObjection` rejects, is capped just
+ * under the auto-link threshold.
  */
 export function scoreCandidate(a: MatchCandidate, b: MatchCandidate): number {
   const name = nameSimilarity(a.title, b.title);
@@ -261,6 +363,6 @@ export function scoreCandidate(a: MatchCandidate, b: MatchCandidate): number {
   if (nameSimilarity(a.organization ?? '', b.organization ?? '') >= 0.8) score += 0.05;
   score += dateSignal(a.eventDate, b.eventDate);
   score += locationSignal(a.location, b.location);
-  if (name < AUTO_NAME_FLOOR) score = Math.min(score, AUTO_LINK_SCORE - 0.01);
+  if (name < AUTO_NAME_FLOOR || autoLinkObjection(a, b) !== null) score = Math.min(score, AUTO_LINK_SCORE - 0.01);
   return Math.round(Math.min(1, Math.max(0, score)) * 1000) / 1000;
 }
