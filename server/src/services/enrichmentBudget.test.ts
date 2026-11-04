@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { utcDateKey, isClaimStale, CLAIM_STALE_MS } from './enrichmentBudget.js';
+import { utcDateKey, isClaimStale, CLAIM_STALE_MS, parseDailyLimit } from './enrichmentBudget.js';
 
 describe('utcDateKey', () => {
   it('uses the UTC calendar day', () => {
@@ -25,5 +25,23 @@ describe('isClaimStale', () => {
 
   it('treats a claim older than the stale window as abandoned', () => {
     expect(isClaimStale(new Date(now.getTime() - CLAIM_STALE_MS - 1), now)).toBe(true);
+  });
+});
+
+describe('parseDailyLimit', () => {
+  it('falls back to the default when unset or blank', () => {
+    expect(parseDailyLimit(undefined)).toBe(600);
+    expect(parseDailyLimit('   ')).toBe(600);
+  });
+
+  it('accepts a positive integer', () => {
+    expect(parseDailyLimit('250')).toBe(250);
+  });
+
+  it('rejects zero, negatives, fractions and junk', () => {
+    expect(parseDailyLimit('0')).toBe(600);
+    expect(parseDailyLimit('-5')).toBe(600);
+    expect(parseDailyLimit('12.5')).toBe(600);
+    expect(parseDailyLimit('lots')).toBe(600);
   });
 });
