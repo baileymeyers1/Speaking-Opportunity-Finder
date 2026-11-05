@@ -14,16 +14,16 @@ const STOPWORDS = new Set([
   'of', 'on', 'or', 'the', 'to', 'with', 'about', 'how', 'what', 'who', 'my', 'our', 'your',
 ]);
 
-/** Characters that count as part of a word when checking word boundaries. */
-const WORD_CHAR = 'a-z0-9';
+/** Characters that count as part of a word when checking word boundaries: any letter or digit, accented ones included. */
+const WORD_CHAR = '\\p{L}\\p{N}';
 
 export function searchTerms(query: string): string[] {
   const terms = query
     .toLowerCase()
     .split(/\s+/)
     // Strip punctuation at the edges but keep symbols inside or leading a term (c++, .net, node.js).
-    .map((word) => word.replace(/^[^a-z0-9.#+]+|[^a-z0-9#+]+$/g, ''))
-    .filter((word) => word.length > 0 && /[a-z0-9]/.test(word) && !STOPWORDS.has(word));
+    .map((word) => word.replace(/^[^\p{L}\p{N}.#+]+|[^\p{L}\p{N}#+]+$/gu, ''))
+    .filter((word) => word.length > 0 && /[\p{L}\p{N}]/u.test(word) && !STOPWORDS.has(word));
   return [...new Set(terms)];
 }
 
@@ -37,7 +37,7 @@ function termPattern(term: string): RegExp {
   let pattern = patternCache.get(term);
   if (!pattern) {
     const end = term.length <= 3 ? `(?![${WORD_CHAR}])` : '';
-    pattern = new RegExp(`(?<![${WORD_CHAR}])${escapeRegExp(term)}${end}`, 'i');
+    pattern = new RegExp(`(?<![${WORD_CHAR}])${escapeRegExp(term)}${end}`, 'iu');
     patternCache.set(term, pattern);
   }
   return pattern;

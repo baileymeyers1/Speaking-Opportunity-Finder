@@ -14,6 +14,10 @@ describe('searchTerms', () => {
     expect(searchTerms('C++ and .NET')).toEqual(['c++', '.net']);
   });
 
+  it('keeps accented letters', () => {
+    expect(searchTerms('Café Tech, Zürich')).toEqual(['café', 'tech', 'zürich']);
+  });
+
   it('returns nothing for a query made only of stopwords', () => {
     expect(searchTerms('for the and')).toEqual([]);
   });
@@ -25,6 +29,13 @@ describe('termMatches', () => {
     expect(termMatches('ai', 'He said the retail summit')).toBe(false);
     expect(termMatches('pr', 'April product launch')).toBe(false);
     expect(termMatches('pr', 'The PR Week awards')).toBe(true);
+  });
+
+  it('treats accented letters as part of the word', () => {
+    expect(termMatches('pr', 'buenas prácticas')).toBe(false);
+    expect(termMatches('ai', 'Développeurs à Paris')).toBe(false);
+    expect(termMatches('ia', 'agentes de IA')).toBe(true);
+    expect(termMatches('café', 'Le Café Tech')).toBe(true);
   });
 
   it('lets a longer term match the start of a word (plurals, -er)', () => {
