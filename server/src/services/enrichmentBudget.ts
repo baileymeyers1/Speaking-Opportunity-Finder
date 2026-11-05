@@ -87,29 +87,59 @@ export async function getTodayEnrichmentCount(prisma: PrismaClient, now: Date = 
  * Returns the row with `enrichmentAttempts` already incremented.
  */
 export async function claimNextUnenriched(prisma: PrismaClient, now: Date = new Date()) {
-  const staleBefore = new Date(now.getTime() - CLAIM_STALE_MS);
-
   const candidates = await prisma.opportunity.findMany({
-    where: {
-      enrichmentStatus: null,
-      enrichmentAttempts: { lt: MAX_ENRICHMENT_ATTEMPTS },
-      OR: [{ enrichmentClaimedAt: null }, { enrichmentClaimedAt: { lt: staleBefore } }],
-    },
+    where: claimableWhere(now),
     orderBy: { createdAt: 'desc' },
     take: 5,
   });
 
   for (const candidate of candidates) {
-    const claimed = await prisma.opportunity.updateMany({
-      where: { id: candidate.id, enrichmentClaimedAt: candidate.enrichmentClaimedAt },
-      data: { enrichmentClaimedAt: now, enrichmentAttempts: { increment: 1 } },
-    });
-    if (claimed.count === 1) {
-      return { ...candidate, enrichmentClaimedAt: now, enrichmentAttempts: candidate.enrichmentAttempts + 1 };
-    }
+    const claimed = await tryClaim(prisma, candidate, now);
+    if (claimed) return claimed;
   }
 
   return null;
+}
+
+/**
+ * Claim these rows for enrichment now (a live search reading hits an earlier
+ * search stored). Same lock and attempt counter as `claimNextUnenriched`, so a
+ * row the worker holds is skipped and no row is read twice.
+ */
+export async function claimUnenrichedByIds(prisma: PrismaClient, ids: readonly string[], now: Date = new Date()) {
+  if (ids.length === 0) return [];
+  const candidates = await prisma.opportunity.findMany({
+    where: { ...claimableWhere(now), id: { in: [...ids] } },
+  });
+  const claimed = [];
+  for (const candidate of candidates) {
+    const row = await tryClaim(prisma, candidate, now);
+    if (row) claimed.push(row);
+  }
+  return claimed;
+}
+
+function claimableWhere(now: Date) {
+  const staleBefore = new Date(now.getTime() - CLAIM_STALE_MS);
+  return {
+    enrichmentStatus: null,
+    enrichmentAttempts: { lt: MAX_ENRICHMENT_ATTEMPTS },
+    OR: [{ enrichmentClaimedAt: null }, { enrichmentClaimedAt: { lt: staleBefore } }],
+  };
+}
+
+/** Optimistic claim keyed on the previous `enrichmentClaimedAt`; null when another worker won. */
+async function tryClaim<Row extends { id: string; enrichmentClaimedAt: Date | null; enrichmentAttempts: number }>(
+  prisma: PrismaClient,
+  candidate: Row,
+  now: Date
+): Promise<Row | null> {
+  const claimed = await prisma.opportunity.updateMany({
+    where: { id: candidate.id, enrichmentClaimedAt: candidate.enrichmentClaimedAt },
+    data: { enrichmentClaimedAt: now, enrichmentAttempts: { increment: 1 } },
+  });
+  if (claimed.count !== 1) return null;
+  return { ...candidate, enrichmentClaimedAt: now, enrichmentAttempts: candidate.enrichmentAttempts + 1 };
 }
 
 /** Undo a claim without consuming an attempt (used when the budget is exhausted). */

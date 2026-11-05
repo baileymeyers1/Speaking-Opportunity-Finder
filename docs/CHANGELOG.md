@@ -2,6 +2,14 @@
 
 Reverse chronological. Current state lives in `docs/STATUS.md`.
 
+## 2026-11-05 — Live search reads waiting hits and explains short results
+
+- A repeat "AI for PR" search in production found 26 pages: 25 already stored, 1 new whose page did not load. It used 1 of its 8 in-request reads, left 3 hits from earlier searches unread and told the user to wait an hour.
+- Spare in-request reads now go to hits an earlier search stored but nobody has read. `claimUnenrichedByIds` (enrichmentBudget.ts) shares the worker's optimistic claim and attempt counter; `enrichRowsNow` runs the worker's per-row step (`enrichClaimedRow`, split out of `processNextUnenriched`) under the daily budget. Locally a repeat search read 8 waiting hits in the request.
+- The response lists unread hits by title and URL (`pendingLiveHits`) and says how many pages were found and how many are not open calls (`liveFoundCount`, `liveNotOpenCount`). `LiveSearchSummary` shows both; the unread list is collapsible and marked unchecked. The "within the hour" notice is gone.
+- PR #16 the same day: word boundaries and query tokens use Unicode letters, so "pr" no longer matches "prácticas".
+- Tests: server 411 → 414.
+
 ## 2026-11-05 — Live search: show checked results, accumulate across searches
 
 - Diagnosis (production logs, "AI for PR" with a profile, 15:15 and 15:19 UTC): both runs returned the same 50 hits (run 2: "0 new, 50 already stored"); only the top 8 per run were read by Claude, so 42 cards carried snippet-only fields ("Date TBD", "Location TBD"). Run 1 sorted by match, which ranks text-heavy listicles high because unknown location/pay drop out of the score; run 2 sorted by deadline (all null), which falls back to quality order. Run 2 re-extracted 8 pages already read 4 minutes earlier and showed the snippet copy of rows instead of the stored, enriched ones.

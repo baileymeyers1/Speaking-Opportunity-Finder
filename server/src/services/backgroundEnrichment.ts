@@ -7,6 +7,7 @@ import { computeQualityScore, type ScraperResult } from '../scrapers/qualityScor
 import {
   claimNextForVerification,
   claimNextUnenriched,
+  claimUnenrichedByIds,
   getTodayEnrichmentCount,
   MAX_ENRICHMENT_ATTEMPTS,
   releaseClaim,
@@ -14,6 +15,7 @@ import {
   releaseVerificationClaim,
   reserveEnrichmentSlot,
 } from './enrichmentBudget.js';
+import { mapWithConcurrency } from '../scrapers/lib/html.js';
 import { buildGoneUpdate, buildVerificationErrorUpdate, buildVerificationUpdate } from './verification.js';
 
 /**
@@ -137,14 +139,37 @@ async function processNextUnenriched(): Promise<WorkerOutcome> {
     return 'none';
   }
 
-  let opportunity: OpportunityRow | null = null;
+  let opportunity: OpportunityRow | null;
   try {
     opportunity = await claimNextUnenriched(prisma);
-    if (!opportunity) {
-      console.log('Background enrichment: No unenriched opportunities found');
-      return 'none';
-    }
+  } catch (error) {
+    console.error('Background enrichment error:', error);
+    state.failed++;
+    return 'processed';
+  }
+  if (!opportunity) {
+    console.log('Background enrichment: No unenriched opportunities found');
+    return 'none';
+  }
+  return enrichClaimedRow(opportunity);
+}
 
+/**
+ * Enrich unenriched rows right now (a live search reading hits an earlier
+ * search stored), under the same claims, attempt counter and daily budget as
+ * the worker. A row the worker already holds is skipped. Returns how many
+ * rows were claimed.
+ */
+export async function enrichRowsNow(ids: readonly string[], concurrency: number = 8): Promise<number> {
+  if (!config.claude.apiKey || ids.length === 0) return 0;
+  const claimed = await claimUnenrichedByIds(prisma, ids);
+  await mapWithConcurrency(claimed, concurrency, (row) => enrichClaimedRow(row));
+  return claimed.length;
+}
+
+/** Read one claimed row's page and enrich it; failures are recorded on the row. */
+async function enrichClaimedRow(opportunity: OpportunityRow): Promise<WorkerOutcome> {
+  try {
     const scraperResult = toScraperResult(opportunity);
     const page = await fetchPageText(opportunity.applyUrl);
     const plan = planEnrichment(scraperResult, page);
@@ -242,16 +267,12 @@ async function processNextUnenriched(): Promise<WorkerOutcome> {
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
     console.error('Background enrichment error:', error);
-    if (opportunity) {
-      try {
-        const outcome = await recordFailure(opportunity, message);
-        if (outcome === 'retry') state.retried++;
-        else state.failed++;
-      } catch (writeError) {
-        console.error('[BackgroundEnrichment] Could not record failure:', writeError);
-      }
-    } else {
-      state.failed++;
+    try {
+      const outcome = await recordFailure(opportunity, message);
+      if (outcome === 'retry') state.retried++;
+      else state.failed++;
+    } catch (writeError) {
+      console.error('[BackgroundEnrichment] Could not record failure:', writeError);
     }
     return 'processed';
   }

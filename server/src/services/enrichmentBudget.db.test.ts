@@ -2,7 +2,9 @@ import { describe, it, expect, beforeEach, afterAll } from 'vitest';
 import { prisma } from '../lib/prisma.js';
 import {
   claimNextUnenriched,
+  claimUnenrichedByIds,
   getTodayEnrichmentCount,
+  MAX_ENRICHMENT_ATTEMPTS,
   releaseEnrichmentSlot,
   reserveEnrichmentSlot,
   utcDateKey,
@@ -60,5 +62,30 @@ describe('enrichment budget against Postgres', () => {
     const stored = await prisma.opportunity.findUniqueOrThrow({ where: { id: row.id } });
     expect(stored.enrichmentClaimedAt?.toISOString()).toBe(now.toISOString());
     expect(stored.enrichmentAttempts).toBe(1);
+  });
+
+  it('claims named rows for a live search, skipping rows another worker holds or that are done', async () => {
+    const free = await prisma.opportunity.create({ data: opportunityRow('free') });
+    const held = await prisma.opportunity.create({ data: { ...opportunityRow('held'), enrichmentClaimedAt: now } });
+    const done = await prisma.opportunity.create({ data: { ...opportunityRow('done'), enrichmentStatus: 'enriched' } });
+    const exhausted = await prisma.opportunity.create({
+      data: { ...opportunityRow('exhausted'), enrichmentAttempts: MAX_ENRICHMENT_ATTEMPTS },
+    });
+
+    const claimed = await claimUnenrichedByIds(prisma, [free.id, held.id, done.id, exhausted.id], now);
+    expect(claimed.map((row) => row.id)).toEqual([free.id]);
+    expect(claimed[0].enrichmentAttempts).toBe(1);
+
+    // The worker cannot take it now, and neither can a second search.
+    expect(await claimNextUnenriched(prisma, now)).toBeNull();
+    expect(await claimUnenrichedByIds(prisma, [free.id], now)).toEqual([]);
+  });
+
+  it('takes over a stale claim', async () => {
+    const stale = await prisma.opportunity.create({
+      data: { ...opportunityRow('stale'), enrichmentClaimedAt: new Date(now.getTime() - 60 * 60 * 1000) },
+    });
+    const claimed = await claimUnenrichedByIds(prisma, [stale.id], now);
+    expect(claimed.map((row) => row.id)).toEqual([stale.id]);
   });
 });
