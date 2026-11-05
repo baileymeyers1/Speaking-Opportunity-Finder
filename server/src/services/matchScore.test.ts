@@ -65,6 +65,14 @@ describe('topicMatches', () => {
 });
 
 describe('computeMatchScore', () => {
+  it('scores an event with no open call lower and says why', () => {
+    const open = computeMatchScore(profile({ topics: ['ai'] }), candidate({ industries: ['ai'] }), NOW);
+    const noCall = computeMatchScore(profile({ topics: ['ai'] }), candidate({ industries: ['ai'], hasOpenCall: false }), NOW);
+    expect(noCall.score).toBe(open.score - 15);
+    expect(noCall.misses).toContain('no open call found');
+    expect(computeMatchScore(profile(), candidate({ hasOpenCall: null }), NOW).misses).not.toContain('no open call found');
+  });
+
   it('scores a profile whose topics, city, pay and format all fit near the top', () => {
     const result = computeMatchScore(denverSpeaker, candidate(), NOW);
     expect(result.score).toBeGreaterThanOrEqual(85);

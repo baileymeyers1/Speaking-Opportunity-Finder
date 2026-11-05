@@ -40,6 +40,7 @@ function extraction(overrides: Partial<ExtractionResult> = {}): ExtractionResult
     isRemote: false,
     isClosed: false,
     isRelevant: true,
+    hasOpenCall: true,
     compensationType: null,
     compensationAmount: null,
     format: 'conference',
@@ -124,8 +125,18 @@ describe('buildLiveCreateData', () => {
     expect(data.verifiedAt).toBeNull();
     expect(data.isClosed).toBe(false);
     expect(data.isRelevant).toBe(true);
+    expect(data.hasOpenCall).toBeNull();
     expect(data.dateConfidence).toBeNull();
     expect(data.industries).toBe('[]');
+  });
+
+  it('stores an event read without a call for speakers as relevant and flagged', () => {
+    const result = makeResult();
+    applyExtractionToLiveResult(result, extraction({ hasOpenCall: false }), NOW);
+    result.extracted = true;
+    const data = buildLiveCreateData(result, NOW);
+    expect(data.isRelevant).toBe(true);
+    expect(data.hasOpenCall).toBe(false);
   });
 
   it('stores a hit enriched from its page as enriched and verified', () => {
