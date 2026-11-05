@@ -289,9 +289,53 @@ describe('performLiveSearch', () => {
 });
 
 describe('buildSearchQueries', () => {
+  const now = new Date('2026-11-05T12:00:00Z');
+
   it('names this year and next in every query', () => {
-    const queries = buildSearchQueries('AI for PR', [], [], new Date('2026-11-05T12:00:00Z'));
+    const queries = buildSearchQueries('AI for PR', [], [], now);
     expect(queries.length).toBeGreaterThan(0);
-    expect(queries.every((q) => q.includes('2026 2027'))).toBe(true);
+    expect(queries.every((q) => q.q.includes('2026 2027'))).toBe(true);
+  });
+
+  it('asks the ways calls are worded and other formats, with PR spelled out', () => {
+    const text = buildSearchQueries('AI for PR', [], [], now).map((q) => q.q).join(' | ');
+    expect(text).toContain('call for speakers');
+    expect(text).toContain('call for proposals');
+    expect(text).toContain('podcast guest');
+    expect(text).toContain('public relations');
+  });
+
+  it('adds an industry angle when industries are chosen', () => {
+    const queries = buildSearchQueries('AI for PR', ['marketing'], [], now);
+    expect(queries[0].q).toMatch(/^AI for PR .*speaking opportunity 2026 2027$/);
+    expect(queries).toHaveLength(4);
+  });
+});
+
+describe('performLiveSearch triage', () => {
+  it('keeps a hit that spells out "public relations" instead of "PR"', async () => {
+    linkupReturns([
+      {
+        name: 'Generative AI in Public Relations Summit 2027',
+        url: urlOf('spelled-out'),
+        content: 'Call for speakers: AI and public relations leaders, submit a session.',
+      },
+    ]);
+    const outcome = await performLiveSearch('AI for PR', []);
+    expect(outcome.results.map((r) => r.applyUrl)).toEqual([urlOf('spelled-out')]);
+  });
+
+  it('drops article titles and reads pages that look like calls first', async () => {
+    linkupReturns([
+      ...Array.from({ length: SYNC_ENRICH_LIMIT }, (_, i) => hit(`plain-${i}`, `AI for PR roundup ${i}`)),
+      { name: 'How to Use AI in PR: Tools and Tips', url: urlOf('howto'), content: 'AI and PR tips for speakers.' },
+      { name: 'AI in PR Summit', url: urlOf('call'), content: 'Call for speakers: AI and PR leaders, submit a session.' },
+    ]);
+
+    const outcome = await performLiveSearch('AI for PR', []);
+
+    expect(extractedUrls()).toContain(urlOf('call'));
+    expect(extractedUrls()).not.toContain(urlOf('howto'));
+    expect(outcome.foundCount).toBe(SYNC_ENRICH_LIMIT + 1);
   });
 });

@@ -2,6 +2,15 @@
 
 Reverse chronological. Current state lives in `docs/STATUS.md`.
 
+## 2026-11-05 — Broader live search queries
+
+- Question: why so few results for "AI for PR"? The 8-read cap was not it (the last search read every hit it found); the database held 3–5 open AI/PR calls under any wording. The lever is what the web search returns.
+- Queries now ask three angles: "call for speakers", "call for proposals / submit a session", and "speakers wanted / podcast guest / panel / webinar", with PR spelled out as "public relations". A variant limited to Sessionize, PaperCall and pretalx returned only tech events (already scraped) and was dropped.
+- `searchTerms.ts` synonyms: a search for PR matches "public relations", "comms" and "corporate/strategic/marketing communications" (not bare "communications": telecoms); AI matches "artificial intelligence" and "GenAI". Applies to the stored search too.
+- `liveHitTriage.ts`: article titles (how-tos, "N ways", "best … tools", "what you need to know", blogs, Reddit/Quora/Medium) are dropped before any read; `callSignal` ranks explicit call wording, then dated event pages, so the 8 in-request reads go to likely calls.
+- Measured against Linkup (no Claude): "AI for PR" 23 → 38 candidates; "healthcare AI" 27 new candidates, 20 with explicit call wording (HASC 2027, AMIA 2027). End to end locally, "AI for PR" read IPR Bridge 2027, SymPRandA and two ALI "AI for Communications" conferences first: the first two had closed calls, the ALI events advertise no call. No new open AI/PR calls exist right now.
+- Tests: server 420 → 446.
+
 ## 2026-11-05 — Live search: next year's events, past dates in titles, reads past the daily limit
 
 - After #17, three production searches each "read 3 of 3" waiting hits and left them unread: the worker had spent the 600-call daily limit, so `enrichClaimedRow` released every claim. The log counted claims, not reads. The page told the user to search again.
