@@ -48,6 +48,9 @@ model Opportunity {
   enrichmentClaimedAt DateTime?
   isClosed            Boolean            @default(false)
   isRelevant          Boolean            @default(true)
+  // Set when Claude reads the page: false = a real event with no call for speakers found (listed, flagged).
+  // Null = not judged (scraped CFP sources, rows read before this field existed): treated as an open call.
+  hasOpenCall         Boolean?
   verifiedAt          DateTime?
   verificationError   String?
   dateConfidence      String?

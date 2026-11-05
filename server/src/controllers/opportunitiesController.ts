@@ -45,6 +45,7 @@ function liveResultToOpportunity(r: liveSearchService.EnrichedLiveResult): Oppor
     isLiveResult: true,
     liveSearchUrl: r.liveSearchUrl,
     matchesLocationFilter: r.matchesLocationFilter,
+    hasOpenCall: r.hasOpenCall ?? null,
   };
 }
 
@@ -159,6 +160,7 @@ export async function getOpportunities(
           pendingLiveHits: liveOutcome.waiting,
           liveFoundCount: liveOutcome.foundCount,
           liveNotOpenCount: liveOutcome.notOpenCount,
+          liveNoCallCount: liveOutcome.noCallCount,
           backgroundChecksResumeAt: liveOutcome.backgroundChecksResumeAt,
         }),
       },
@@ -270,6 +272,7 @@ export async function liveSearch(
       pendingLiveHits: outcome.waiting,
       liveFoundCount: outcome.foundCount,
       liveNotOpenCount: outcome.notOpenCount,
+      liveNoCallCount: outcome.noCallCount,
       backgroundChecksResumeAt: outcome.backgroundChecksResumeAt,
     });
   } catch (error) {

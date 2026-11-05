@@ -237,9 +237,9 @@ export function OpportunityCard({ opportunity, showSave = true, isPast }: Opport
               href={current.applyUrl}
               target="_blank"
               rel="noopener noreferrer"
-              aria-label={`Apply to ${current.title}`}
+              aria-label={current.hasOpenCall === false ? `View the event page of ${current.title}` : `Apply to ${current.title}`}
             >
-              Apply
+              {current.hasOpenCall === false ? 'View event' : 'Apply'}
               <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
             </a>
           </Button>

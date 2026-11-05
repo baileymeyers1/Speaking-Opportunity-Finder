@@ -4,8 +4,10 @@ import type { PendingLiveHit } from '@/types';
 interface LiveSearchSummaryProps {
   /** Pages the live search found after its relevance filter. */
   foundCount: number;
-  /** Of those, how many were read and are not open calls for speakers. */
+  /** Of those, how many were read and are closed calls or not about a specific event. */
   notOpenCount: number;
+  /** Of those, how many are upcoming events with no call for speakers (shown, flagged). */
+  noCallCount: number;
   /** Pages found but not read yet. */
   pendingHits: PendingLiveHit[];
   /** Set when background checks have spent today's limit: when they resume (ISO). */
@@ -31,7 +33,13 @@ function backgroundNote(resumeAt: string | null): string {
   return `Background checks have used today's limit and resume at ${time}.`;
 }
 
-export function LiveSearchSummary({ foundCount, notOpenCount, pendingHits, backgroundChecksResumeAt }: LiveSearchSummaryProps) {
+export function LiveSearchSummary({
+  foundCount,
+  notOpenCount,
+  noCallCount,
+  pendingHits,
+  backgroundChecksResumeAt,
+}: LiveSearchSummaryProps) {
   if (foundCount === 0 && pendingHits.length === 0) return null;
 
   return (
@@ -41,8 +49,13 @@ export function LiveSearchSummary({ foundCount, notOpenCount, pendingHits, backg
           Live search found {foundCount} {foundCount === 1 ? 'page' : 'pages'}
           {notOpenCount > 0 && (
             <>
-              ; {notOpenCount} {notOpenCount === 1 ? "wasn't an open call" : "weren't open calls"} for speakers
-              (articles, vendor pages or events without a speaker call)
+              ; {notOpenCount} {notOpenCount === 1 ? 'was an article, vendor page or closed call' : 'were articles, vendor pages or closed calls'}
+            </>
+          )}
+          {noCallCount > 0 && (
+            <>
+              ; {noCallCount} {noCallCount === 1 ? 'is an upcoming event' : 'are upcoming events'} with no open call
+              yet, marked &ldquo;No open call&rdquo; below
             </>
           )}
           .

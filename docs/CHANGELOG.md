@@ -2,6 +2,15 @@
 
 Reverse chronological. Current state lives in `docs/STATUS.md`.
 
+## 2026-11-05 — List events with no open call, flagged
+
+- An attendee page for an upcoming event (ALI's "AI for Communications" conferences) was marked `isRelevant: false` and hidden like an article. Extraction now answers two questions: `isRelevant` (the page is about one specific event or program, call or not) and `hasOpenCall` (it invites speakers now). New nullable column `Opportunity.hasOpenCall`; the worker, re-verification and live search store it.
+- Listed with a "No open call" badge (tooltip: pitch the organizer or check back), "View event" instead of "Apply", a 15-point match penalty with the miss "no open call found". Re-verification follows the page, so a listed event flips to an open call when one is posted.
+- The live-search summary separates "articles, vendor pages or closed calls" from "upcoming events with no open call yet".
+- `requeueHiddenEvents.ts`: re-reads Live Search / Linkup Search rows hidden under the old rule (enriched, not relevant, not closed). Dev: 26 queued; a live search re-read 8, and six came back as flagged events (AI for PR Conference 2027, Future of Communications 2026, Relevance 2027, both ALI conferences); speaker-bureau pages stayed hidden.
+- Seen: two flagged rows link to a roundup article and a press release rather than the event's own page.
+- Tests: server 446 → 454.
+
 ## 2026-11-05 — Broader live search queries
 
 - Question: why so few results for "AI for PR"? The 8-read cap was not it (the last search read every hit it found); the database held 3–5 open AI/PR calls under any wording. The lever is what the web search returns.

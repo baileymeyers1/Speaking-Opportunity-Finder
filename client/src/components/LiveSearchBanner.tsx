@@ -11,6 +11,7 @@ interface LiveSearchBannerProps {
   /** Pages the last live search found, and how many of them are not open calls. */
   liveFoundCount: number;
   liveNotOpenCount: number;
+  liveNoCallCount: number;
   /** When background checks resume, if they have spent today's limit. */
   backgroundChecksResumeAt: string | null;
   /** Number of results matching the location filter, when one is active. */
@@ -35,6 +36,7 @@ export function LiveSearchBanner({
   pendingLiveHits,
   liveFoundCount,
   liveNotOpenCount,
+  liveNoCallCount,
   backgroundChecksResumeAt,
   locationMatchedCount,
   lastUpdated,
@@ -88,6 +90,7 @@ export function LiveSearchBanner({
       <LiveSearchSummary
         foundCount={liveFoundCount}
         notOpenCount={liveNotOpenCount}
+        noCallCount={liveNoCallCount}
         pendingHits={pendingLiveHits}
         backgroundChecksResumeAt={backgroundChecksResumeAt}
       />

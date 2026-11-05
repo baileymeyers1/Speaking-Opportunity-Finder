@@ -27,6 +27,7 @@ function merged(overrides: Partial<MergedOpportunity> = {}): MergedOpportunity {
     source: 'confs.tech',
     isClosed: false,
     isRelevant: true,
+    hasOpenCall: true,
     dateConfidence: { eventDate: 'high', cfpDeadline: 'low', location: 'high' },
     ...overrides,
   };
@@ -67,6 +68,11 @@ describe('verificationCandidates', () => {
 });
 
 describe('buildVerificationUpdate', () => {
+  it('follows the page on whether a call is open, so a listed event turns into an open call', () => {
+    expect(buildVerificationUpdate({ isRelevant: true }, merged({ hasOpenCall: true }), NOW).hasOpenCall).toBe(true);
+    expect(buildVerificationUpdate({ isRelevant: true }, merged({ hasOpenCall: false }), NOW).hasOpenCall).toBe(false);
+  });
+
   it('writes dates, location, remote, compensation, closed flag and confidence, and stamps verifiedAt', () => {
     const update = buildVerificationUpdate({ isRelevant: true }, merged(), NOW);
     expect(update).toMatchObject({

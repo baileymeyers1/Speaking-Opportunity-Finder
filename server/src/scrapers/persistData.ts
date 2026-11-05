@@ -5,8 +5,8 @@ import { computeQualityScore, type ScraperResult } from './qualityScore.js';
  *
  * The rules that matter:
  * - Enrichment bookkeeping (`enrichmentStatus`, `enrichedAt`, `enrichmentError`,
- *   `enrichmentAttempts`, `enrichmentClaimedAt`, `isClosed`, `isRelevant`) is
- *   never written from a scrape. Only the enrichment worker owns those columns.
+ *   `enrichmentAttempts`, `enrichmentClaimedAt`, `isClosed`, `isRelevant`,
+ *   `hasOpenCall`) is never written from a scrape. Only the enrichment worker owns those columns.
  * - When the existing row has been enriched by Claude, a re-scrape only fills
  *   fields that are still empty. It never replaces a value Claude already set.
  * - `applyUrl` is never changed on an update, so saved links stay stable.

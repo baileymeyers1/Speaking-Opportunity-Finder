@@ -58,8 +58,10 @@ export interface EnrichedLiveResult {
   matchesLocationFilter?: boolean;
   /** Set by Claude extraction: the call is closed. Dropped before results are returned. */
   isClosed?: boolean;
-  /** Set by Claude extraction: false when the page is not a speaking opportunity. */
+  /** Set by Claude extraction: false when the page is not about a specific event or program. */
   isRelevant?: boolean;
+  /** Set by Claude extraction: false for an event page with no call for speakers (listed, flagged). */
+  hasOpenCall?: boolean;
   dateConfidence?: DateConfidence | null;
   /** True once a Claude extraction was applied to this result. */
   extracted?: boolean;
@@ -595,8 +597,10 @@ export interface LiveSearchOutcome {
   waiting: PendingLiveHit[];
   /** Hits found after the relevance filter. */
   foundCount: number;
-  /** Hits read (now or earlier) and found closed or not a speaking opportunity. */
+  /** Hits read (now or earlier) and found closed or not about a specific event. */
   notOpenCount: number;
+  /** Hits read and found to be upcoming events with no call for speakers (listed, flagged). */
+  noCallCount: number;
   /** When the background worker resumes, if today's limit is spent and hits are still waiting. */
   backgroundChecksResumeAt: string | null;
 }
@@ -622,6 +626,7 @@ export async function performLiveSearch(
     waiting: [],
     foundCount: 0,
     notOpenCount: 0,
+    noCallCount: 0,
     backgroundChecksResumeAt: null,
   };
   const apiKey = config.scrapers?.webSearch;
@@ -716,6 +721,7 @@ export async function performLiveSearch(
     summary = {
       waiting: fresh.filter(r => !r.extracted && !r.isClosed).map(r => ({ title: r.title, applyUrl: r.applyUrl })),
       notOpenCount: 0,
+      noCallCount: 0,
     };
   }
 
@@ -785,6 +791,7 @@ export async function performLiveSearch(
     waiting: summary.waiting,
     foundCount: hits.length,
     notOpenCount: summary.notOpenCount,
+    noCallCount: summary.noCallCount,
     backgroundChecksResumeAt: summary.waiting.length > 0 ? await backgroundChecksResumeAt() : null,
   };
 }
@@ -821,6 +828,7 @@ export function applyExtractionToLiveResult(result: EnrichedLiveResult, extracti
   result.compensationAmount = merged.compensationAmount ?? null;
   result.isClosed = merged.isClosed;
   result.isRelevant = merged.isRelevant;
+  result.hasOpenCall = merged.hasOpenCall;
   result.dateConfidence = merged.dateConfidence;
 }
 
@@ -1016,6 +1024,7 @@ function liveResultToScraperResult(result: EnrichedLiveResult): ScraperResult {
     sourceUrl: result.sourceUrl,
     isClosed: result.isClosed,
     isRelevant: result.isRelevant,
+    hasOpenCall: result.hasOpenCall,
   };
 }
 
@@ -1031,6 +1040,7 @@ export function buildLiveCreateData(result: EnrichedLiveResult, now: Date = new 
     ...base,
     isClosed: result.isClosed === true,
     isRelevant: result.isRelevant !== false,
+    hasOpenCall: extracted ? (result.hasOpenCall ?? null) : null,
     dateConfidence: serializeDateConfidence(result.dateConfidence),
     enrichmentStatus: extracted ? 'enriched' : null,
     enrichedAt: extracted ? now : null,

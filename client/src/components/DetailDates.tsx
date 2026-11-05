@@ -1,6 +1,7 @@
 import type { Opportunity } from '../types';
 import { DateWithConfidence } from './VerificationHints';
 import { Calendar, Clock } from 'lucide-react';
+import { NO_OPEN_CALL_HINT } from './DeadlineBadge';
 
 /** The event date and CFP deadline block of the detail page, long form with confidence and zone notes. */
 export function DetailDates({ opportunity }: { opportunity: Opportunity }) {
@@ -23,9 +24,16 @@ export function DetailDates({ opportunity }: { opportunity: Opportunity }) {
         </div>
         <div>
           <p className="text-sm font-medium text-foreground">CFP Deadline</p>
-          <p className="text-sm text-muted-foreground">
-            <DateWithConfidence opportunity={opportunity} field="cfpDeadline" style="long" fallback="Not listed" />
-          </p>
+          {opportunity.hasOpenCall === false ? (
+            <>
+              <p className="text-sm font-medium text-amber-800 dark:text-amber-300">No open call found</p>
+              <p className="mt-1 text-sm text-muted-foreground">{NO_OPEN_CALL_HINT}</p>
+            </>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              <DateWithConfidence opportunity={opportunity} field="cfpDeadline" style="long" fallback="Not listed" />
+            </p>
+          )}
         </div>
       </div>
     </div>

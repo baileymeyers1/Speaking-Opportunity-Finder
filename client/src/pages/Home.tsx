@@ -64,6 +64,7 @@ export function Home() {
   const pendingLiveHits = data?.pendingLiveHits ?? [];
   const liveFoundCount = data?.liveFoundCount ?? 0;
   const liveNotOpenCount = data?.liveNotOpenCount ?? 0;
+  const liveNoCallCount = data?.liveNoCallCount ?? 0;
   const backgroundChecksResumeAt = data?.backgroundChecksResumeAt ?? null;
   const isLoading = data === undefined && query.isPending;
   const isRefreshing = data !== undefined && query.isFetching;
@@ -189,6 +190,7 @@ export function Home() {
               pendingLiveHits={pendingLiveHits}
               liveFoundCount={liveFoundCount}
               liveNotOpenCount={liveNotOpenCount}
+              liveNoCallCount={liveNoCallCount}
               backgroundChecksResumeAt={backgroundChecksResumeAt}
               locationMatchedCount={
                 hasLocationFilter ? opportunities.filter((item) => item.matchesLocationFilter).length : null

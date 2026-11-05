@@ -65,21 +65,24 @@ export async function backgroundChecksResumeAt(now: Date = new Date()): Promise<
 export interface HitSummary {
   /** Hits stored but not read yet; the worker reads them. */
   waiting: PendingLiveHit[];
-  /** Hits read and found closed or not a speaking opportunity. */
+  /** Hits read and found closed, or not about a specific event (articles, vendor pages). */
   notOpenCount: number;
+  /** Hits read and found to be an upcoming event with no call for speakers: listed, flagged. */
+  noCallCount: number;
 }
 
 /** State of every hit after the request's reads and inserts. */
 export async function summarizeHits(urls: readonly string[]): Promise<HitSummary> {
-  if (urls.length === 0) return { waiting: [], notOpenCount: 0 };
+  if (urls.length === 0) return { waiting: [], notOpenCount: 0, noCallCount: 0 };
   const rows = await prisma.opportunity.findMany({
     where: { applyUrl: { in: [...urls] } },
-    select: { title: true, applyUrl: true, source: true, enrichmentStatus: true, isClosed: true, isRelevant: true },
+    select: { title: true, applyUrl: true, source: true, enrichmentStatus: true, isClosed: true, isRelevant: true, hasOpenCall: true },
   });
   return {
     waiting: rows
       .filter((row) => row.source === LIVE_SEARCH_SOURCE && row.enrichmentStatus === null)
       .map((row) => ({ title: row.title, applyUrl: row.applyUrl })),
     notOpenCount: rows.filter((row) => row.isClosed || !row.isRelevant).length,
+    noCallCount: rows.filter((row) => !row.isClosed && row.isRelevant && row.hasOpenCall === false).length,
   };
 }

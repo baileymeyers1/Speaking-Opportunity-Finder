@@ -143,8 +143,13 @@ export interface OpportunityBase<DateType> {
   updatedAt: DateType;
   /** Enrichment flagged the call for papers as closed. Stored rows only. */
   isClosed?: boolean;
-  /** Enrichment judged the page to be a real speaking opportunity. Stored rows only. */
+  /** Enrichment judged the page to be about a specific event or speaking program. Stored rows only. */
   isRelevant?: boolean;
+  /**
+   * False when the page was read and it is an upcoming event with no call for
+   * speakers: listed, flagged. Null or absent = not judged, treated as an open call.
+   */
+  hasOpenCall?: boolean | null;
   /** True for a row produced by a live search that has not been stored yet. */
   isLiveResult?: boolean;
   /** The page a live result was found on. */
@@ -282,8 +287,10 @@ export interface PaginatedResponse<T> {
   pendingLiveHits?: PendingLiveHit[];
   /** Pages the live search found (after its relevance filter). */
   liveFoundCount?: number;
-  /** Of those, how many were read and are not open calls for speakers. */
+  /** Of those, how many were read and are closed or not about a specific event. */
   liveNotOpenCount?: number;
+  /** Of those, how many are upcoming events with no call for speakers (listed, flagged). */
+  liveNoCallCount?: number;
   /** Set when the background worker has spent today's Claude limit: when it resumes (ISO, next UTC midnight). */
   backgroundChecksResumeAt?: string | null;
 }

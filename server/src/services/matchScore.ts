@@ -37,6 +37,8 @@ export interface MatchCandidate {
   cfpDeadline: Date | string | null;
   verifiedAt?: Date | string | null;
   dateConfidence?: DateConfidence | null;
+  /** False = an event with no call for speakers found; you would have to pitch the organizer. */
+  hasOpenCall?: boolean | null;
 }
 
 export type ScoredOpportunity<T> = T & {
@@ -52,7 +54,7 @@ const WEIGHTS = { topics: 40, location: 25, compensation: 15, format: 10 } as co
 const QUALITY_WEIGHT = 0.2;
 const NEUTRAL_QUALITY = 50;
 const DEADLINE_SOON_DAYS = 3;
-const PENALTIES = { deadlineSoon: 10, approximateDeadline: 5, unverified: 3 } as const;
+const PENALTIES = { deadlineSoon: 10, approximateDeadline: 5, unverified: 3, noOpenCall: 15 } as const;
 
 interface Component {
   weight: number;
@@ -221,6 +223,10 @@ function assessRisk(row: MatchCandidate, now: Date): { penalty: number; misses: 
   if (!row.verifiedAt) {
     penalty += PENALTIES.unverified;
     misses.push('not yet verified');
+  }
+  if (row.hasOpenCall === false) {
+    penalty += PENALTIES.noOpenCall;
+    misses.push('no open call found');
   }
   return { penalty, misses };
 }

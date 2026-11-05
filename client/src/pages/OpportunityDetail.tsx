@@ -239,10 +239,14 @@ export function OpportunityDetail() {
                 href={opportunity.applyUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                aria-label={`Apply now to ${opportunity.title}`}
+                aria-label={
+                  opportunity.hasOpenCall === false
+                    ? `View the event page of ${opportunity.title}`
+                    : `Apply now to ${opportunity.title}`
+                }
               >
                 <ExternalLink className="h-4 w-4" aria-hidden="true" />
-                Apply Now
+                {opportunity.hasOpenCall === false ? 'View Event' : 'Apply Now'}
               </a>
             </Button>
 

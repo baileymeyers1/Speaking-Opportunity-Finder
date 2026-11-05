@@ -22,6 +22,7 @@ function fullOutput(overrides: Record<string, unknown> = {}): Record<string, unk
     isRemote: false,
     isClosed: false,
     isRelevant: true,
+    hasOpenCall: true,
     compensationType: 'travel',
     compensationAmount: null,
     format: 'conference',
@@ -66,6 +67,12 @@ describe('EXTRACTION_SCHEMA', () => {
 });
 
 describe('buildExtractionPrompt', () => {
+  it('separates "is about an event" from "asks for speakers now"', () => {
+    const prompt = buildExtractionPrompt({ title: 'Practical AI for Communications Virtual Conference' }, NOW);
+    expect(prompt).toContain('whether or not it is asking for speakers right now');
+    expect(prompt).toContain('hasOpenCall is true when the page invites people to apply or submit to speak');
+  });
+
   it('includes today, the computed years, the title and both text sources', () => {
     const prompt = buildExtractionPrompt(
       { title: 'DevConf', organization: 'Dev Org', description: 'listing text', pageText: 'page text', applyUrl: 'https://x.test' },
@@ -89,6 +96,24 @@ describe('buildExtractionPrompt', () => {
 });
 
 describe('parseExtractionOutput', () => {
+  it('keeps an event page with no call for speakers as relevant, without an open call', () => {
+    const parsed = parseExtractionOutput(fullOutput({ isRelevant: true, hasOpenCall: false }));
+    expect(parsed.ok && parsed.result.isRelevant).toBe(true);
+    expect(parsed.ok && parsed.result.hasOpenCall).toBe(false);
+  });
+
+  it('never reports an open call on a page that is not about an event', () => {
+    const parsed = parseExtractionOutput(fullOutput({ isRelevant: false, hasOpenCall: true }));
+    expect(parsed.ok && parsed.result.hasOpenCall).toBe(false);
+  });
+
+  it('reads a missing hasOpenCall as an open call', () => {
+    const output = fullOutput();
+    delete output.hasOpenCall;
+    const parsed = parseExtractionOutput(output);
+    expect(parsed.ok && parsed.result.hasOpenCall).toBe(true);
+  });
+
   it('parses a complete response', () => {
     const parsed = parseExtractionOutput(fullOutput());
     expect(parsed.ok).toBe(true);
@@ -194,6 +219,11 @@ describe('parseExtractionOutput', () => {
 });
 
 describe('mergeExtraction', () => {
+  it('carries whether a call is open', () => {
+    expect(mergeExtraction(scraped(), extraction({ hasOpenCall: false }), NOW).hasOpenCall).toBe(false);
+    expect(mergeExtraction(scraped(), extraction(), NOW).hasOpenCall).toBe(true);
+  });
+
   it('lets extracted values overwrite scraped ones', () => {
     const merged = mergeExtraction(scraped(), extraction(), NOW);
     expect(merged.title).toBe('HealthTech Summit 2027');
