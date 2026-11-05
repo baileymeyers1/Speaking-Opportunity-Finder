@@ -1,6 +1,6 @@
 import { Prisma } from '../generated/prisma/client.js';
 import type { SortBy } from 'shared';
-import { matchesAllTerms, searchTerms, termMatches } from './searchTerms.js';
+import { matchesAllTerms, searchTerms, termAlternatives, termMatches } from './searchTerms.js';
 
 /** Filters accepted by `getOpportunities`, as the controller builds them from the query string. */
 export interface OpportunityFilters {
@@ -59,12 +59,12 @@ export function buildOpportunityWhere(filters: OpportunityFilters, now: Date = n
     const terms = searchTerms(filters.search);
     for (const term of terms.length > 0 ? terms : [filters.search.trim()]) {
       andConditions.push({
-        OR: [
-          { title: containsInsensitive(term) },
-          { organization: containsInsensitive(term) },
-          { description: containsInsensitive(term) },
-          { industries: containsInsensitive(term) },
-        ],
+        OR: termAlternatives(term).flatMap((form) => [
+          { title: containsInsensitive(form) },
+          { organization: containsInsensitive(form) },
+          { description: containsInsensitive(form) },
+          { industries: containsInsensitive(form) },
+        ]),
       });
     }
   }
