@@ -2,6 +2,16 @@
 
 Reverse chronological. Current state lives in `docs/STATUS.md`.
 
+## 2026-11-05 — Live search: next year's events, past dates in titles, reads past the daily limit
+
+- After #17, three production searches each "read 3 of 3" waiting hits and left them unread: the worker had spent the 600-call daily limit, so `enrichClaimedRow` released every claim. The log counted claims, not reads. The page told the user to search again.
+- Live search queries said only the current year ("… 2026"); in November that finds mostly finished events. They now name this year and next, like `linkupQueries.ts`. Locally the same query found 8 new pages and 3 open calls instead of 1.
+- The past-event pre-filter also reads the title ("PR Daily Conference | June 3-5, 2026 | Brooklyn").
+- `enrichRowsNow` reserves with `NO_DAILY_LIMIT` (2³¹−1; `Number.MAX_SAFE_INTEGER` overflows the int column, caught by the new DB test): counted, never refused. It returns `{ claimed, read }` and the log says how many were read.
+- Live rows whose read failed or was skipped stay hidden (`UNREAD_LIVE_HIT`, mirrored in the grouping SQL). The response carries `backgroundChecksResumeAt` when the worker is out of budget; the unread list says when checks resume.
+- Seen locally, not fixed: Claude left "Call for Speakers | Swaay.Health LIVE" open with no deadline although the snippet says the call ran through November 21, 2025.
+- Tests: server 414 → 420.
+
 ## 2026-11-05 — Live search reads waiting hits and explains short results
 
 - A repeat "AI for PR" search in production found 26 pages: 25 already stored, 1 new whose page did not load. It used 1 of its 8 in-request reads, left 3 hits from earlier searches unread and told the user to wait an hour.
