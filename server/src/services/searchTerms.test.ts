@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { matchesAllTerms, searchTerms, termMatches } from './searchTerms.js';
+import { expandQuery, matchesAllTerms, searchTerms, termMatches } from './searchTerms.js';
 
 describe('searchTerms', () => {
   it('keeps short meaningful words and drops stopwords', () => {
@@ -63,5 +63,31 @@ describe('matchesAllTerms', () => {
 
   it('matches everything when there are no terms', () => {
     expect(matchesAllTerms([], ['anything'])).toBe(true);
+  });
+});
+
+describe('synonyms', () => {
+  it('lets PR match pages that spell it out', () => {
+    expect(matchesAllTerms(['ai', 'pr'], ['AI in Public Relations Summit', null])).toBe(true);
+    expect(matchesAllTerms(['ai', 'pr'], ['Generative AI for corporate communications teams', null])).toBe(true);
+  });
+
+  it('does not treat bare "communications" as PR', () => {
+    expect(matchesAllTerms(['ai', 'pr'], ['AI in satellite communications', null])).toBe(false);
+  });
+
+  it('lets AI match "artificial intelligence"', () => {
+    expect(matchesAllTerms(['ai'], ['Artificial Intelligence in Healthcare'])).toBe(true);
+  });
+});
+
+describe('expandQuery', () => {
+  it('spells out ambiguous abbreviations for the web search', () => {
+    expect(expandQuery('AI for PR')).toBe('AI for PR public relations');
+    expect(expandQuery('HR tech')).toBe('HR tech human resources');
+  });
+
+  it('leaves a query without abbreviations alone', () => {
+    expect(expandQuery('developer experience')).toBe('developer experience');
   });
 });
