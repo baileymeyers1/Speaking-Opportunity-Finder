@@ -1,6 +1,7 @@
 import { Prisma } from '../generated/prisma/client.js';
 import { prisma } from '../lib/prisma.js';
 import type { EventEdition, PreviousEdition } from 'shared';
+import { LIVE_SEARCH_SOURCE } from './opportunityQuery.js';
 
 /**
  * What a list or detail response says about an opportunity's canonical event:
@@ -31,6 +32,7 @@ export async function shadowedEditionIds(now: Date = new Date()): Promise<string
         AND "isRelevant" = true
         AND "qualityScore" >= ${MIN_QUALITY_SCORE}
         AND ("cfpDeadline" IS NULL OR "cfpDeadline" >= ${now})
+        AND NOT ("source" = ${LIVE_SEARCH_SOURCE} AND "enrichmentStatus" IS NULL)
     )
     SELECT id FROM ranked WHERE rank > 1
   `);

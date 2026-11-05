@@ -1,5 +1,6 @@
 import { Prisma } from '../generated/prisma/client.js';
 import type { SortBy } from 'shared';
+import { matchesAllTerms, searchTerms, termMatches } from './searchTerms.js';
 
 /** Filters accepted by `getOpportunities`, as the controller builds them from the query string. */
 export interface OpportunityFilters {
@@ -20,12 +21,28 @@ export interface OpportunityFilters {
 /** Rows with almost no metadata (base score 5) never surface. */
 const MIN_QUALITY_SCORE = 15;
 
+/** Source of rows stored from a live search (see liveSearchService). */
+export const LIVE_SEARCH_SOURCE = 'Live Search';
+
+/**
+ * A live-search hit is stored with only what the search snippet said; it is
+ * listed once the enrichment worker (or the request) has read its page.
+ */
+export const PENDING_LIVE_HIT: Prisma.OpportunityWhereInput = {
+  source: LIVE_SEARCH_SOURCE,
+  enrichmentStatus: null,
+};
+
 /** Case-insensitive `contains` (Postgres `ILIKE`). */
 export function containsInsensitive(value: string): Prisma.StringFilter {
   return { contains: value, mode: 'insensitive' };
 }
 
-/** The Prisma `where` for a filter set: future or missing deadline, visible, plus every active filter. */
+/**
+ * The Prisma `where` for a filter set: future or missing deadline, visible,
+ * plus every active filter. A search term narrows by ILIKE on each word; the
+ * caller applies the whole-word rule with `matchesSearch` afterwards.
+ */
 export function buildOpportunityWhere(filters: OpportunityFilters, now: Date = new Date()): Prisma.OpportunityWhereInput {
   const where: Prisma.OpportunityWhereInput = {
     OR: [{ cfpDeadline: { gte: now } }, { cfpDeadline: null }],
@@ -34,17 +51,21 @@ export function buildOpportunityWhere(filters: OpportunityFilters, now: Date = n
     isClosed: false,
     isRelevant: true,
   };
-  const andConditions: Prisma.OpportunityWhereInput[] = [];
+  const andConditions: Prisma.OpportunityWhereInput[] = [{ NOT: PENDING_LIVE_HIT }];
 
-  // Text search (OR across fields, but AND with other filters)
+  // Text search: every word must appear in one of the fields.
   if (filters.search) {
-    andConditions.push({
-      OR: [
-        { title: containsInsensitive(filters.search) },
-        { organization: containsInsensitive(filters.search) },
-        { description: containsInsensitive(filters.search) },
-      ],
-    });
+    const terms = searchTerms(filters.search);
+    for (const term of terms.length > 0 ? terms : [filters.search.trim()]) {
+      andConditions.push({
+        OR: [
+          { title: containsInsensitive(term) },
+          { organization: containsInsensitive(term) },
+          { description: containsInsensitive(term) },
+          { industries: containsInsensitive(term) },
+        ],
+      });
+    }
   }
 
   if (filters.format && filters.format.length > 0) {
@@ -93,10 +114,7 @@ export function buildOpportunityWhere(filters: OpportunityFilters, now: Date = n
     if (filters.cfpDeadlineAfter) where.cfpDeadline.gte = filters.cfpDeadlineAfter;
   }
 
-  if (andConditions.length > 0) {
-    where.AND = andConditions;
-  }
-
+  where.AND = andConditions;
   return where;
 }
 
@@ -124,6 +142,25 @@ interface RelevanceInput {
   qualityScore?: number | null;
 }
 
+function parseIndustries(value: string | null | undefined): string[] {
+  try {
+    const parsed: unknown = JSON.parse(value || '[]');
+    return Array.isArray(parsed) ? parsed.map(String) : [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Whether a row matches a search query under the whole-word rule of
+ * `searchTerms.ts`: every word in the title, organization, industries or
+ * description. ILIKE in the `where` is only a coarse first pass.
+ */
+export function matchesSearch(opportunity: RelevanceInput, query: string): boolean {
+  const industries = parseIndustries(opportunity.industries).join(' ');
+  return matchesAllTerms(searchTerms(query), [opportunity.title, opportunity.organization, industries, opportunity.description]);
+}
+
 /** Keyword relevance of a row to a search term; higher is better. */
 export function computeSearchRelevance(opportunity: RelevanceInput, query: string): number {
   const q = query.toLowerCase();
@@ -148,6 +185,19 @@ export function computeSearchRelevance(opportunity: RelevanceInput, query: strin
   // Description match (weakest: any tech conf could mention "entertainment" in passing)
   const desc = (opportunity.description || '').toLowerCase();
   if (desc.includes(q)) score += 10;
+
+  // Each word of a multi-word query counts on its own, so "AI for PR" ranks
+  // "AI in PR: a summit" above a page that only mentions both in passing.
+  const terms = searchTerms(query);
+  if (terms.length > 1) {
+    const industries = parseIndustries(opportunity.industries).join(' ');
+    for (const term of terms) {
+      if (termMatches(term, opportunity.title)) score += 20;
+      if (termMatches(term, opportunity.organization)) score += 10;
+      if (termMatches(term, industries)) score += 15;
+      if (termMatches(term, opportunity.description)) score += 5;
+    }
+  }
 
   score += (opportunity.qualityScore || 0) * 0.1;
   return score;

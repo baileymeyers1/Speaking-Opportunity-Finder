@@ -276,7 +276,10 @@ export interface PaginatedResponse<T> {
   page: number;
   pageSize: number;
   totalPages: number;
+  /** Results this live search surfaced: new hits read in the request plus stored copies of known hits. */
   liveResultCount?: number;
+  /** New live hits stored but not read yet; they appear once the enrichment worker reads them. */
+  pendingLiveCount?: number;
 }
 
 export interface PaginationParams {
