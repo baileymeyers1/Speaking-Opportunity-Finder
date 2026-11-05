@@ -242,6 +242,7 @@ async function enrichClaimedRow(
           isRemote: mergedResult.isRemote,
           isClosed,
           isRelevant,
+          hasOpenCall: isRelevant ? (enriched.hasOpenCall ?? null) : false,
           // Stored as columns so recalculateAllQualityScores keeps the score at 0.
           qualityScore: computeQualityScore(mergedResult),
           dateConfidence: serializeDateConfidence(enriched.dateConfidence),

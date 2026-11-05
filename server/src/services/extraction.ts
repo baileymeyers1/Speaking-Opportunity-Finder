@@ -38,7 +38,10 @@ export interface ExtractionResult {
   location: string | null;
   isRemote: boolean;
   isClosed: boolean;
+  /** The page is about a specific event or speaking program (open call or not). */
   isRelevant: boolean;
+  /** The page invites people to apply to speak right now. False for an event page with no such invitation. */
+  hasOpenCall: boolean;
   compensationType: CompensationType | null;
   compensationAmount: number | null;
   format: OpportunityFormat;
@@ -79,6 +82,7 @@ export const EXTRACTION_SCHEMA = {
     'isRemote',
     'isClosed',
     'isRelevant',
+    'hasOpenCall',
     'compensationType',
     'compensationAmount',
     'format',
@@ -106,6 +110,7 @@ export const EXTRACTION_SCHEMA = {
     isRemote: { type: 'boolean' },
     isClosed: { type: 'boolean' },
     isRelevant: { type: 'boolean' },
+    hasOpenCall: { type: 'boolean' },
     compensationType: { anyOf: [{ type: 'string', enum: [...COMPENSATION_TYPES] }, { type: 'null' }] },
     compensationAmount: { type: ['integer', 'null'], description: 'Speaker fee or stipend in USD when a figure is given.' },
     format: { type: 'string', enum: [...OPPORTUNITY_FORMATS] },
@@ -142,8 +147,9 @@ Rules:
 - deadlineTimezone is the timezone the deadline is stated in, as an IANA name ("America/New_York", "Europe/Berlin", "UTC"), or "AoE" when the page says "Anywhere on Earth", "AoE" or "UTC-12". Convert a stated abbreviation to the IANA name it denotes ("PST" is America/Los_Angeles, "CET" is Europe/Berlin); null when the abbreviation is ambiguous. Null when the page states no timezone: never infer it from the venue, the organizer or the country.
 - location is where the event physically takes place, not the organizer's headquarters. Null when fully online or not stated.
 - isRemote is true when the event is virtual or offers remote attendance or remote speaking.
-- isClosed is true when the call for speakers is explicitly closed or no longer accepting submissions, when the event is cancelled or already past, when the deadline is before ${todayStr}, or when the page is an error or "not found" page.
-- isRelevant is true only when the page is a genuine opportunity to speak or present. False for job postings, attendee registration, sponsorship pages, news articles and unrelated pages.
+- isClosed is true when the call for speakers is explicitly closed or no longer accepting submissions, when the event is cancelled or already past, when the deadline is before ${todayStr}, or when the page is an error or "not found" page. For an event with no call for speakers, isClosed is true only when the event is cancelled or already past.
+- isRelevant is true when the page is about one specific upcoming event, conference, podcast, webinar or speaking program that people can take part in, whether or not it is asking for speakers right now. False for job postings, news articles, how-to and opinion pieces, vendor or product pages, lists or directories of many events, speaker bureau or individual speaker profile pages, and unrelated pages.
+- hasOpenCall is true when the page invites people to apply or submit to speak, present, join a panel or be a podcast guest: a call for speakers, papers, proposals or abstracts, a speaker application form, "apply to speak". False when the page is about the event but gives no way to apply to speak (attendee registration, agenda, sponsorship). False when isRelevant is false.
 - compensationType: "paid" (speaker fee or stipend), "travel" (travel or hotel covered), "honorarium", "exposure" (explicitly unpaid), or null when not stated. compensationAmount is the USD figure when one is given.
 - format: conference, meetup, podcast, webinar, workshop, panel, or other.
 - industries: up to 5 short lowercase topic tags such as "healthcare", "ai", "devops".
@@ -250,6 +256,7 @@ export function parseExtractionOutput(raw: unknown): ParsedExtraction {
       isRemote: data.isRemote === true,
       isClosed: data.isClosed === true,
       isRelevant: data.isRelevant !== false,
+      hasOpenCall: data.isRelevant !== false && data.hasOpenCall !== false,
       compensationType,
       compensationAmount: amount,
       format,
@@ -329,6 +336,7 @@ export function extractOpportunitiesBatch(
 export interface MergedOpportunity extends ScraperResult {
   isClosed: boolean;
   isRelevant: boolean;
+  hasOpenCall: boolean;
   dateConfidence: DateConfidence;
 }
 
@@ -369,6 +377,7 @@ export function mergeExtraction(
     compensationAmount: extraction.compensationAmount ?? existing.compensationAmount,
     isClosed: extraction.isClosed || deadlinePassed,
     isRelevant: extraction.isRelevant,
+    hasOpenCall: extraction.hasOpenCall,
     dateConfidence: extraction.confidence,
   };
 }

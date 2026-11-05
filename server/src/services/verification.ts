@@ -89,8 +89,10 @@ export interface VerifiedRowContext {
 
 /**
  * Column updates after a successful re-extraction. Dates, location, remote
- * flag, compensation and the closed flag follow the page; title,
- * organization, industries and relevance stay as enrichment set them.
+ * flag, compensation, the closed flag and whether a call is open follow the
+ * page (an event listed without a call becomes an open call once one is
+ * posted); title, organization, industries and relevance stay as enrichment
+ * set them.
  */
 export function buildVerificationUpdate(
   existing: VerifiedRowContext,
@@ -106,6 +108,7 @@ export function buildVerificationUpdate(
     compensationType: merged.compensationType ?? null,
     compensationAmount: merged.compensationAmount ?? null,
     isClosed: merged.isClosed,
+    hasOpenCall: merged.hasOpenCall,
     dateConfidence: serializeDateConfidence(merged.dateConfidence),
     qualityScore: computeQualityScore({ ...merged, isRelevant: existing.isRelevant }),
     verifiedAt: now,

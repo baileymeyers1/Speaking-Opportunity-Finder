@@ -27,6 +27,8 @@ export interface ScraperResult {
   isClosed?: boolean;
   /** Set by enrichment: false when the page is not a speaking opportunity. Forces score 0. */
   isRelevant?: boolean;
+  /** Set by extraction: the page asks for speakers now. Undefined when not judged. */
+  hasOpenCall?: boolean;
 }
 
 export const TRUSTED_SOURCES = [
