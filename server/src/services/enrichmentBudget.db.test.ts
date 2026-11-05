@@ -1,8 +1,36 @@
-import { describe, it, expect, beforeEach, afterAll } from 'vitest';
+import { describe, it, expect, beforeEach, afterAll, vi } from 'vitest';
+import type * as Config from '../config/index.js';
+import type * as EnrichmentService from './enrichmentService.js';
+
+// enrichRowsNow reads real rows; only the page fetch and the Claude call are faked.
+vi.mock('../config/index.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof Config>();
+  return { ...actual, config: { ...actual.config, claude: { ...actual.config.claude, apiKey: 'test-key' } } };
+});
+vi.mock('./pageText.js', () => ({
+  fetchPageText: vi.fn(async () => ({ ok: true, text: 'Call for speakers: submit a talk on AI in communications by the deadline.' })),
+}));
+vi.mock('./enrichmentService.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof EnrichmentService>();
+  return {
+    ...actual,
+    enrichOpportunity: vi.fn(async (result: Parameters<typeof actual.enrichOpportunity>[0]) => ({
+      ...result,
+      enrichmentStatus: 'enriched' as const,
+      enrichedAt: new Date(),
+      isClosed: false,
+      isRelevant: true,
+      dateConfidence: null,
+    })),
+  };
+});
+
 import { prisma } from '../lib/prisma.js';
+import { enrichRowsNow } from './backgroundEnrichment.js';
 import {
   claimNextUnenriched,
   claimUnenrichedByIds,
+  DAILY_ENRICHMENT_LIMIT,
   getTodayEnrichmentCount,
   MAX_ENRICHMENT_ATTEMPTS,
   releaseEnrichmentSlot,
@@ -28,14 +56,16 @@ function opportunityRow(suffix: string) {
   };
 }
 
+const today = utcDateKey(new Date());
+
 describe('enrichment budget against Postgres', () => {
   beforeEach(async () => {
-    await prisma.enrichmentUsage.deleteMany({ where: { date: utcDateKey(now) } });
+    await prisma.enrichmentUsage.deleteMany({ where: { date: { in: [utcDateKey(now), today] } } });
     await prisma.opportunity.deleteMany({ where: { source: 'test' } });
   });
 
   afterAll(async () => {
-    await prisma.enrichmentUsage.deleteMany({ where: { date: utcDateKey(now) } });
+    await prisma.enrichmentUsage.deleteMany({ where: { date: { in: [utcDateKey(now), today] } } });
     await prisma.opportunity.deleteMany({ where: { source: 'test' } });
     await prisma.$disconnect();
   });
@@ -87,5 +117,18 @@ describe('enrichment budget against Postgres', () => {
     });
     const claimed = await claimUnenrichedByIds(prisma, [stale.id], now);
     expect(claimed.map((row) => row.id)).toEqual([stale.id]);
+  });
+
+  it('lets a live search read named rows after the worker has spent the daily limit', async () => {
+    await prisma.enrichmentUsage.create({ data: { date: today, count: DAILY_ENRICHMENT_LIMIT } });
+    const row = await prisma.opportunity.create({ data: opportunityRow('after-limit') });
+
+    expect(await enrichRowsNow([row.id])).toEqual({ claimed: 1, read: 1 });
+
+    const stored = await prisma.opportunity.findUniqueOrThrow({ where: { id: row.id } });
+    expect(stored.enrichmentStatus).toBe('enriched');
+    expect(stored.enrichmentClaimedAt).toBeNull();
+    // Counted in today's usage, so the admin page shows the spend.
+    expect(await getTodayEnrichmentCount(prisma)).toBe(DAILY_ENRICHMENT_LIMIT + 1);
   });
 });

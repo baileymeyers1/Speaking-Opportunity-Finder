@@ -24,6 +24,8 @@ export function parseDailyLimit(value: string | undefined, fallback: number = DE
 
 export const DAILY_ENRICHMENT_LIMIT = parseDailyLimit(process.env.ENRICHMENT_DAILY_LIMIT);
 export const MAX_ENRICHMENT_ATTEMPTS = 3;
+/** A limit `reserveEnrichmentSlot` never reaches: the call is counted but not refused. Fits the int column. */
+export const NO_DAILY_LIMIT = 2 ** 31 - 1;
 /** A claim older than this is treated as abandoned (crashed or timed-out worker). */
 export const CLAIM_STALE_MS = 10 * 60 * 1000;
 

@@ -1,6 +1,7 @@
 import type { PendingLiveHit } from 'shared';
 import { prisma } from '../lib/prisma.js';
 import { enrichRowsNow } from './backgroundEnrichment.js';
+import { DAILY_ENRICHMENT_LIMIT, getTodayEnrichmentCount } from './enrichmentBudget.js';
 import { LIVE_SEARCH_SOURCE } from './opportunityQuery.js';
 
 /**
@@ -34,16 +35,30 @@ export async function findStoredHits(urls: readonly string[]): Promise<StoredHit
   }
 }
 
-/** Read waiting hits now with the request's spare Claude calls (same claims and budget as the worker). */
+/** Read waiting hits now with the request's spare Claude calls (same claims as the worker; capped per request, not by the daily limit). */
 export async function readWaitingHits(ids: readonly string[]): Promise<number> {
   if (ids.length === 0) return 0;
   try {
-    const read = await enrichRowsNow(ids);
-    console.log(`[LiveSearch] Read ${read} of ${ids.length} waiting hits from earlier searches`);
+    const { claimed, read } = await enrichRowsNow(ids);
+    console.log(`[LiveSearch] Waiting hits from earlier searches: ${read} read, ${claimed - read} not read, ${ids.length - claimed} held elsewhere`);
     return read;
   } catch (error) {
     console.error('[LiveSearch] Could not read waiting hits:', error);
     return 0;
+  }
+}
+
+/**
+ * When the background worker resumes if it has spent today's limit (next UTC
+ * midnight), else null. Lets the page say when unread hits will be read.
+ */
+export async function backgroundChecksResumeAt(now: Date = new Date()): Promise<string | null> {
+  try {
+    if ((await getTodayEnrichmentCount(prisma, now)) < DAILY_ENRICHMENT_LIMIT) return null;
+    const nextMidnight = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1));
+    return nextMidnight.toISOString();
+  } catch {
+    return null;
   }
 }
 

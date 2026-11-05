@@ -11,6 +11,8 @@ interface LiveSearchBannerProps {
   /** Pages the last live search found, and how many of them are not open calls. */
   liveFoundCount: number;
   liveNotOpenCount: number;
+  /** When background checks resume, if they have spent today's limit. */
+  backgroundChecksResumeAt: string | null;
   /** Number of results matching the location filter, when one is active. */
   locationMatchedCount: number | null;
   lastUpdated: Date | null;
@@ -33,6 +35,7 @@ export function LiveSearchBanner({
   pendingLiveHits,
   liveFoundCount,
   liveNotOpenCount,
+  backgroundChecksResumeAt,
   locationMatchedCount,
   lastUpdated,
   isRefreshing,
@@ -82,7 +85,12 @@ export function LiveSearchBanner({
         </div>
       )}
 
-      <LiveSearchSummary foundCount={liveFoundCount} notOpenCount={liveNotOpenCount} pendingHits={pendingLiveHits} />
+      <LiveSearchSummary
+        foundCount={liveFoundCount}
+        notOpenCount={liveNotOpenCount}
+        pendingHits={pendingLiveHits}
+        backgroundChecksResumeAt={backgroundChecksResumeAt}
+      />
 
       {resultCount > 0 && (
         <div className="flex flex-wrap items-center justify-between gap-2" aria-live="polite">

@@ -26,11 +26,12 @@ export const LIVE_SEARCH_SOURCE = 'Live Search';
 
 /**
  * A live-search hit is stored with only what the search snippet said; it is
- * listed once the enrichment worker (or the request) has read its page.
+ * listed once its page has been read (enriched). Hits not read yet, and hits
+ * whose read failed or was skipped, would be empty cards, so they stay hidden.
  */
-export const PENDING_LIVE_HIT: Prisma.OpportunityWhereInput = {
+export const UNREAD_LIVE_HIT: Prisma.OpportunityWhereInput = {
   source: LIVE_SEARCH_SOURCE,
-  enrichmentStatus: null,
+  OR: [{ enrichmentStatus: null }, { enrichmentStatus: { not: 'enriched' } }],
 };
 
 /** Case-insensitive `contains` (Postgres `ILIKE`). */
@@ -51,7 +52,7 @@ export function buildOpportunityWhere(filters: OpportunityFilters, now: Date = n
     isClosed: false,
     isRelevant: true,
   };
-  const andConditions: Prisma.OpportunityWhereInput[] = [{ NOT: PENDING_LIVE_HIT }];
+  const andConditions: Prisma.OpportunityWhereInput[] = [{ NOT: UNREAD_LIVE_HIT }];
 
   // Text search: every word must appear in one of the fields.
   if (filters.search) {

@@ -284,6 +284,8 @@ export interface PaginatedResponse<T> {
   liveFoundCount?: number;
   /** Of those, how many were read and are not open calls for speakers. */
   liveNotOpenCount?: number;
+  /** Set when the background worker has spent today's Claude limit: when it resumes (ISO, next UTC midnight). */
+  backgroundChecksResumeAt?: string | null;
 }
 
 /** A live-search hit whose page has not been read yet: shown by name, unchecked. */

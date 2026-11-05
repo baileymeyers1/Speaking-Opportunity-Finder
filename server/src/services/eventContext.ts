@@ -32,7 +32,7 @@ export async function shadowedEditionIds(now: Date = new Date()): Promise<string
         AND "isRelevant" = true
         AND "qualityScore" >= ${MIN_QUALITY_SCORE}
         AND ("cfpDeadline" IS NULL OR "cfpDeadline" >= ${now})
-        AND NOT ("source" = ${LIVE_SEARCH_SOURCE} AND "enrichmentStatus" IS NULL)
+        AND NOT ("source" = ${LIVE_SEARCH_SOURCE} AND "enrichmentStatus" IS DISTINCT FROM 'enriched')
     )
     SELECT id FROM ranked WHERE rank > 1
   `);
