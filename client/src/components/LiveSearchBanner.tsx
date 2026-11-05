@@ -1,9 +1,11 @@
-import { AlertCircle, Clock, X } from 'lucide-react';
+import { AlertCircle, Clock, Hourglass, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 interface LiveSearchBannerProps {
   resultCount: number;
   liveResultCount: number;
+  /** New live hits stored but not checked yet; they join the results once read. */
+  pendingLiveCount: number;
   /** Number of results matching the location filter, when one is active. */
   locationMatchedCount: number | null;
   lastUpdated: Date | null;
@@ -17,12 +19,13 @@ interface LiveSearchBannerProps {
 
 /**
  * Status row above the grid: result counts, where live results came from,
- * and the two non-fatal notices (rate limit, live search failure) that keep
+ * how many live hits are still being checked, and the two non-fatal notices (rate limit, live search failure) that keep
  * the stored results on screen.
  */
 export function LiveSearchBanner({
   resultCount,
   liveResultCount,
+  pendingLiveCount,
   locationMatchedCount,
   lastUpdated,
   isRefreshing,
@@ -69,6 +72,19 @@ export function LiveSearchBanner({
           >
             <X className="h-3.5 w-3.5" aria-hidden="true" />
           </button>
+        </div>
+      )}
+
+      {pendingLiveCount > 0 && (
+        <div
+          className="flex items-center gap-2 rounded-md border border-border bg-muted/50 px-4 py-2 text-sm text-muted-foreground"
+          role="status"
+          aria-live="polite"
+        >
+          <Hourglass className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
+          {pendingLiveCount} more possible {pendingLiveCount === 1 ? 'match' : 'matches'} found. We are checking{' '}
+          {pendingLiveCount === 1 ? 'its page' : 'their pages'}; open calls for speakers will show up in this search within
+          the hour.
         </div>
       )}
 

@@ -8,6 +8,7 @@ import {
   buildOpportunityOrderBy,
   buildOpportunityWhere,
   computeSearchRelevance,
+  matchesSearch,
   type OpportunityFilters,
 } from './opportunityQuery.js';
 import type { CompensationType, OpportunityFormat, OpportunityWithDates, PaginatedResponse } from 'shared';
@@ -107,6 +108,23 @@ function paginate<T>(items: T[], page: number, pageSize: number, total: number):
   };
 }
 
+/**
+ * The listed rows among these apply URLs, under the same visibility and
+ * filters as the list (search text aside: a live search already chose them).
+ * Used to show stored copies of live-search hits instead of re-reading them.
+ */
+export async function getListedByApplyUrls(
+  applyUrls: readonly string[],
+  filters: OpportunityFilters = {},
+  options: ListOptions = {}
+): Promise<OpportunityWithDates[]> {
+  if (applyUrls.length === 0) return [];
+  const where = await buildGroupedWhere({ ...filters, search: undefined }, options.now);
+  where.AND = [...(Array.isArray(where.AND) ? where.AND : where.AND ? [where.AND] : []), { applyUrl: { in: [...applyUrls] } }];
+  const rows = await prisma.opportunity.findMany({ where });
+  return attachEventContext(withMatchScores(rows.map(transformOpportunity), options));
+}
+
 export async function getOpportunities(
   filters: OpportunityFilters = {},
   pagination: PaginationParams = {},
@@ -120,11 +138,10 @@ export async function getOpportunities(
   // A search term is ranked by keyword relevance across every match before
   // paginating; a page-sized DB slice would only re-sort within itself.
   if (filters.search) {
-    const [allMatches, total] = await Promise.all([
-      prisma.opportunity.findMany({ where, orderBy }),
-      prisma.opportunity.count({ where }),
-    ]);
     const search = filters.search;
+    // ILIKE is a coarse pass ("ai" is inside "said"); the whole-word rule runs here.
+    const allMatches = (await prisma.opportunity.findMany({ where, orderBy })).filter((item) => matchesSearch(item, search));
+    const total = allMatches.length;
     const ranked = allMatches
       .map((item) => ({ item, relevance: computeSearchRelevance(item, search) }))
       .sort((a, b) => b.relevance - a.relevance)

@@ -61,6 +61,7 @@ export function Home() {
   const data = query.data;
   const opportunities = data?.items ?? [];
   const liveResultCount = data?.liveResultCount ?? 0;
+  const pendingLiveCount = data?.pendingLiveCount ?? 0;
   const isLoading = data === undefined && query.isPending;
   const isRefreshing = data !== undefined && query.isFetching;
   const lastUpdated =
@@ -182,6 +183,7 @@ export function Home() {
             <LiveSearchBanner
               resultCount={opportunities.length}
               liveResultCount={liveResultCount}
+              pendingLiveCount={pendingLiveCount}
               locationMatchedCount={
                 hasLocationFilter ? opportunities.filter((item) => item.matchesLocationFilter).length : null
               }

@@ -12,6 +12,8 @@ import {
   type ExtractionResult,
 } from './extraction.js';
 import { fetchPageText } from './pageText.js';
+import { matchesAllTerms, searchTerms } from './searchTerms.js';
+import { LIVE_SEARCH_SOURCE } from './opportunityQuery.js';
 import { mapWithConcurrency, parseHumanDate } from '../scrapers/lib/html.js';
 import { endOfCalendarDay } from '../lib/deadlines.js';
 import { buildCreateData } from '../scrapers/persistData.js';
@@ -564,27 +566,65 @@ function buildSearchQueries(query: string, industries: string[], locations: stri
   return queries;
 }
 
+export interface LiveSearchOutcome {
+  /** New hits Claude read in this request and found open and relevant. */
+  results: EnrichedLiveResult[];
+  /** Apply URLs of hits that were already stored; the caller lists the stored rows. */
+  storedUrls: string[];
+  /** Hits stored but not read yet (new now or left by an earlier search); the enrichment worker finishes them. */
+  pendingCount: number;
+}
+
+interface StoredHits {
+  urls: Set<string>;
+  /** Stored by an earlier live search and not read yet. */
+  pendingCount: number;
+}
+
+/** Which of these apply URLs already have a row, and how many of those still wait to be read. */
+async function findStoredHits(urls: readonly string[]): Promise<StoredHits> {
+  if (urls.length === 0) return { urls: new Set(), pendingCount: 0 };
+  try {
+    const rows = await prisma.opportunity.findMany({
+      where: { applyUrl: { in: [...urls] } },
+      select: { applyUrl: true, source: true, enrichmentStatus: true },
+    });
+    return {
+      urls: new Set(rows.map((row) => row.applyUrl)),
+      pendingCount: rows.filter((row) => row.source === LIVE_SEARCH_SOURCE && row.enrichmentStatus === null).length,
+    };
+  } catch (error) {
+    console.error('[LiveSearch] Could not look up stored hits:', error);
+    return { urls: new Set(), pendingCount: 0 };
+  }
+}
+
 /**
  * Perform a live web search for speaking opportunities using Linkup API.
- * Returns enriched results that match the Opportunity shape.
+ *
+ * Hits already stored are not read again: their URLs come back in
+ * `storedUrls` so the caller shows the stored (enriched) rows. The in-request
+ * Claude calls go to the best new hits; only the ones it read are returned,
+ * the rest are stored for the enrichment worker and counted in `pendingCount`.
  */
 export async function performLiveSearch(
   query: string,
   industries: string[],
   locations: string[] = [],
   filters: LiveSearchFilters = {}
-): Promise<EnrichedLiveResult[]> {
+): Promise<LiveSearchOutcome> {
+  const empty: LiveSearchOutcome = { results: [], storedUrls: [], pendingCount: 0 };
   const apiKey = config.scrapers?.webSearch;
 
   const searchQueries = buildSearchQueries(query, industries, locations);
 
   if (searchQueries.length === 0) {
-    return [];
+    return empty;
   }
 
   if (!apiKey) {
     console.log('[LiveSearch] No WEB_SEARCH_API_KEY configured. Live search disabled.');
-    return [];
+    return empty;
   }
 
   console.log(`[LiveSearch] Running ${searchQueries.length} parallel queries:`, searchQueries);
@@ -597,12 +637,12 @@ export async function performLiveSearch(
 
   // Deduplicate by URL across all query results
   const seenUrls = new Set<string>();
-  let results: EnrichedLiveResult[] = [];
+  let hits: EnrichedLiveResult[] = [];
   for (const batch of allResults) {
     for (const r of batch) {
       if (!seenUrls.has(r.applyUrl)) {
         seenUrls.add(r.applyUrl);
-        results.push(r);
+        hits.push(r);
       }
     }
   }
@@ -611,50 +651,48 @@ export async function performLiveSearch(
 
   // 1. Remove closed CFPs, past deadlines, and past events
   const now = new Date();
-  results = results.filter(r => !isCfpClosed(r.description || '', r.title));
-  results = results.filter(r => {
+  hits = hits.filter(r => !isCfpClosed(r.description || '', r.title));
+  hits = hits.filter(r => {
     if (!r.cfpDeadline) return true; // Keep results with unknown deadlines
     return new Date(r.cfpDeadline) >= now;
   });
-  results = results.filter(r => {
+  hits = hits.filter(r => {
     if (!r.eventDate) return true; // Keep results with unknown event dates
     return new Date(r.eventDate) >= now;
   });
 
-  // 2. Relevance check — ensure result is actually about the search topic
-  if (query) {
-    const queryLower = query.toLowerCase();
-    const queryTerms = queryLower.split(/\s+/).filter(t => t.length > 2);
-    results = results.filter(r => {
-      const title = r.title.toLowerCase();
-      const industries = r.industries.join(' ').toLowerCase();
-      // Check title and industries first (strongest signal)
-      const inTitleOrIndustries = queryTerms.some(term => title.includes(term) || industries.includes(term));
-      if (inTitleOrIndustries) return true;
-      // Check description but require the term as a standalone word (not "high-energy" for "energy")
-      const desc = r.description || '';
-      return queryTerms.some(term => {
-        const wordBoundary = new RegExp(`\\b${term}\\b`, 'i');
-        return wordBoundary.test(desc);
-      });
-    });
+  // 2. Relevance: every word of the query (stopwords aside) must appear as a
+  //    word in the title, tags or snippet. Same rule as the stored search.
+  const terms = searchTerms(query);
+  if (terms.length > 0) {
+    hits = hits.filter(r => matchesAllTerms(terms, [r.title, r.industries.join(' '), r.description]));
   }
 
-  // --- Synchronous enrichment of the top hits only ---
-  results.sort((a, b) => b.qualityScore - a.qualityScore);
-  const toEnrich = results.slice(0, SYNC_ENRICH_LIMIT);
+  // 3. Hits already stored are listed from the database, never read twice.
+  const storedHits = await findStoredHits(hits.map(r => r.applyUrl));
+  const stored = storedHits.urls;
+  const fresh = hits.filter(r => !stored.has(r.applyUrl));
+
+  // --- Synchronous enrichment of the best new hits only ---
+  fresh.sort((a, b) => b.qualityScore - a.qualityScore);
+  const toEnrich = fresh.slice(0, SYNC_ENRICH_LIMIT);
   if (toEnrich.length > 0) {
-    console.log(`[LiveSearch] Enriching top ${toEnrich.length} of ${results.length} results from page content...`);
+    console.log(`[LiveSearch] Enriching top ${toEnrich.length} of ${fresh.length} new results (${stored.size} already stored)...`);
     await enrichResultsFromPages(toEnrich, industries);
   }
 
-  // Persist every hit now; the enrichment cron finishes the ones not enriched here.
+  // Persist every new hit now; the enrichment cron finishes the ones not enriched here.
   try {
-    const persisted = await persistLiveResults(results, now);
+    const persisted = await persistLiveResults(fresh, now);
     console.log(`[LiveSearch] Persisted ${persisted.created} new results (${persisted.existing} already stored)`);
   } catch (error) {
     console.error('[LiveSearch] Failed to persist live results:', error);
   }
+
+  const pendingCount = fresh.filter(r => !r.extracted && !r.isClosed).length + storedHits.pendingCount;
+
+  // Only hits Claude read are shown: the rest have nothing but a search snippet.
+  let results = fresh.filter(r => r.extracted === true);
 
   // Enrichment may have found a closed call or a page that is not an opportunity.
   results = results.filter(r => !r.isClosed && r.isRelevant !== false);
@@ -713,7 +751,11 @@ export async function performLiveSearch(
     }
   }
 
-  return results.sort((a, b) => b.qualityScore - a.qualityScore);
+  return {
+    results: results.sort((a, b) => b.qualityScore - a.qualityScore),
+    storedUrls: hits.filter(r => stored.has(r.applyUrl)).map(r => r.applyUrl),
+    pendingCount,
+  };
 }
 
 interface LinkupSearchResult {
@@ -899,7 +941,7 @@ async function performLinkupSearch(
             compensationType: meta.compensationType,
             description: item.content || null,
           }),
-          source: 'Live Search',
+          source: LIVE_SEARCH_SOURCE,
           sourceUrl: item.url,
           createdAt: now,
           updatedAt: now,
@@ -939,7 +981,7 @@ function liveResultToScraperResult(result: EnrichedLiveResult): ScraperResult {
     compensationAmount: result.compensationAmount || undefined,
     compensationDetails: result.compensationDetails || undefined,
     applyUrl: result.applyUrl,
-    source: 'Live Search',
+    source: LIVE_SEARCH_SOURCE,
     sourceUrl: result.sourceUrl,
     isClosed: result.isClosed,
     isRelevant: result.isRelevant,

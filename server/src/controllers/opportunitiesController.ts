@@ -19,6 +19,52 @@ import type {
   SerializableOpportunity,
 } from 'shared';
 
+/** Wire shape of a live hit read in this request. */
+function liveResultToOpportunity(r: liveSearchService.EnrichedLiveResult): Opportunity {
+  return {
+    id: r.id,
+    title: r.title,
+    organization: r.organization,
+    description: r.description,
+    location: r.location,
+    isRemote: r.isRemote,
+    eventDate: r.eventDate,
+    cfpDeadline: r.cfpDeadline,
+    deadlineTimezone: r.deadlineTimezone ?? null,
+    format: r.format as OpportunityFormat,
+    industries: r.industries,
+    compensationType: r.compensationType as CompensationType | null,
+    compensationAmount: r.compensationAmount,
+    compensationDetails: r.compensationDetails,
+    applyUrl: r.applyUrl,
+    qualityScore: r.qualityScore,
+    source: r.source,
+    sourceUrl: r.sourceUrl,
+    createdAt: r.createdAt,
+    updatedAt: r.updatedAt,
+    isLiveResult: true,
+    liveSearchUrl: r.liveSearchUrl,
+    matchesLocationFilter: r.matchesLocationFilter,
+  };
+}
+
+/**
+ * What a live search adds to the list: the new hits read in the request, and
+ * the stored rows of hits seen before (enriched, verified, event-grouped)
+ * rather than a fresh copy built from the search snippet.
+ */
+async function liveOutcomeToItems(
+  outcome: liveSearchService.LiveSearchOutcome,
+  filters: opportunityService.OpportunityFilters,
+  listOptions: opportunityService.ListOptions,
+  profile: opportunityService.ListOptions['profile']
+): Promise<{ live: Opportunity[]; stored: OpportunityWithDates[] }> {
+  const liveItems = outcome.results.map(liveResultToOpportunity);
+  const live = profile ? scoreOpportunities(profile, liveItems) : liveItems;
+  const stored = await opportunityService.getListedByApplyUrls(outcome.storedUrls, filters, listOptions);
+  return { live, stored };
+}
+
 export async function getOpportunities(
   req: Request,
   res: Response,
@@ -41,7 +87,7 @@ export async function getOpportunities(
     const dbResults = await opportunityService.getOpportunities(filters, pagination, listOptions);
 
     // If liveSearch requested, also run live search
-    let liveResults: liveSearchService.EnrichedLiveResult[] = [];
+    let liveOutcome: liveSearchService.LiveSearchOutcome = { results: [], storedUrls: [], pendingCount: 0 };
     if (doLiveSearch === 'true' && (queryParams.search || queryParams.industries)) {
       const searchQuery = queryParams.search ? String(queryParams.search) : '';
       const industryList = queryParams.industries
@@ -65,53 +111,25 @@ export async function getOpportunities(
 
       // performLiveSearch persists every hit before returning; the enrichment
       // cron finishes the ones it did not enrich in the request.
-      liveResults = await liveSearchService.performLiveSearch(searchQuery, industryList, locationList, liveFilters);
+      liveOutcome = await liveSearchService.performLiveSearch(searchQuery, industryList, locationList, liveFilters);
       // Awaited on purpose: a fire-and-forget insert is lost when the function freezes.
       await recordSearch({
         query: searchQuery,
         industries: industryList,
         locations: locationList,
-        resultCount: liveResults.length,
+        resultCount: liveOutcome.results.length + liveOutcome.storedUrls.length,
         userId: req.user?.userId,
       });
     }
 
-    // Deduplicate: exclude DB results that match live result URLs
-    const liveUrls = new Set(liveResults.map((r) => r.applyUrl));
-    const dedupedDbItems: OpportunityWithDates[] = liveResults.length > 0
-      ? dbResults.items.filter((item) => !liveUrls.has(item.applyUrl))
-      : dbResults.items;
+    const { live: liveOpportunities, stored: storedHits } = await liveOutcomeToItems(liveOutcome, filters, listOptions, profile);
 
-    // Convert live results to match the Opportunity response shape
-    const liveItems: Opportunity[] = liveResults.map((r) => ({
-      id: r.id,
-      title: r.title,
-      organization: r.organization,
-      description: r.description,
-      location: r.location,
-      isRemote: r.isRemote,
-      eventDate: r.eventDate,
-      cfpDeadline: r.cfpDeadline,
-      deadlineTimezone: r.deadlineTimezone ?? null,
-      format: r.format as OpportunityFormat,
-      industries: r.industries,
-      compensationType: r.compensationType as CompensationType | null,
-      compensationAmount: r.compensationAmount,
-      compensationDetails: r.compensationDetails,
-      applyUrl: r.applyUrl,
-      qualityScore: r.qualityScore,
-      source: r.source,
-      sourceUrl: r.sourceUrl,
-      createdAt: r.createdAt,
-      updatedAt: r.updatedAt,
-      isLiveResult: true,
-      liveSearchUrl: r.liveSearchUrl,
-      matchesLocationFilter: r.matchesLocationFilter,
-    }));
-    const liveOpportunities: Opportunity[] = profile ? scoreOpportunities(profile, liveItems) : liveItems;
+    // A row surfaced by the live search is listed once, from the live side.
+    const surfacedUrls = new Set([...liveOpportunities, ...storedHits].map((item) => item.applyUrl));
+    const dedupedDbItems: OpportunityWithDates[] = dbResults.items.filter((item) => !surfacedUrls.has(item.applyUrl));
 
     // Combine and sort
-    const combined: SerializableOpportunity[] = [...liveOpportunities, ...dedupedDbItems];
+    const combined: SerializableOpportunity[] = [...liveOpportunities, ...storedHits, ...dedupedDbItems];
     const sortBy = filters.sortBy === 'match' && !profile ? 'quality' : filters.sortBy || 'deadline';
 
     combined.sort((a, b) => {
@@ -134,7 +152,8 @@ export async function getOpportunities(
       data: {
         ...dbResults,
         items: combined,
-        liveResultCount: liveResults.length,
+        liveResultCount: liveOpportunities.length + storedHits.length,
+        pendingLiveCount: liveOutcome.pendingCount,
       },
     };
     res.json(payload);
@@ -222,7 +241,7 @@ export async function liveSearch(
     };
 
     // Hits are persisted inside performLiveSearch; nothing runs after the response.
-    const results = await liveSearchService.performLiveSearch(
+    const outcome = await liveSearchService.performLiveSearch(
       searchQuery,
       industryList,
       locationList,
@@ -232,13 +251,16 @@ export async function liveSearch(
       query: searchQuery,
       industries: industryList,
       locations: locationList,
-      resultCount: results.length,
+      resultCount: outcome.results.length + outcome.storedUrls.length,
       userId: req.user?.userId,
     });
 
+    const profile = req.user ? await profileService.getMatchProfile(req.user.userId) : null;
+    const { live, stored } = await liveOutcomeToItems(outcome, {}, { profile }, profile);
     res.json({
       success: true,
-      data: results,
+      data: [...live, ...stored],
+      pendingLiveCount: outcome.pendingCount,
     });
   } catch (error) {
     next(error);
