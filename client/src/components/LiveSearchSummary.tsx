@@ -8,6 +8,8 @@ interface LiveSearchSummaryProps {
   notOpenCount: number;
   /** Pages found but not read yet. */
   pendingHits: PendingLiveHit[];
+  /** Set when background checks have spent today's limit: when they resume (ISO). */
+  backgroundChecksResumeAt: string | null;
 }
 
 function hostname(url: string): string {
@@ -23,7 +25,13 @@ function hostname(url: string): string {
  * to be open calls, and which ones it has not read yet (by name, unchecked).
  * Explains a short result list instead of leaving it looking broken.
  */
-export function LiveSearchSummary({ foundCount, notOpenCount, pendingHits }: LiveSearchSummaryProps) {
+function backgroundNote(resumeAt: string | null): string {
+  if (!resumeAt) return 'The rest are checked in the background within a few minutes.';
+  const time = new Date(resumeAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  return `Background checks have used today's limit and resume at ${time}.`;
+}
+
+export function LiveSearchSummary({ foundCount, notOpenCount, pendingHits, backgroundChecksResumeAt }: LiveSearchSummaryProps) {
   if (foundCount === 0 && pendingHits.length === 0) return null;
 
   return (
@@ -49,8 +57,8 @@ export function LiveSearchSummary({ foundCount, notOpenCount, pendingHits }: Liv
             <span className="font-normal text-muted-foreground group-open:hidden">(show)</span>
           </summary>
           <p className="mt-2">
-            We have not read these pages yet, so they may not be open calls. Search again to check them now; they are
-            also checked in the background within a few minutes.
+            We have not read these pages yet, so they may not be open calls. Each live search reads up to 8 of them
+            right away. {backgroundNote(backgroundChecksResumeAt)}
           </p>
           <ul className="mt-2 space-y-1">
             {pendingHits.map((hit) => (

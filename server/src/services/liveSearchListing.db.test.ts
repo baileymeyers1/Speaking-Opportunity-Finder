@@ -58,6 +58,8 @@ describe('stored search and live-search hits', () => {
     await store({ title: 'Retail Product Days', applyUrl: url('retail'), description: 'He said the April product launch went well.' });
     // A live hit stored from its snippet, page not read yet.
     await store({ title: 'AI PR Roundup', applyUrl: url('pending'), source: 'Live Search', enrichmentStatus: null });
+    // A live hit whose read failed: still only the snippet, so it stays hidden too.
+    await store({ title: 'AI PR Unreadable', applyUrl: url('failed'), source: 'Live Search', enrichmentStatus: 'failed' });
     // The same kind of hit once the worker has read it.
     await store({ title: 'AI PR Awards Call', applyUrl: url('read'), source: 'Live Search', enrichmentStatus: 'enriched' });
     await store({ title: 'AI PR Closed Call', applyUrl: url('closed'), isClosed: true });
@@ -92,6 +94,12 @@ describe('stored search and live-search hits', () => {
   it('hides a live hit until its page has been read', async () => {
     const page = await getOpportunities({ search: 'Roundup' }, { page: 1, pageSize: 50 }, { now });
     expect(page.items.map((item) => item.title)).not.toContain('AI PR Roundup');
+  });
+
+  it('hides a live hit whose page could not be read', async () => {
+    const page = await getOpportunities({ search: 'Unreadable' }, { page: 1, pageSize: 50 }, { now });
+    expect(page.items).toEqual([]);
+    expect(await getListedByApplyUrls([url('failed')], {}, { now })).toEqual([]);
   });
 
   it('finds the listed stored copies of live hits by URL, with the list visibility rules', async () => {

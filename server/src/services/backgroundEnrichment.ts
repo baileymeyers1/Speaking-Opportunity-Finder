@@ -8,8 +8,10 @@ import {
   claimNextForVerification,
   claimNextUnenriched,
   claimUnenrichedByIds,
+  DAILY_ENRICHMENT_LIMIT,
   getTodayEnrichmentCount,
   MAX_ENRICHMENT_ATTEMPTS,
+  NO_DAILY_LIMIT,
   releaseClaim,
   releaseEnrichmentSlot,
   releaseVerificationClaim,
@@ -155,20 +157,32 @@ async function processNextUnenriched(): Promise<WorkerOutcome> {
 }
 
 /**
- * Enrich unenriched rows right now (a live search reading hits an earlier
- * search stored), under the same claims, attempt counter and daily budget as
- * the worker. A row the worker already holds is skipped. Returns how many
- * rows were claimed.
+ * Enrich unenriched rows right now, for a live search reading hits an earlier
+ * search stored. Same claims and attempt counter as the worker, so a row the
+ * worker holds is skipped. The calls are counted in today's usage but not
+ * refused when the worker's daily limit is spent: like a live search's other
+ * reads, they are capped per request instead (SYNC_ENRICH_LIMIT).
  */
-export async function enrichRowsNow(ids: readonly string[], concurrency: number = 8): Promise<number> {
-  if (!config.claude.apiKey || ids.length === 0) return 0;
+export async function enrichRowsNow(
+  ids: readonly string[],
+  concurrency: number = 8
+): Promise<{ claimed: number; read: number }> {
+  if (!config.claude.apiKey || ids.length === 0) return { claimed: 0, read: 0 };
   const claimed = await claimUnenrichedByIds(prisma, ids);
-  await mapWithConcurrency(claimed, concurrency, (row) => enrichClaimedRow(row));
-  return claimed.length;
+  const outcomes = await mapWithConcurrency(claimed, concurrency, (row) =>
+    enrichClaimedRow(row, NO_DAILY_LIMIT)
+  );
+  const read = await prisma.opportunity.count({
+    where: { id: { in: claimed.map((row) => row.id) }, enrichmentStatus: { not: null } },
+  });
+  return { claimed: outcomes.length, read };
 }
 
 /** Read one claimed row's page and enrich it; failures are recorded on the row. */
-async function enrichClaimedRow(opportunity: OpportunityRow): Promise<WorkerOutcome> {
+async function enrichClaimedRow(
+  opportunity: OpportunityRow,
+  dailyLimit: number = DAILY_ENRICHMENT_LIMIT
+): Promise<WorkerOutcome> {
   try {
     const scraperResult = toScraperResult(opportunity);
     const page = await fetchPageText(opportunity.applyUrl);
@@ -190,7 +204,7 @@ async function enrichClaimedRow(opportunity: OpportunityRow): Promise<WorkerOutc
       return 'processed';
     }
 
-    const budget = await reserveEnrichmentSlot(prisma);
+    const budget = await reserveEnrichmentSlot(prisma, dailyLimit);
     state.dailyEnrichmentCount = budget.count;
     if (!budget.reserved) {
       state.processed--;

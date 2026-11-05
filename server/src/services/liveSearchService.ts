@@ -14,7 +14,13 @@ import {
 import { fetchPageText } from './pageText.js';
 import { matchesAllTerms, searchTerms } from './searchTerms.js';
 import { LIVE_SEARCH_SOURCE } from './opportunityQuery.js';
-import { findStoredHits, readWaitingHits, summarizeHits, type HitSummary } from './liveSearchHits.js';
+import {
+  backgroundChecksResumeAt,
+  findStoredHits,
+  readWaitingHits,
+  summarizeHits,
+  type HitSummary,
+} from './liveSearchHits.js';
 import { mapWithConcurrency, parseHumanDate } from '../scrapers/lib/html.js';
 import { endOfCalendarDay } from '../lib/deadlines.js';
 import { buildCreateData } from '../scrapers/persistData.js';
@@ -479,7 +485,8 @@ function extractMetadata(content: string, title: string, searchIndustries: strin
   }
 
   const compensation = extractCompensation(content);
-  const eventDate = extractEventDate(content);
+  // A date in the title ("PR Daily Conference | June 3-5, 2026") counts too; the snippet often omits it.
+  const eventDate = extractEventDate(content) ?? extractEventDate(title);
 
   return { format, isRemote, location, cfpDeadline, industries: normalizeIndustries(industries), eventDate, ...compensation };
 }
@@ -528,10 +535,12 @@ const locationAliasMap: Record<string, string[]> = {
 
 /**
  * Build multiple search queries for broader coverage.
- * Returns 2-3 query variations to run in parallel.
+ * Returns 2-3 query variations to run in parallel. Each names this year and
+ * next: late in the year most events "this year" are over, and calls for
+ * next year's events are already open (same as linkupQueries.ts).
  */
-function buildSearchQueries(query: string, industries: string[], locations: string[]): string[] {
-  const currentYear = new Date().getFullYear();
+export function buildSearchQueries(query: string, industries: string[], locations: string[], now: Date = new Date()): string[] {
+  const years = `${now.getFullYear()} ${now.getFullYear() + 1}`;
   const locationSuffix = locations.length > 0
     ? ` ${locations.join(' OR ')}`
     : '';
@@ -543,26 +552,26 @@ function buildSearchQueries(query: string, industries: string[], locations: stri
       const templates = INDUSTRY_QUERIES[ind.toLowerCase()];
       return templates ? templates[0] : `${ind} conference`;
     });
-    queries.push(`${query} ${industryTerms[0]} speaking opportunity ${currentYear}${locationSuffix}`);
-    queries.push(`${query} conference call for speakers ${currentYear}${locationSuffix}`);
+    queries.push(`${query} ${industryTerms[0]} speaking opportunity ${years}${locationSuffix}`);
+    queries.push(`${query} conference call for speakers ${years}${locationSuffix}`);
     if (industryTerms.length > 1) {
-      queries.push(`${query} ${industryTerms[1]} CFP ${currentYear}${locationSuffix}`);
+      queries.push(`${query} ${industryTerms[1]} CFP ${years}${locationSuffix}`);
     }
   } else if (query) {
     // Multiple query angles for broad coverage
-    queries.push(`${query} conference call for speakers ${currentYear}${locationSuffix}`);
-    queries.push(`${query} speaking opportunity CFP ${currentYear}${locationSuffix}`);
-    queries.push(`${query} summit keynote speaker submissions ${currentYear}${locationSuffix}`);
+    queries.push(`${query} conference call for speakers ${years}${locationSuffix}`);
+    queries.push(`${query} speaking opportunity CFP ${years}${locationSuffix}`);
+    queries.push(`${query} summit keynote speaker submissions ${years}${locationSuffix}`);
   } else if (industries.length > 0) {
     const industryTerms = industries.map((ind) => {
       const templates = INDUSTRY_QUERIES[ind.toLowerCase()];
       return templates ? templates[0] : `${ind} conference`;
     });
-    queries.push(`${industryTerms[0]} call for speakers ${currentYear}${locationSuffix}`);
+    queries.push(`${industryTerms[0]} call for speakers ${years}${locationSuffix}`);
     if (industryTerms.length > 1) {
-      queries.push(`${industryTerms[1]} ${currentYear}${locationSuffix}`);
+      queries.push(`${industryTerms[1]} ${years}${locationSuffix}`);
     }
-    queries.push(`${industries[0]} conference CFP ${currentYear}${locationSuffix}`);
+    queries.push(`${industries[0]} conference CFP ${years}${locationSuffix}`);
   }
 
   return queries;
@@ -579,6 +588,8 @@ export interface LiveSearchOutcome {
   foundCount: number;
   /** Hits read (now or earlier) and found closed or not a speaking opportunity. */
   notOpenCount: number;
+  /** When the background worker resumes, if today's limit is spent and hits are still waiting. */
+  backgroundChecksResumeAt: string | null;
 }
 
 /**
@@ -596,7 +607,14 @@ export async function performLiveSearch(
   locations: string[] = [],
   filters: LiveSearchFilters = {}
 ): Promise<LiveSearchOutcome> {
-  const empty: LiveSearchOutcome = { results: [], storedUrls: [], waiting: [], foundCount: 0, notOpenCount: 0 };
+  const empty: LiveSearchOutcome = {
+    results: [],
+    storedUrls: [],
+    waiting: [],
+    foundCount: 0,
+    notOpenCount: 0,
+    backgroundChecksResumeAt: null,
+  };
   const apiKey = config.scrapers?.webSearch;
 
   const searchQueries = buildSearchQueries(query, industries, locations);
@@ -754,6 +772,7 @@ export async function performLiveSearch(
     waiting: summary.waiting,
     foundCount: hits.length,
     notOpenCount: summary.notOpenCount,
+    backgroundChecksResumeAt: summary.waiting.length > 0 ? await backgroundChecksResumeAt() : null,
   };
 }
 

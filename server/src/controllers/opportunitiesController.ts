@@ -159,6 +159,7 @@ export async function getOpportunities(
           pendingLiveHits: liveOutcome.waiting,
           liveFoundCount: liveOutcome.foundCount,
           liveNotOpenCount: liveOutcome.notOpenCount,
+          backgroundChecksResumeAt: liveOutcome.backgroundChecksResumeAt,
         }),
       },
     };
@@ -269,6 +270,7 @@ export async function liveSearch(
       pendingLiveHits: outcome.waiting,
       liveFoundCount: outcome.foundCount,
       liveNotOpenCount: outcome.notOpenCount,
+      backgroundChecksResumeAt: outcome.backgroundChecksResumeAt,
     });
   } catch (error) {
     next(error);

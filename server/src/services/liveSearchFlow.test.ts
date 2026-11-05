@@ -19,6 +19,7 @@ interface StoredRow {
 
 const mocks = vi.hoisted(() => ({
   table: new Map<string, StoredRow>(),
+  usageToday: 0,
   extract: vi.fn(),
   enrichRowsNow: vi.fn(),
 }));
@@ -53,6 +54,9 @@ vi.mock('../lib/prisma.js', () => ({
         return { count: data.length };
       }),
     },
+    enrichmentUsage: {
+      findUnique: vi.fn(async () => ({ count: mocks.usageToday })),
+    },
   },
 }));
 
@@ -69,7 +73,8 @@ vi.mock('./extraction.js', async (importOriginal) => {
   return { ...actual, extractOpportunitiesBatch: mocks.extract };
 });
 
-import { performLiveSearch, SYNC_ENRICH_LIMIT } from './liveSearchService.js';
+import { buildSearchQueries, performLiveSearch, SYNC_ENRICH_LIMIT } from './liveSearchService.js';
+import { DAILY_ENRICHMENT_LIMIT } from './enrichmentBudget.js';
 
 interface LinkupItem {
   name: string;
@@ -135,13 +140,14 @@ const extractedUrls = () =>
 
 beforeEach(() => {
   mocks.table.clear();
+  mocks.usageToday = 0;
   mocks.extract.mockImplementation(async (inputs: unknown[]) => inputs.map(() => extractionOk()));
   // The worker's per-row read: mark each claimed row enriched and open.
   mocks.enrichRowsNow.mockImplementation(async (ids: string[]) => {
     for (const row of mocks.table.values()) {
       if (ids.includes(row.id)) row.enrichmentStatus = 'enriched';
     }
-    return ids.length;
+    return { claimed: ids.length, read: ids.length };
   });
   vi.spyOn(console, 'log').mockImplementation(() => undefined);
 });
@@ -243,5 +249,49 @@ describe('performLiveSearch', () => {
 
     expect(outcome.results.map((r) => r.applyUrl)).toEqual([urlOf('match')]);
     expect(outcome.foundCount).toBe(1);
+  });
+
+  it('drops a hit whose title names an event date that has passed', async () => {
+    linkupReturns([
+      hit('open'),
+      {
+        name: 'PR Daily Conference | June 3-5, 2025 | Brooklyn',
+        url: urlOf('past'),
+        content: 'Join PR and AI leaders for three days of sessions; we are looking for speakers.',
+      },
+    ]);
+
+    const outcome = await performLiveSearch('AI for PR', []);
+
+    expect(outcome.results.map((r) => r.applyUrl)).toEqual([urlOf('open')]);
+    expect(outcome.foundCount).toBe(1);
+  });
+
+  it('says when background checks resume once the worker has spent the daily limit', async () => {
+    linkupReturns(Array.from({ length: SYNC_ENRICH_LIMIT + 1 }, (_, i) => hit(`new-${i}`)));
+    mocks.usageToday = DAILY_ENRICHMENT_LIMIT;
+
+    const outcome = await performLiveSearch('AI for PR', []);
+
+    expect(outcome.waiting).toHaveLength(1);
+    const resumeAt = new Date(outcome.backgroundChecksResumeAt ?? '');
+    expect(resumeAt.getUTCHours()).toBe(0);
+    expect(resumeAt.getTime()).toBeGreaterThan(Date.now());
+  });
+
+  it('says nothing about the background when it still has budget', async () => {
+    linkupReturns(Array.from({ length: SYNC_ENRICH_LIMIT + 1 }, (_, i) => hit(`new-${i}`)));
+
+    const outcome = await performLiveSearch('AI for PR', []);
+
+    expect(outcome.backgroundChecksResumeAt).toBeNull();
+  });
+});
+
+describe('buildSearchQueries', () => {
+  it('names this year and next in every query', () => {
+    const queries = buildSearchQueries('AI for PR', [], [], new Date('2026-11-05T12:00:00Z'));
+    expect(queries.length).toBeGreaterThan(0);
+    expect(queries.every((q) => q.includes('2026 2027'))).toBe(true);
   });
 });
