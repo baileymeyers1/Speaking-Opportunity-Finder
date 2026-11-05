@@ -14,10 +14,12 @@ import {
 import { fetchPageText } from './pageText.js';
 import { matchesAllTerms, searchTerms } from './searchTerms.js';
 import { LIVE_SEARCH_SOURCE } from './opportunityQuery.js';
+import { findStoredHits, readWaitingHits, summarizeHits, type HitSummary } from './liveSearchHits.js';
 import { mapWithConcurrency, parseHumanDate } from '../scrapers/lib/html.js';
 import { endOfCalendarDay } from '../lib/deadlines.js';
 import { buildCreateData } from '../scrapers/persistData.js';
 import type { ScraperResult } from '../scrapers/qualityScore.js';
+import type { PendingLiveHit } from 'shared';
 
 /** Live hits enriched synchronously per request; the enrichment cron finishes the rest. */
 export const SYNC_ENRICH_LIMIT = 8;
@@ -572,31 +574,11 @@ export interface LiveSearchOutcome {
   /** Apply URLs of hits that were already stored; the caller lists the stored rows. */
   storedUrls: string[];
   /** Hits stored but not read yet (new now or left by an earlier search); the enrichment worker finishes them. */
-  pendingCount: number;
-}
-
-interface StoredHits {
-  urls: Set<string>;
-  /** Stored by an earlier live search and not read yet. */
-  pendingCount: number;
-}
-
-/** Which of these apply URLs already have a row, and how many of those still wait to be read. */
-async function findStoredHits(urls: readonly string[]): Promise<StoredHits> {
-  if (urls.length === 0) return { urls: new Set(), pendingCount: 0 };
-  try {
-    const rows = await prisma.opportunity.findMany({
-      where: { applyUrl: { in: [...urls] } },
-      select: { applyUrl: true, source: true, enrichmentStatus: true },
-    });
-    return {
-      urls: new Set(rows.map((row) => row.applyUrl)),
-      pendingCount: rows.filter((row) => row.source === LIVE_SEARCH_SOURCE && row.enrichmentStatus === null).length,
-    };
-  } catch (error) {
-    console.error('[LiveSearch] Could not look up stored hits:', error);
-    return { urls: new Set(), pendingCount: 0 };
-  }
+  waiting: PendingLiveHit[];
+  /** Hits found after the relevance filter. */
+  foundCount: number;
+  /** Hits read (now or earlier) and found closed or not a speaking opportunity. */
+  notOpenCount: number;
 }
 
 /**
@@ -604,8 +586,9 @@ async function findStoredHits(urls: readonly string[]): Promise<StoredHits> {
  *
  * Hits already stored are not read again: their URLs come back in
  * `storedUrls` so the caller shows the stored (enriched) rows. The in-request
- * Claude calls go to the best new hits; only the ones it read are returned,
- * the rest are stored for the enrichment worker and counted in `pendingCount`.
+ * Claude calls go to the best new hits; calls left over read hits an earlier
+ * search stored but nobody has read yet. Only hits Claude read are returned;
+ * the rest are stored for the enrichment worker and listed in `waiting`.
  */
 export async function performLiveSearch(
   query: string,
@@ -613,7 +596,7 @@ export async function performLiveSearch(
   locations: string[] = [],
   filters: LiveSearchFilters = {}
 ): Promise<LiveSearchOutcome> {
-  const empty: LiveSearchOutcome = { results: [], storedUrls: [], pendingCount: 0 };
+  const empty: LiveSearchOutcome = { results: [], storedUrls: [], waiting: [], foundCount: 0, notOpenCount: 0 };
   const apiKey = config.scrapers?.webSearch;
 
   const searchQueries = buildSearchQueries(query, industries, locations);
@@ -676,10 +659,15 @@ export async function performLiveSearch(
   // --- Synchronous enrichment of the best new hits only ---
   fresh.sort((a, b) => b.qualityScore - a.qualityScore);
   const toEnrich = fresh.slice(0, SYNC_ENRICH_LIMIT);
+  // Calls the new hits leave over read hits an earlier search stored but nobody has read.
+  const waitingToRead = storedHits.waitingIds.slice(0, SYNC_ENRICH_LIMIT - toEnrich.length);
   if (toEnrich.length > 0) {
     console.log(`[LiveSearch] Enriching top ${toEnrich.length} of ${fresh.length} new results (${stored.size} already stored)...`);
-    await enrichResultsFromPages(toEnrich, industries);
   }
+  await Promise.all([
+    toEnrich.length > 0 ? enrichResultsFromPages(toEnrich, industries) : Promise.resolve(),
+    readWaitingHits(waitingToRead),
+  ]);
 
   // Persist every new hit now; the enrichment cron finishes the ones not enriched here.
   try {
@@ -689,7 +677,16 @@ export async function performLiveSearch(
     console.error('[LiveSearch] Failed to persist live results:', error);
   }
 
-  const pendingCount = fresh.filter(r => !r.extracted && !r.isClosed).length + storedHits.pendingCount;
+  let summary: HitSummary;
+  try {
+    summary = await summarizeHits(hits.map(r => r.applyUrl));
+  } catch (error) {
+    console.error('[LiveSearch] Could not summarize hits:', error);
+    summary = {
+      waiting: fresh.filter(r => !r.extracted && !r.isClosed).map(r => ({ title: r.title, applyUrl: r.applyUrl })),
+      notOpenCount: 0,
+    };
+  }
 
   // Only hits Claude read are shown: the rest have nothing but a search snippet.
   let results = fresh.filter(r => r.extracted === true);
@@ -754,7 +751,9 @@ export async function performLiveSearch(
   return {
     results: results.sort((a, b) => b.qualityScore - a.qualityScore),
     storedUrls: hits.filter(r => stored.has(r.applyUrl)).map(r => r.applyUrl),
-    pendingCount,
+    waiting: summary.waiting,
+    foundCount: hits.length,
+    notOpenCount: summary.notOpenCount,
   };
 }
 

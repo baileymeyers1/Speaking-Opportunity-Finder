@@ -278,8 +278,18 @@ export interface PaginatedResponse<T> {
   totalPages: number;
   /** Results this live search surfaced: new hits read in the request plus stored copies of known hits. */
   liveResultCount?: number;
-  /** New live hits stored but not read yet; they appear once the enrichment worker reads them. */
-  pendingLiveCount?: number;
+  /** Live hits stored but not read yet; they appear once the enrichment worker reads them. */
+  pendingLiveHits?: PendingLiveHit[];
+  /** Pages the live search found (after its relevance filter). */
+  liveFoundCount?: number;
+  /** Of those, how many were read and are not open calls for speakers. */
+  liveNotOpenCount?: number;
+}
+
+/** A live-search hit whose page has not been read yet: shown by name, unchecked. */
+export interface PendingLiveHit {
+  title: string;
+  applyUrl: string;
 }
 
 export interface PaginationParams {

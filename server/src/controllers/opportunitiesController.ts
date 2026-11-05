@@ -87,7 +87,7 @@ export async function getOpportunities(
     const dbResults = await opportunityService.getOpportunities(filters, pagination, listOptions);
 
     // If liveSearch requested, also run live search
-    let liveOutcome: liveSearchService.LiveSearchOutcome = { results: [], storedUrls: [], pendingCount: 0 };
+    let liveOutcome: liveSearchService.LiveSearchOutcome | null = null;
     if (doLiveSearch === 'true' && (queryParams.search || queryParams.industries)) {
       const searchQuery = queryParams.search ? String(queryParams.search) : '';
       const industryList = queryParams.industries
@@ -122,7 +122,9 @@ export async function getOpportunities(
       });
     }
 
-    const { live: liveOpportunities, stored: storedHits } = await liveOutcomeToItems(liveOutcome, filters, listOptions, profile);
+    const { live: liveOpportunities, stored: storedHits } = liveOutcome
+      ? await liveOutcomeToItems(liveOutcome, filters, listOptions, profile)
+      : { live: [], stored: [] };
 
     // A row surfaced by the live search is listed once, from the live side.
     const surfacedUrls = new Set([...liveOpportunities, ...storedHits].map((item) => item.applyUrl));
@@ -153,7 +155,11 @@ export async function getOpportunities(
         ...dbResults,
         items: combined,
         liveResultCount: liveOpportunities.length + storedHits.length,
-        pendingLiveCount: liveOutcome.pendingCount,
+        ...(liveOutcome && {
+          pendingLiveHits: liveOutcome.waiting,
+          liveFoundCount: liveOutcome.foundCount,
+          liveNotOpenCount: liveOutcome.notOpenCount,
+        }),
       },
     };
     res.json(payload);
@@ -260,7 +266,9 @@ export async function liveSearch(
     res.json({
       success: true,
       data: [...live, ...stored],
-      pendingLiveCount: outcome.pendingCount,
+      pendingLiveHits: outcome.waiting,
+      liveFoundCount: outcome.foundCount,
+      liveNotOpenCount: outcome.notOpenCount,
     });
   } catch (error) {
     next(error);
