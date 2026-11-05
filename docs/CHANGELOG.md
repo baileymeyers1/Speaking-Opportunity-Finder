@@ -2,6 +2,14 @@
 
 Reverse chronological. Current state lives in `docs/STATUS.md`.
 
+## 2026-11-05 — Live search: show checked results, accumulate across searches
+
+- Diagnosis (production logs, "AI for PR" with a profile, 15:15 and 15:19 UTC): both runs returned the same 50 hits (run 2: "0 new, 50 already stored"); only the top 8 per run were read by Claude, so 42 cards carried snippet-only fields ("Date TBD", "Location TBD"). Run 1 sorted by match, which ranks text-heavy listicles high because unknown location/pay drop out of the score; run 2 sorted by deadline (all null), which falls back to quality order. Run 2 re-extracted 8 pages already read 4 minutes earlier and showed the snippet copy of rows instead of the stored, enriched ones.
+- `performLiveSearch` returns `{ results, storedUrls, pendingCount }`. Stored hits are listed from the database through `getListedByApplyUrls` (same visibility, filters and event grouping as the list); the in-request extractions go to new hits only; only hits Claude read are returned. A repeat search with nothing new makes no Claude call.
+- Live-search rows not yet read (`source: 'Live Search'`, `enrichmentStatus: null`) are hidden from every list, mirrored in the event-grouping SQL. The response carries `pendingLiveCount`; the banner says how many possible matches are still being checked.
+- `searchTerms.ts`: stored search matches every word instead of the exact phrase; short words match whole words. The live relevance check used the same idea but dropped words of 2 characters or fewer, so "AI for PR" filtered on "for" alone. Locally the same query now keeps 26 hits instead of 50; Claude read 8 and judged all of them not open calls (listicles, vendor pages, conferences without a speaker call).
+- Tests: server 387 → 409 (search terms, live search flow with mocks, listing against the test database).
+
 ## 2026-11-04 — Event matcher precision after the production dry run
 
 - The production backfill dry run (1,826 rows: 1,644 events, 130 links, 396 review pairs) auto-linked directory index pages ("Law Conferences in California" → "Medical Conferences in California"), academic titles with the same words and different acronyms ("… Power and Renewable Energy Engineering (PREE)" → "… Renewable Energy and Power Engineering (REPE)"), "Annual Conference" → "CAA Annual Conference", and AWS Student Community Day city editions. Every one is now a must-not-link fixture; c0c0n, Power Platform Days Barcelona, LEDucation, Global Gaming Expo (G2E) and ACMME are must-link fixtures.
