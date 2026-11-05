@@ -12,7 +12,8 @@ import {
   type ExtractionResult,
 } from './extraction.js';
 import { fetchPageText } from './pageText.js';
-import { matchesAllTerms, searchTerms } from './searchTerms.js';
+import { expandQuery, matchesAllTerms, searchTerms } from './searchTerms.js';
+import { callSignal, looksLikeArticle } from './liveHitTriage.js';
 import { LIVE_SEARCH_SOURCE } from './opportunityQuery.js';
 import {
   backgroundChecksResumeAt,
@@ -533,48 +534,56 @@ const locationAliasMap: Record<string, string[]> = {
   'philadelphia': ['philly'],
 };
 
+export interface LiveQuery {
+  q: string;
+}
+
 /**
- * Build multiple search queries for broader coverage.
- * Returns 2-3 query variations to run in parallel. Each names this year and
- * next: late in the year most events "this year" are over, and calls for
- * next year's events are already open (same as linkupQueries.ts).
+ * Build the query variants to run in parallel. Each names this year and next:
+ * late in the year most events "this year" are over, and calls for next
+ * year's events are already open (same as linkupQueries.ts).
+ *
+ * A search term gets several angles, because calls are worded many ways:
+ * "call for speakers", "call for proposals / submit a session", and formats
+ * beyond conferences (podcast guests, panels, webinars). Ambiguous
+ * abbreviations are spelled out ("PR" → "public relations") for the engine;
+ * the relevance check accepts both (searchTerms.ts). A variant limited to
+ * Sessionize/PaperCall/pretalx was tried and dropped: those sites host mostly
+ * tech events, which the structured scrapers already collect.
  */
-export function buildSearchQueries(query: string, industries: string[], locations: string[], now: Date = new Date()): string[] {
+export function buildSearchQueries(query: string, industries: string[], locations: string[], now: Date = new Date()): LiveQuery[] {
   const years = `${now.getFullYear()} ${now.getFullYear() + 1}`;
   const locationSuffix = locations.length > 0
     ? ` ${locations.join(' OR ')}`
     : '';
+  const industryTerms = industries.map((ind) => {
+    const templates = INDUSTRY_QUERIES[ind.toLowerCase()];
+    return templates ? templates[0] : `${ind} conference`;
+  });
 
-  const queries: string[] = [];
-
-  if (query && industries.length > 0) {
-    const industryTerms = industries.map((ind) => {
-      const templates = INDUSTRY_QUERIES[ind.toLowerCase()];
-      return templates ? templates[0] : `${ind} conference`;
-    });
-    queries.push(`${query} ${industryTerms[0]} speaking opportunity ${years}${locationSuffix}`);
-    queries.push(`${query} conference call for speakers ${years}${locationSuffix}`);
-    if (industryTerms.length > 1) {
-      queries.push(`${query} ${industryTerms[1]} CFP ${years}${locationSuffix}`);
+  if (query) {
+    const expanded = expandQuery(query);
+    const queries: LiveQuery[] = [
+      { q: `${query} conference call for speakers ${years}${locationSuffix}` },
+      { q: `${expanded} call for proposals submit a session ${years}${locationSuffix}` },
+      { q: `${expanded} speakers wanted podcast guest panel webinar ${years}${locationSuffix}` },
+    ];
+    if (industryTerms.length > 0) {
+      queries.unshift({ q: `${query} ${industryTerms[0]} speaking opportunity ${years}${locationSuffix}` });
     }
-  } else if (query) {
-    // Multiple query angles for broad coverage
-    queries.push(`${query} conference call for speakers ${years}${locationSuffix}`);
-    queries.push(`${query} speaking opportunity CFP ${years}${locationSuffix}`);
-    queries.push(`${query} summit keynote speaker submissions ${years}${locationSuffix}`);
-  } else if (industries.length > 0) {
-    const industryTerms = industries.map((ind) => {
-      const templates = INDUSTRY_QUERIES[ind.toLowerCase()];
-      return templates ? templates[0] : `${ind} conference`;
-    });
-    queries.push(`${industryTerms[0]} call for speakers ${years}${locationSuffix}`);
-    if (industryTerms.length > 1) {
-      queries.push(`${industryTerms[1]} ${years}${locationSuffix}`);
-    }
-    queries.push(`${industries[0]} conference CFP ${years}${locationSuffix}`);
+    return queries;
   }
 
-  return queries;
+  if (industries.length > 0) {
+    const queries: LiveQuery[] = [{ q: `${industryTerms[0]} call for speakers ${years}${locationSuffix}` }];
+    if (industryTerms.length > 1) {
+      queries.push({ q: `${industryTerms[1]} ${years}${locationSuffix}` });
+    }
+    queries.push({ q: `${industries[0]} conference CFP ${years}${locationSuffix}` });
+    return queries;
+  }
+
+  return [];
 }
 
 export interface LiveSearchOutcome {
@@ -669,13 +678,17 @@ export async function performLiveSearch(
     hits = hits.filter(r => matchesAllTerms(terms, [r.title, r.industries.join(' '), r.description]));
   }
 
-  // 3. Hits already stored are listed from the database, never read twice.
+  // 3. Articles about the topic (how-tos, listicles, blogs, forums) are never calls.
+  hits = hits.filter(r => !looksLikeArticle(r));
+
+  // 4. Hits already stored are listed from the database, never read twice.
   const storedHits = await findStoredHits(hits.map(r => r.applyUrl));
   const stored = storedHits.urls;
   const fresh = hits.filter(r => !stored.has(r.applyUrl));
 
   // --- Synchronous enrichment of the best new hits only ---
-  fresh.sort((a, b) => b.qualityScore - a.qualityScore);
+  // Pages that look like a call go first, so the few in-request reads find the open ones.
+  fresh.sort((a, b) => callSignal(b) - callSignal(a) || b.qualityScore - a.qualityScore);
   const toEnrich = fresh.slice(0, SYNC_ENRICH_LIMIT);
   // Calls the new hits leave over read hits an earlier search stored but nobody has read.
   const waitingToRead = storedHits.waitingIds.slice(0, SYNC_ENRICH_LIMIT - toEnrich.length);
@@ -892,7 +905,7 @@ async function enrichResultsFromPages(
 }
 
 async function performLinkupSearch(
-  query: string,
+  liveQuery: LiveQuery,
   apiKey: string,
   searchIndustries: string[]
 ): Promise<EnrichedLiveResult[]> {
@@ -913,7 +926,7 @@ async function performLinkupSearch(
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          q: query,
+          q: liveQuery.q,
           depth: 'standard',
           outputType: 'searchResults',
           maxResults: maxPerPage,
