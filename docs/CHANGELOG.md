@@ -2,6 +2,19 @@
 
 Reverse chronological. Current state lives in `docs/STATUS.md`.
 
+## 2026-11-06 — Production one-off runs and the Claude budget analysis recorded
+
+Docs only; STATUS still said these were pending.
+- **Deadline migration, production, 2026-11-04.** The first write rolled back on Prisma's default 5s transaction timeout (fixed in PR #13). The rerun rewrote 379 midnight-UTC deadlines to AoE end of day; afterwards 659 rows had a deadline, 584 a zone, and 75 without one carry a time of day. A second dry run changed nothing.
+- **Event backfill, production, 2026-11-04**, after PR #13 and #14. The dry run's 20 lowest-confidence links were all the same event. The real run created 1,682 events and linked 92 rows to existing ones, so 1,822 of 1,826 rows belong to an event. It took 13 minutes, and a confirming dry run changed nothing. Visible cards went from 1,479 to 1,369.
+- **Hidden search-hit requeue, production, 2026-11-05.** `requeueHiddenEvents.ts` queued 306 rows: 66 Live Search, 240 Linkup Search. Many are articles ("10 Best CFP Websites…") and will stay hidden after the re-read. Not yet checked: how many came back as flagged events.
+- **Daily Claude budget, 2026-11-05 (UTC day).** The 600-call cap ran out at 13:15:
+  - New-row enrichment: 187 calls, 176 of them from 00:00 to 02:50 (the end of a backlog) and 11 at the 06:00 scrape.
+  - Re-verification: 413 calls (370 weekly, 43 for deadlines within 14 days), most of them the first-ever check of rows enriched February–October; in one sampled hour, 20 of 39 checks found the listing already closed.
+  - Live search: 16 calls not counted against the cap, plus 9 counted reads of waiting hits.
+  - About a third of verification attempts make no Claude call, because the page fetch fails (mostly HTTP 403).
+- **Steady state and decision.** Expected load is ~190 checks (~125–130 calls) plus enrichment, about 200–300 calls a day. Re-checks come due in batches: 55 on 11-06, 81 on 11-07, 200 on 11-11, 378 on 11-12 (about 250 calls). Decision: leave the split as is. If the cap still runs out after the catch-up, stop re-verification at 450 calls in `verifyNext`. Checking far-off deadlines less often would save only ~13 calls a day. The analysis had one day of Vercel logs and no production DB reads.
+
 ## 2026-11-05 — List events with no open call, flagged
 
 - An attendee page for an upcoming event (ALI's "AI for Communications" conferences) was marked `isRelevant: false` and hidden like an article. Extraction now answers two questions: `isRelevant` (the page is about one specific event or program, call or not) and `hasOpenCall` (it invites speakers now). New nullable column `Opportunity.hasOpenCall`; the worker, re-verification and live search store it.
