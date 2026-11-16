@@ -11,12 +11,9 @@ import { scrapeWikiCFP } from './wikicfp.js';
 import { scrapeConferenceAlertsUSA } from './conferenceAlerts.js';
 import { scrapeDevelopersEvents } from './developersEvents.js';
 import { config } from '../config/index.js';
-import { generateDeduplicationKey } from '../services/deduplicationService.js';
 import { promotedLinkupQueries } from '../services/searchLog.js';
-import { decodeHtmlEntities, isJunkResult } from '../services/dataNormalization.js';
 import { computeQualityScore, type ScraperResult } from './qualityScore.js';
-import { buildCreateData, buildUpdateData } from './persistData.js';
-import { assignEvents, type AssignableOpportunity } from '../services/eventAssignment.js';
+import { persistResults } from './persistResults.js';
 
 export { computeQualityScore } from './qualityScore.js';
 export type { ScraperResult } from './qualityScore.js';
@@ -220,6 +217,8 @@ export interface ScraperRunSummary {
   found: number;
   added: number;
   updated: number;
+  /** Results not written before the scraper's deadline; the next run writes them. */
+  deferred: number;
   durationMs: number;
   error?: string;
 }
@@ -243,27 +242,34 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number, name: string): P
 
 /**
  * Run one scraper, persist its results immediately, and record the run.
- * A failure or timeout in one scraper never loses another scraper's rows.
+ * `timeoutMs` bounds the whole run, fetching and writing: the fetch is cut off
+ * at it, and writing stops at it (what is left waits for the next run), so a
+ * run never outlasts the function. A failure or timeout in one scraper never
+ * loses another scraper's rows.
  */
 export async function runScraper(def: ScraperDefinition, timeoutMs: number): Promise<ScraperRunSummary> {
   const startedAt = new Date();
+  const deadline = startedAt.getTime() + timeoutMs;
   const run = await prisma.scraperRun.create({
     data: { scraper: def.name, cadence: def.cadence, status: 'running', startedAt },
   });
 
   try {
     const results = deduplicateResults(await withTimeout(def.run(), timeoutMs, def.name));
-    const { added, updated } = await persistResults(results);
+    const { added, updated, deferred } = await persistResults(results, { deadline });
     const finishedAt = new Date();
     await prisma.scraperRun.update({
       where: { id: run.id },
       data: { status: 'ok', finishedAt, found: results.length, added, updated },
     });
     const summary: ScraperRunSummary = {
-      scraper: def.name, status: 'ok', found: results.length, added, updated,
+      scraper: def.name, status: 'ok', found: results.length, added, updated, deferred,
       durationMs: finishedAt.getTime() - startedAt.getTime(),
     };
-    console.log(`[Sync] ${def.name}: ${results.length} found, ${added} added, ${updated} updated (${summary.durationMs}ms)`);
+    const deferredNote = deferred > 0 ? `, ${deferred} left for the next run (time budget)` : '';
+    console.log(
+      `[Sync] ${def.name}: ${results.length} found, ${added} added, ${updated} updated${deferredNote} (${summary.durationMs}ms)`
+    );
     return summary;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -274,7 +280,7 @@ export async function runScraper(def: ScraperDefinition, timeoutMs: number): Pro
     });
     console.error(`[Sync] ${def.name} failed: ${message}`);
     return {
-      scraper: def.name, status: 'error', found: 0, added: 0, updated: 0,
+      scraper: def.name, status: 'error', found: 0, added: 0, updated: 0, deferred: 0,
       durationMs: finishedAt.getTime() - startedAt.getTime(), error: message,
     };
   }
@@ -289,88 +295,6 @@ async function orderByLeastRecentlyRun(defs: ScraperDefinition[]): Promise<Scrap
   });
   const lastRunAt = new Map(lastRuns.map((r) => [r.scraper, r._max.startedAt?.getTime() ?? 0]));
   return [...defs].sort((a, b) => (lastRunAt.get(a.name) ?? 0) - (lastRunAt.get(b.name) ?? 0));
-}
-
-async function persistResults(results: ScraperResult[]): Promise<{ added: number; updated: number }> {
-  let added = 0;
-  let updated = 0;
-  const createdRows: AssignableOpportunity[] = [];
-
-  for (const result of results) {
-    try {
-      // Decode HTML entities before any processing
-      result.title = decodeHtmlEntities(result.title);
-      result.organization = decodeHtmlEntities(result.organization);
-      if (result.description) {
-        result.description = decodeHtmlEntities(result.description);
-      }
-
-      // Skip junk results
-      if (isJunkResult({ title: result.title, description: result.description, applyUrl: result.applyUrl })) {
-        continue;
-      }
-
-      const existing = await prisma.opportunity.findFirst({
-        where: { applyUrl: result.applyUrl },
-      });
-
-      if (existing) {
-        // Re-scrape: refresh scraped fields only. Enrichment bookkeeping and
-        // Claude-set values are preserved (see persistData.ts).
-        await prisma.opportunity.update({
-          where: { id: existing.id },
-          data: buildUpdateData(result, existing),
-        });
-        updated++;
-      } else {
-        // Cross-source dedup: check if an event with the same normalized title+org already exists
-        const dedupKey = generateDeduplicationKey(result.title, result.organization);
-        const orgPrefix = (result.organization || '').substring(0, 10);
-        let dedupMatchId: string | undefined;
-        let dedupMatchScore: number | null = null;
-
-        if (orgPrefix.length > 0) {
-          const candidates = await prisma.opportunity.findMany({
-            where: { organization: { contains: orgPrefix } },
-            select: { id: true, title: true, organization: true, qualityScore: true },
-            take: 50,
-          });
-
-          const match = candidates.find(c =>
-            generateDeduplicationKey(c.title, c.organization) === dedupKey
-          );
-          dedupMatchId = match?.id;
-          dedupMatchScore = match?.qualityScore ?? null;
-        }
-
-        if (dedupMatchId) {
-          const createData = buildCreateData(result);
-          // Merge into the existing record if the new one has equal or better quality.
-          // applyUrl is deliberately left alone so saved links stay stable.
-          if (createData.qualityScore >= (dedupMatchScore || 0)) {
-            const dedupRow = await prisma.opportunity.findUnique({ where: { id: dedupMatchId } });
-            if (dedupRow) {
-              await prisma.opportunity.update({
-                where: { id: dedupRow.id },
-                data: buildUpdateData(result, dedupRow),
-              });
-            }
-          }
-          updated++;
-        } else {
-          createdRows.push(await prisma.opportunity.create({ data: buildCreateData(result) }));
-          added++;
-        }
-      }
-    } catch (error) {
-      console.error(`Error saving opportunity: ${result.title}`, error);
-    }
-  }
-
-  // New rows join (or start) their canonical event; a matching failure never loses a row.
-  await assignEvents(prisma, createdRows);
-
-  return { added, updated };
 }
 
 /**
