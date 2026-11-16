@@ -8,6 +8,7 @@ import { config } from './config/index.js';
 import routes from './routes/index.js';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
 import { generalLimiter, searchLimiter } from './middleware/rateLimit.js';
+import { serializeRequestForLog, serializeResponseForLog } from './lib/requestLogSerializers.js';
 
 const app = express();
 
@@ -44,6 +45,12 @@ const logger = (createLogger as typeof pinoHttp.default)({
   // Don't log health check requests (too noisy)
   autoLogging: {
     ignore: (req: IncomingMessage) => req.url === '/api/health',
+  },
+  // Allow-listed fields only: the default serializers log every header,
+  // credentials included (lib/requestLogSerializers.ts).
+  serializers: {
+    req: serializeRequestForLog,
+    res: serializeResponseForLog,
   },
 });
 
