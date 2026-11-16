@@ -1,4 +1,5 @@
 import { prisma } from '../lib/prisma.js';
+import { storableDate } from '../lib/storableDate.js';
 import { AppError } from '../middleware/errorHandler.js';
 import { parseDateConfidence } from './extraction.js';
 import { assignEvents } from './eventAssignment.js';
@@ -208,9 +209,13 @@ export interface OpportunityCreateInput {
 }
 
 export async function createOpportunity(data: OpportunityCreateInput) {
+  const cfpDeadline = storableDate(data.cfpDeadline);
   const opportunity = await prisma.opportunity.create({
     data: {
       ...data,
+      eventDate: storableDate(data.eventDate),
+      cfpDeadline,
+      deadlineTimezone: cfpDeadline ? data.deadlineTimezone : null,
       industries: JSON.stringify(data.industries || []),
     },
   });

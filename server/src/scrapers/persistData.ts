@@ -1,4 +1,5 @@
 import { computeQualityScore, type ScraperResult } from './qualityScore.js';
+import { storableDate } from '../lib/storableDate.js';
 
 /**
  * Builds the Prisma `data` objects used when persisting scraper results.
@@ -95,15 +96,17 @@ function parseIndustries(value: string | null | undefined): string[] {
 /** Scraped fields with compensation inferred from the description when the scraper gave none. */
 function scrapedFields(result: ScraperResult) {
   const inferred = inferCompensation(result.description);
+  // Text-parsed dates can come out absurd; only storable ones are written (lib/storableDate.ts).
+  const cfpDeadline = storableDate(result.cfpDeadline);
   return {
     title: result.title,
     organization: result.organization,
     description: result.description || null,
     location: result.location || null,
     isRemote: result.isRemote,
-    eventDate: result.eventDate || null,
-    cfpDeadline: result.cfpDeadline || null,
-    deadlineTimezone: result.cfpDeadline ? (result.deadlineTimezone ?? null) : null,
+    eventDate: storableDate(result.eventDate),
+    cfpDeadline,
+    deadlineTimezone: cfpDeadline ? (result.deadlineTimezone ?? null) : null,
     format: result.format,
     industries: result.industries || [],
     compensationType: result.compensationType || inferred.compensationType || null,
@@ -142,8 +145,10 @@ export function buildUpdateData(
   const existingIndustries = parseIndustries(existing.industries);
   const industries =
     preserveEnriched && existingIndustries.length > 0 ? existingIndustries : scraped.industries;
-  // The zone travels with the deadline it qualifies.
-  const keepExistingDeadline = preserveEnriched && existing.cfpDeadline !== null;
+  // The zone travels with the deadline it qualifies. A stored date that reads
+  // back as Invalid Date is not kept: writing it back would fail the update.
+  const existingDeadline = storableDate(existing.cfpDeadline);
+  const keepExistingDeadline = preserveEnriched && existingDeadline !== null;
 
   const merged = {
     title: pick(existing.title, scraped.title) as string,
@@ -152,8 +157,8 @@ export function buildUpdateData(
     description: scraped.description ?? existing.description,
     location: pick(existing.location, scraped.location),
     isRemote: preserveEnriched ? existing.isRemote : scraped.isRemote,
-    eventDate: pick(existing.eventDate, scraped.eventDate),
-    cfpDeadline: keepExistingDeadline ? existing.cfpDeadline : scraped.cfpDeadline,
+    eventDate: pick(storableDate(existing.eventDate), scraped.eventDate),
+    cfpDeadline: keepExistingDeadline ? existingDeadline : scraped.cfpDeadline,
     deadlineTimezone: keepExistingDeadline ? existing.deadlineTimezone : scraped.deadlineTimezone,
     format: scraped.format,
     industries,

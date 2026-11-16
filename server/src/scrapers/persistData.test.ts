@@ -55,6 +55,16 @@ const ENRICHMENT_OWNED_KEYS = [
 ];
 
 describe('buildUpdateData', () => {
+  it('replaces stored dates that read back as Invalid Date with the scraped ones', () => {
+    const data = buildUpdateData(
+      makeScraped({ eventDate: new Date('2027-06-02T00:00:00Z') }),
+      makeExisting({ eventDate: new Date('Invalid Date'), cfpDeadline: new Date('Invalid Date'), deadlineTimezone: 'UTC' })
+    );
+    expect(data.eventDate?.toISOString()).toBe('2027-06-02T00:00:00.000Z');
+    expect(data.cfpDeadline?.toISOString()).toBe('2027-01-15T00:00:00.000Z');
+    expect(data.deadlineTimezone).toBeNull();
+  });
+
   it('never writes enrichment bookkeeping or applyUrl', () => {
     const data = buildUpdateData(makeScraped(), makeExisting());
     for (const key of ENRICHMENT_OWNED_KEYS) {
@@ -147,6 +157,15 @@ describe('buildCreateData', () => {
     }
     expect(JSON.parse(data.industries)).toEqual(['technology']);
     expect(data.qualityScore).toBeGreaterThan(0);
+  });
+
+  it('drops text-parsed dates the database could not give back', () => {
+    const data = buildCreateData(
+      makeScraped({ eventDate: new Date('+020261-05-04T00:00:00Z'), cfpDeadline: new Date('+020261-01-15T00:00:00Z'), deadlineTimezone: 'UTC' })
+    );
+    expect(data.eventDate).toBeNull();
+    expect(data.cfpDeadline).toBeNull();
+    expect(data.deadlineTimezone).toBeNull();
   });
 
   it('respects a scraper-provided quality score', () => {

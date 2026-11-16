@@ -260,6 +260,18 @@ describe('mergeExtraction', () => {
     expect(merged.industries).toEqual(['technology']);
   });
 
+  it('clears a stored date that reads back as Invalid Date instead of writing it back', () => {
+    // A year past 9999 is stored by Postgres and read back by the pg adapter as Invalid Date.
+    const merged = mergeExtraction(
+      scraped({ eventDate: new Date('Invalid Date'), cfpDeadline: new Date('Invalid Date'), deadlineTimezone: 'UTC' }),
+      extraction({ eventDate: null, cfpDeadline: null }),
+      NOW
+    );
+    expect(merged.eventDate).toBeUndefined();
+    expect(merged.cfpDeadline).toBeUndefined();
+    expect(merged.deadlineTimezone).toBeNull();
+  });
+
   it('marks the listing closed when the merged deadline instant is already past', () => {
     const merged = mergeExtraction(
       scraped(),
