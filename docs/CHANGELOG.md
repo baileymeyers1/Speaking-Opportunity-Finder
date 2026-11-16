@@ -2,6 +2,28 @@
 
 Reverse chronological. Current state lives in `docs/STATUS.md`.
 
+## 2026-11-16 — Secrets out of request logs, syncs within the function limit, unstorable dates
+
+Found in the production runtime logs and errors (Vercel, week to 11-16).
+- **Request logs carried credentials.** `pino-http` used its default serializers, which log every request header: each cron call wrote `Authorization: Bearer <CRON_SECRET>` and Vercel's OIDC token, each signed-in request the JWT cookie, each login response its `set-cookie`. `lib/requestLogSerializers.ts` is an allow-list: method, URL, `user-agent`, `x-vercel-id`, `x-vercel-cron-schedule`, status code. Checked with a request carrying fake secrets: the log line holds none of them. Rotate `CRON_SECRET` after deploying.
+- **Every sync was killed at 60s.** 6 runtime timeouts in the week. On 11-16 the daily sync wrote pretalx (12.7s) and sessionize (23.4s), then developers.events fetched 201 calls in 0.5s and died writing them; the weekly sync died writing WikiCFP's 95 rows after conferencealerts. Cause: the time budget only bounded a scraper's fetch (`withTimeout(def.run())`); writing ran unbounded, one row at a time, 2–3 round trips per row at ~100 ms each (conferencealerts: 49 rows in 11s). A killed run left its `ScraperRun` at `running`, skipped cleanup and rescoring, and never matched its new rows to events.
+- `scrapers/persistResults.ts` (moved out of `scrapers/index.ts`): one `applyUrl IN (…)` lookup for the batch, new rows first (sequential, the cross-source dedup check reads the previous write), refreshes 5 at a time, and a deadline (the scraper's start + its timeout) after which the rest is counted as `deferred` and written by the next run. New rows written before the deadline still go through event matching. The run log says "N left for the next run (time budget)".
+- **Invalid Date on write.** On 11-12 enrichment (3 attempts) and verification of one row failed with `eventDate: Invalid Date`. Claude's dates were already validated; the merge fell back to the row's stored `eventDate`, which held a year past 9999. Postgres stores such a year, and the `pg` adapter reads it back as Invalid Date (reproduced locally: 9999 round-trips, 20261 does not). `lib/storableDate.ts` (1900–2100, the range extraction already used) now guards scraper and live-search writes (`persistData.ts`), save-live (`createOpportunity`), the worker's row read and the merge fallback, so a bad stored date is cleared rather than written back. Which parser wrote the year is unknown; `scripts/clearUnstorableDates.ts --dry-run` lists such rows with source and URL, and clears them without the flag (tried on the test database).
+- Tests: server 454 → 468.
+
+## 2026-11-06 — Production one-off runs and the Claude budget analysis recorded
+
+Docs only; STATUS still said these were pending.
+- **Deadline migration, production, 2026-11-04.** The first write rolled back on Prisma's default 5s transaction timeout (fixed in PR #13). The rerun rewrote 379 midnight-UTC deadlines to AoE end of day; afterwards 659 rows had a deadline, 584 a zone, and 75 without one carry a time of day. A second dry run changed nothing.
+- **Event backfill, production, 2026-11-04**, after PR #13 and #14. The dry run's 20 lowest-confidence links were all the same event. The real run created 1,682 events and linked 92 rows to existing ones, so 1,822 of 1,826 rows belong to an event. It took 13 minutes, and a confirming dry run changed nothing. Visible cards went from 1,479 to 1,369.
+- **Hidden search-hit requeue, production, 2026-11-05.** `requeueHiddenEvents.ts` queued 306 rows: 66 Live Search, 240 Linkup Search. Many are articles ("10 Best CFP Websites…") and will stay hidden after the re-read. Not yet checked: how many came back as flagged events.
+- **Daily Claude budget, 2026-11-05 (UTC day).** The 600-call cap ran out at 13:15:
+  - New-row enrichment: 187 calls, 176 of them from 00:00 to 02:50 (the end of a backlog) and 11 at the 06:00 scrape.
+  - Re-verification: 413 calls (370 weekly, 43 for deadlines within 14 days), most of them the first-ever check of rows enriched February–October; in one sampled hour, 20 of 39 checks found the listing already closed.
+  - Live search: 16 calls not counted against the cap, plus 9 counted reads of waiting hits.
+  - About a third of verification attempts make no Claude call, because the page fetch fails (mostly HTTP 403).
+- **Steady state and decision.** Expected load is ~190 checks (~125–130 calls) plus enrichment, about 200–300 calls a day. Re-checks come due in batches: 55 on 11-06, 81 on 11-07, 200 on 11-11, 378 on 11-12 (about 250 calls). Decision: leave the split as is. If the cap still runs out after the catch-up, stop re-verification at 450 calls in `verifyNext`. Checking far-off deadlines less often would save only ~13 calls a day. The analysis had one day of Vercel logs and no production DB reads.
+
 ## 2026-11-05 — List events with no open call, flagged
 
 - An attendee page for an upcoming event (ALI's "AI for Communications" conferences) was marked `isRelevant: false` and hidden like an article. Extraction now answers two questions: `isRelevant` (the page is about one specific event or program, call or not) and `hasOpenCall` (it invites speakers now). New nullable column `Opportunity.hasOpenCall`; the worker, re-verification and live search store it.

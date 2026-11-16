@@ -3,6 +3,7 @@ import { config } from '../config/index.js';
 import { normalizeIndustries } from './dataNormalization.js';
 import { mapWithConcurrency } from '../scrapers/lib/html.js';
 import { calendarDate, instantInZone, isDeadlinePast, isValidTimezone } from '../lib/deadlines.js';
+import { storableDate } from '../lib/storableDate.js';
 import type { ScraperResult } from '../scrapers/qualityScore.js';
 
 /**
@@ -186,10 +187,7 @@ function parseIsoDate(value: unknown): Date | null | undefined {
   if (value === null || value === undefined || value === '' || value === 'null') return null;
   if (typeof value !== 'string') return undefined;
   const date = new Date(/^\d{4}-\d{2}-\d{2}$/.test(value) ? `${value}T00:00:00Z` : value);
-  if (isNaN(date.getTime())) return undefined;
-  const year = date.getUTCFullYear();
-  if (year < 1900 || year > 2100) return undefined;
-  return date;
+  return storableDate(date) ?? undefined;
 }
 
 function optionalString(value: unknown): string | null {
@@ -351,15 +349,20 @@ export interface MergedOpportunity extends ScraperResult {
  * lib/deadlines.ts). The deadline's zone travels with the deadline: an
  * extracted deadline brings its own zone (or none), a kept one keeps its own.
  * Low-confidence dates are kept; the confidence is returned so the UI can
- * show them as approximate.
+ * show them as approximate. A stored date that cannot be written back (an
+ * Invalid Date read from a year past 9999, see lib/storableDate.ts) counts as
+ * not stated, so the merge clears it instead of failing the write.
  */
 export function mergeExtraction(
   existing: ScraperResult,
   extraction: ExtractionResult,
   now: Date = new Date()
 ): MergedOpportunity {
-  const cfpDeadline = extraction.cfpDeadline ?? existing.cfpDeadline;
-  const deadlineTimezone = extraction.cfpDeadline ? extraction.deadlineTimezone : (existing.deadlineTimezone ?? null);
+  const storedDeadline = storableDate(existing.cfpDeadline) ?? undefined;
+  const cfpDeadline = extraction.cfpDeadline ?? storedDeadline;
+  const deadlineTimezone = extraction.cfpDeadline
+    ? extraction.deadlineTimezone
+    : storedDeadline ? (existing.deadlineTimezone ?? null) : null;
   const deadlinePassed = isDeadlinePast({ cfpDeadline, deadlineTimezone }, now);
 
   return {
@@ -368,7 +371,7 @@ export function mergeExtraction(
     organization: extraction.cleanOrganization ?? existing.organization,
     location: extraction.location ?? existing.location,
     isRemote: extraction.isRemote,
-    eventDate: extraction.eventDate ?? existing.eventDate,
+    eventDate: extraction.eventDate ?? storableDate(existing.eventDate) ?? undefined,
     cfpDeadline,
     deadlineTimezone,
     format: extraction.format,

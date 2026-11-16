@@ -1,4 +1,5 @@
 import { prisma } from '../lib/prisma.js';
+import { storableDate } from '../lib/storableDate.js';
 import { enrichOpportunity, planEnrichment, toExtractionInput } from './enrichmentService.js';
 import { extractOpportunity, mergeExtraction, serializeDateConfidence } from './extraction.js';
 import { fetchPageText } from './pageText.js';
@@ -63,8 +64,9 @@ function toScraperResult(opportunity: OpportunityRow): ScraperResult {
     description: opportunity.description || undefined,
     location: opportunity.location || undefined,
     isRemote: opportunity.isRemote,
-    eventDate: opportunity.eventDate || undefined,
-    cfpDeadline: opportunity.cfpDeadline || undefined,
+    // A stored year past 9999 reads back as Invalid Date: treat it as not stated.
+    eventDate: storableDate(opportunity.eventDate) ?? undefined,
+    cfpDeadline: storableDate(opportunity.cfpDeadline) ?? undefined,
     deadlineTimezone: opportunity.deadlineTimezone,
     format: opportunity.format,
     industries: (() => {
