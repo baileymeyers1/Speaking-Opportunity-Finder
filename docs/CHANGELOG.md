@@ -2,6 +2,15 @@
 
 Reverse chronological. Current state lives in `docs/STATUS.md`.
 
+## 2026-11-16 — Secrets out of request logs, syncs within the function limit, unstorable dates
+
+Found in the production runtime logs and errors (Vercel, week to 11-16).
+- **Request logs carried credentials.** `pino-http` used its default serializers, which log every request header: each cron call wrote `Authorization: Bearer <CRON_SECRET>` and Vercel's OIDC token, each signed-in request the JWT cookie, each login response its `set-cookie`. `lib/requestLogSerializers.ts` is an allow-list: method, URL, `user-agent`, `x-vercel-id`, `x-vercel-cron-schedule`, status code. Checked with a request carrying fake secrets: the log line holds none of them. Rotate `CRON_SECRET` after deploying.
+- **Every sync was killed at 60s.** 6 runtime timeouts in the week. On 11-16 the daily sync wrote pretalx (12.7s) and sessionize (23.4s), then developers.events fetched 201 calls in 0.5s and died writing them; the weekly sync died writing WikiCFP's 95 rows after conferencealerts. Cause: the time budget only bounded a scraper's fetch (`withTimeout(def.run())`); writing ran unbounded, one row at a time, 2–3 round trips per row at ~100 ms each (conferencealerts: 49 rows in 11s). A killed run left its `ScraperRun` at `running`, skipped cleanup and rescoring, and never matched its new rows to events.
+- `scrapers/persistResults.ts` (moved out of `scrapers/index.ts`): one `applyUrl IN (…)` lookup for the batch, new rows first (sequential, the cross-source dedup check reads the previous write), refreshes 5 at a time, and a deadline (the scraper's start + its timeout) after which the rest is counted as `deferred` and written by the next run. New rows written before the deadline still go through event matching. The run log says "N left for the next run (time budget)".
+- **Invalid Date on write.** On 11-12 enrichment (3 attempts) and verification of one row failed with `eventDate: Invalid Date`. Claude's dates were already validated; the merge fell back to the row's stored `eventDate`, which held a year past 9999. Postgres stores such a year, and the `pg` adapter reads it back as Invalid Date (reproduced locally: 9999 round-trips, 20261 does not). `lib/storableDate.ts` (1900–2100, the range extraction already used) now guards scraper and live-search writes (`persistData.ts`), save-live (`createOpportunity`), the worker's row read and the merge fallback, so a bad stored date is cleared rather than written back. Which parser wrote the year is unknown; `scripts/clearUnstorableDates.ts --dry-run` lists such rows with source and URL, and clears them without the flag (tried on the test database).
+- Tests: server 454 → 468.
+
 ## 2026-11-06 — Production one-off runs and the Claude budget analysis recorded
 
 Docs only; STATUS still said these were pending.
