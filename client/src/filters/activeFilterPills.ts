@@ -1,5 +1,6 @@
 import type { OpportunityFilters } from '../types';
 import { COMPENSATION_MAX } from './constants';
+import { sectorLabel } from '../lib/sectors';
 
 export interface FilterPill {
   label: string;
@@ -28,6 +29,10 @@ export function buildActiveFilterPills(filters: OpportunityFilters): FilterPill[
   filters.format?.forEach((format) => {
     pills.push({ label: capitalize(format), next: { ...filters, format: without(filters.format, format) } });
   });
+  filters.sectors?.forEach((sector) => {
+    pills.push({ label: sectorLabel(sector), next: { ...filters, sectors: without(filters.sectors, sector) } });
+  });
+  // Free-text industries only arrive from a link or a saved search made before sectors.
   filters.industries?.forEach((industry) => {
     pills.push({
       label: capitalize(industry),

@@ -122,6 +122,7 @@ function extractionOk(overrides: { isRelevant?: boolean } = {}) {
       compensationAmount: null,
       format: 'conference',
       industries: ['ai', 'marketing'],
+      sectors: ['ai', 'marketing'],
       cleanTitle: null,
       cleanOrganization: null,
       confidence: { eventDate: 'high', cfpDeadline: 'high', location: 'high' },
@@ -323,6 +324,13 @@ describe('buildSearchQueries', () => {
     expect(text).toContain('call for proposals');
     expect(text).toContain('podcast guest');
     expect(text).toContain('public relations');
+  });
+
+  it('searches for a sector on its own when there is no query text', () => {
+    const queries = buildSearchQueries('', ['public relations'], [], now);
+    expect(queries.length).toBeGreaterThanOrEqual(2);
+    for (const query of queries) expect(query.q).toContain('2026 2027');
+    expect(queries[queries.length - 1].q).toBe('public relations conference CFP 2026 2027');
   });
 
   it('adds an industry angle when industries are chosen', () => {

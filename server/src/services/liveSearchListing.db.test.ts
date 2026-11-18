@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { prisma } from '../lib/prisma.js';
 import { MAX_ENRICHMENT_ATTEMPTS } from './enrichmentBudget.js';
-import { getListedByApplyUrls, getOpportunities, getUniqueIndustries, getUniqueLocations } from './opportunityService.js';
+import { getListedByApplyUrls, getOpportunities, getSectorOptions, getUniqueLocations } from './opportunityService.js';
 
 /**
  * Against the test Postgres database: a search matches every word of the
@@ -166,19 +166,22 @@ describe('stored search and live-search hits', () => {
   it('offers filter options from listed rows only', async () => {
     // The options read the clock, not the test's `now`: keep these two open whenever the test runs.
     const farDeadline = new Date('2099-01-01T00:00:00Z');
+    const countOf = async (id: string) => (await getSectorOptions()).find((sector) => sector.id === id)!.count;
+    const [aerospaceBefore, agricultureBefore] = await Promise.all([countOf('aerospace'), countOf('agriculture')]);
     await prisma.opportunity.updateMany({
       where: { applyUrl: url('linkup-snippet') },
-      data: { location: 'Closes Sep', industries: '["hiddentag"]', cfpDeadline: farDeadline },
+      data: { location: 'Closes Sep', sectors: ['agriculture'], cfpDeadline: farDeadline },
     });
     await prisma.opportunity.updateMany({
       where: { applyUrl: url('linkup-read') },
-      data: { location: 'Gatecheck City, NL', industries: '["listedtag"]', cfpDeadline: farDeadline },
+      data: { location: 'Gatecheck City, NL', sectors: ['aerospace'], cfpDeadline: farDeadline },
     });
-    const [locations, industries] = await Promise.all([getUniqueLocations(), getUniqueIndustries()]);
+    const locations = await getUniqueLocations();
     expect(locations).toContain('Gatecheck City, NL');
     expect(locations).not.toContain('Closes Sep');
-    expect(industries).toContain('listedtag');
-    expect(industries).not.toContain('hiddentag');
+    // The listed row counts for its sector; the unread hit does not.
+    expect(await countOf('aerospace')).toBe(aerospaceBefore + 1);
+    expect(await countOf('agriculture')).toBe(agricultureBefore);
   });
 
   it('applies the other active filters to stored copies', async () => {

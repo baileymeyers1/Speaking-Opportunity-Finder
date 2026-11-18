@@ -131,7 +131,14 @@ export interface OpportunityBase<DateType> {
   /** IANA zone name or `AoE`; null when the page states none (the deadline is then read as AoE). */
   deadlineTimezone?: string | null;
   format: OpportunityFormat;
+  /** Free-text topic tags: searched and shown, never filtered on. */
   industries: string[];
+  /**
+   * One or two ids from the fixed sector list (server/src/lib/sectors.ts): what
+   * the list is filtered and counted by. Empty when no sector was found; absent
+   * on a list cached before sectors existed.
+   */
+  sectors?: string[];
   compensationType: CompensationType | null;
   compensationAmount: number | null;
   compensationDetails: string | null;
@@ -191,6 +198,9 @@ export type SerializableOpportunity = OpportunityBase<Date | string>;
 export interface OpportunityFilters {
   search?: string;
   format?: OpportunityFormat[];
+  /** Sector ids; a row matches when it carries any of them. */
+  sectors?: string[];
+  /** Free-text values from links and saved searches made before sectors; the server maps each to a sector. */
   industries?: string[];
   isRemote?: boolean;
   locations?: string[];
@@ -203,10 +213,17 @@ export interface OpportunityFilters {
   qualityMin?: number;
 }
 
+/** One entry of the sector filter: every sector is listed, with how many cards it has. */
+export interface SectorOption {
+  id: string;
+  label: string;
+  count: number;
+}
+
 /** `GET /api/opportunities/filters` */
 export interface FilterOptions {
   locations: string[];
-  industries: string[];
+  sectors: SectorOption[];
   compensationRange: { min: number; max: number };
   compensationStats?: { hasCompensation: boolean };
   formats: OpportunityFormat[];
@@ -225,6 +242,7 @@ export interface SaveLiveOpportunityInput {
   deadlineTimezone?: string | null;
   format?: OpportunityFormat;
   industries?: string[];
+  sectors?: string[];
   compensationType?: CompensationType | null;
   compensationAmount?: number | null;
   compensationDetails?: string | null;

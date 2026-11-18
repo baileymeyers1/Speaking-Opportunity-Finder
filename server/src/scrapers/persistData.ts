@@ -1,5 +1,7 @@
 import { computeQualityScore, type ScraperResult } from './qualityScore.js';
 import { storableDate } from '../lib/storableDate.js';
+import { normalizeSectors, type Sector } from '../lib/sectors.js';
+import { sectorsFromTags } from '../services/sectorMapping.js';
 
 /**
  * Builds the Prisma `data` objects used when persisting scraper results.
@@ -10,6 +12,8 @@ import { storableDate } from '../lib/storableDate.js';
  *   `hasOpenCall`) is never written from a scrape. Only the enrichment worker owns those columns.
  * - When the existing row has been enriched by Claude, a re-scrape only fills
  *   fields that are still empty. It never replaces a value Claude already set.
+ * - Sectors follow the tags (services/sectorMapping.ts) until Claude has read the
+ *   row; after that a re-scrape keeps the sectors Claude named.
  * - `applyUrl` is never changed on an update, so saved links stay stable.
  */
 
@@ -25,6 +29,7 @@ export interface ExistingOpportunityRow {
   deadlineTimezone: string | null;
   format: string;
   industries: string;
+  sectors?: string[] | null;
   compensationType: string | null;
   compensationAmount: number | null;
   compensationDetails: string | null;
@@ -46,6 +51,7 @@ export interface ScrapedUpdateData {
   deadlineTimezone: string | null;
   format: string;
   industries: string;
+  sectors: Sector[];
   compensationType: string | null;
   compensationAmount: number | null;
   compensationDetails: string | null;
@@ -117,11 +123,18 @@ function scrapedFields(result: ScraperResult) {
   };
 }
 
+/** The sectors a result brings with it (a live hit Claude read), else the ones its tags point to. */
+function sectorsOf(result: ScraperResult, industries: readonly string[]): Sector[] {
+  const given = normalizeSectors(result.sectors);
+  return given.length > 0 ? given : sectorsFromTags(industries);
+}
+
 export function buildCreateData(result: ScraperResult): ScrapedCreateData {
   const scraped = scrapedFields(result);
   return {
     ...scraped,
     industries: JSON.stringify(scraped.industries),
+    sectors: sectorsOf(result, scraped.industries),
     applyUrl: result.applyUrl,
     qualityScore: result.qualityScore ?? computeQualityScore(result),
   };
@@ -145,6 +158,11 @@ export function buildUpdateData(
   const existingIndustries = parseIndustries(existing.industries);
   const industries =
     preserveEnriched && existingIndustries.length > 0 ? existingIndustries : scraped.industries;
+  // A row Claude has not read follows its tags, and keeps what it has when the tags say nothing.
+  const existingSectors = normalizeSectors(existing.sectors);
+  const scrapedSectors = sectorsOf(result, industries);
+  const sectors =
+    (preserveEnriched && existingSectors.length > 0) || scrapedSectors.length === 0 ? existingSectors : scrapedSectors;
   // The zone travels with the deadline it qualifies. A stored date that reads
   // back as Invalid Date is not kept: writing it back would fail the update.
   const existingDeadline = storableDate(existing.cfpDeadline);
@@ -185,6 +203,7 @@ export function buildUpdateData(
   return {
     ...merged,
     industries: JSON.stringify(industries),
+    sectors,
     qualityScore,
   };
 }

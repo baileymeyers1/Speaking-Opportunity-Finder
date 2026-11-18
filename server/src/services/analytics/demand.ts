@@ -1,5 +1,7 @@
 import { prisma } from '../../lib/prisma.js';
 import type { AdminDemandResponse, AdminSavedSearchDemand } from 'shared';
+import { isSector, sectorLabel } from '../../lib/sectors.js';
+import { sectorsFromTags } from '../sectorMapping.js';
 import { getSearchLogAnalytics } from './searchLog.js';
 import { daysAgo, topCounts } from './shared.js';
 
@@ -34,7 +36,7 @@ export function summarizeSavedSearches(rows: SavedSearchRow[], now: Date): Admin
   const weekAgo = daysAgo(7, now);
   const users = new Set<string>();
   const queries = new Map<string, number>();
-  const industries = new Map<string, number>();
+  const sectors = new Map<string, number>();
   const locations = new Map<string, number>();
   const formats = new Map<string, number>();
   let createdLast7d = 0;
@@ -54,7 +56,12 @@ export function summarizeSavedSearches(rows: SavedSearchRow[], now: Date): Admin
       bump(queries, [query]);
     }
     const filters = parseFilters(row.filters);
-    bump(industries, stringArray(filters.industries));
+    // Searches saved before sectors hold free-text industries; count each under its sector.
+    const saved = new Set([
+      ...stringArray(filters.sectors).filter(isSector),
+      ...stringArray(filters.industries).flatMap((industry) => sectorsFromTags([industry])),
+    ]);
+    bump(sectors, [...saved].map(sectorLabel));
     bump(locations, stringArray(filters.locations));
     bump(formats, stringArray(filters.format));
     if (filters.isRemote === true) remoteOnly++;
@@ -67,7 +74,7 @@ export function summarizeSavedSearches(rows: SavedSearchRow[], now: Date): Admin
     withQuery,
     remoteOnly,
     topQueries: topCounts(queries, TOP_DEMAND),
-    topIndustries: topCounts(industries, TOP_DEMAND),
+    topSectors: topCounts(sectors, TOP_DEMAND),
     topLocations: topCounts(locations, TOP_DEMAND),
     topFormats: topCounts(formats, TOP_DEMAND),
   };

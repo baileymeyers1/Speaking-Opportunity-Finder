@@ -8,6 +8,7 @@ import { OpportunityDetailSkeleton } from '../components/OpportunityDetailSkelet
 import { VerifiedBadge } from '../components/VerificationHints';
 import { AlsoListedOn, EventEditionsList } from '../components/EventHints';
 import { DetailDates } from '../components/DetailDates';
+import { sectorLabel } from '../lib/sectors';
 import { hasMatchScore, MatchExplanationBlock } from '../components/MatchHints';
 
 import { Card, CardHeader, CardContent } from '@/components/ui/card';
@@ -201,9 +202,22 @@ export function OpportunityDetail() {
 
           <Separator />
 
-          {/* Industries */}
+          {/* Sector, then the free-text topics */}
+          {(opportunity.sectors?.length ?? 0) > 0 && (
+            <div className="space-y-3">
+              <h3 className="text-sm font-medium text-foreground">Sector</h3>
+              <div className="flex flex-wrap gap-2">
+                {opportunity.sectors?.map((sector) => (
+                  <Badge key={sector} variant="secondary">
+                    {sectorLabel(sector)}
+                  </Badge>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div className="space-y-3">
-            <h3 className="text-sm font-medium text-foreground">Industries</h3>
+            <h3 className="text-sm font-medium text-foreground">Topics</h3>
             <div className="flex flex-wrap gap-2">
               {opportunity.industries.length > 0 ? (
                 opportunity.industries.map((industry) => (

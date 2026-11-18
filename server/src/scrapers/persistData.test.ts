@@ -148,6 +148,43 @@ describe('buildUpdateData', () => {
   });
 });
 
+describe('sectors on scraped rows', () => {
+  it('places a new row by its tags', () => {
+    expect(buildCreateData(makeScraped({ industries: ['devops', 'kubernetes', 'healthcare'] })).sectors).toEqual([
+      'cloud-devops',
+      'healthcare',
+    ]);
+    expect(buildCreateData(makeScraped({ industries: [] })).sectors).toEqual([]);
+  });
+
+  it('keeps the sectors a result brings with it (a live hit Claude read)', () => {
+    const data = buildCreateData(makeScraped({ industries: ['ai'], sectors: ['pr-communications', 'bogus'] }));
+    expect(data.sectors).toEqual(['pr-communications']);
+  });
+
+  it('follows the scraped tags while the row has not been read by Claude', () => {
+    const existing = makeExisting({ enrichmentStatus: null, sectors: ['software'] });
+    expect(buildUpdateData(makeScraped({ industries: ['nursing'] }), existing).sectors).toEqual(['healthcare']);
+  });
+
+  it('keeps what an unread row has when the new tags say nothing', () => {
+    const existing = makeExisting({ enrichmentStatus: null, sectors: ['software'] });
+    expect(buildUpdateData(makeScraped({ industries: [] }), existing).sectors).toEqual(['software']);
+  });
+
+  it('never replaces the sectors Claude gave an enriched row', () => {
+    const existing = makeExisting({ sectors: ['healthcare'] });
+    expect(buildUpdateData(makeScraped({ industries: ['devops'] }), existing).sectors).toEqual(['healthcare']);
+  });
+
+  it('places an enriched row that has no sectors yet by its stored tags', () => {
+    const stored = buildUpdateData(makeScraped({ industries: ['technology'] }), makeExisting({ sectors: null }));
+    expect(stored.industries).toBe(JSON.stringify(['open source', 'linux']));
+    expect(stored.sectors).toEqual(['software']);
+    expect(buildUpdateData(makeScraped(), makeExisting({ sectors: [] })).sectors).toEqual(['software']);
+  });
+});
+
 describe('buildCreateData', () => {
   it('includes applyUrl and no enrichment bookkeeping', () => {
     const data = buildCreateData(makeScraped());

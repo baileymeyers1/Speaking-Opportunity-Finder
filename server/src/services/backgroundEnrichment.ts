@@ -73,6 +73,7 @@ function toScraperResult(opportunity: OpportunityRow): ScraperResult {
         return [];
       }
     })(),
+    sectors: opportunity.sectors ?? [],
     compensationType: opportunity.compensationType || undefined,
     compensationAmount: opportunity.compensationAmount || undefined,
     compensationDetails: opportunity.compensationDetails || undefined,

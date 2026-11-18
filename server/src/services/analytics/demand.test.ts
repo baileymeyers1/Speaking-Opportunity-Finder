@@ -24,14 +24,17 @@ describe('summarizeSavedSearches', () => {
       saved({ userId: 'u2', query: 'kubernetes ', filters: JSON.stringify({ industries: ['technology'], locations: ['Denver, CO'], format: ['conference'] }), createdAt: new Date('2026-11-02T00:00:00Z') }),
       saved({ userId: 'u2', filters: JSON.stringify({ industries: ['healthcare'], format: ['podcast', 'conference'] }) }),
       saved({ userId: 'u3', filters: 'not json' }),
+      // Saved after sectors: ids, an unknown one ignored; an old industry naming the same sector is not counted twice.
+      saved({ userId: 'u3', filters: JSON.stringify({ sectors: ['healthcare', 'bogus'], industries: ['nursing'] }) }),
     ];
     const summary = summarizeSavedSearches(rows, NOW);
-    expect(summary).toMatchObject({ total: 4, users: 3, createdLast7d: 1, withQuery: 2, remoteOnly: 1 });
+    expect(summary).toMatchObject({ total: 5, users: 3, createdLast7d: 1, withQuery: 2, remoteOnly: 1 });
     expect(summary.topQueries).toEqual([{ label: 'kubernetes', count: 2 }]);
-    expect(summary.topIndustries).toEqual([
-      { label: 'technology', count: 2 },
-      { label: 'devops', count: 1 },
-      { label: 'healthcare', count: 1 },
+    // Old free-text industries count under the sector they map to.
+    expect(summary.topSectors).toEqual([
+      { label: 'Healthcare & Medicine', count: 2 },
+      { label: 'Software Development', count: 2 },
+      { label: 'Cloud, DevOps & Infrastructure', count: 1 },
     ]);
     expect(summary.topLocations).toEqual([{ label: 'Denver, CO', count: 1 }]);
     expect(summary.topFormats).toEqual([
@@ -48,7 +51,7 @@ describe('summarizeSavedSearches', () => {
       withQuery: 0,
       remoteOnly: 0,
       topQueries: [],
-      topIndustries: [],
+      topSectors: [],
       topLocations: [],
       topFormats: [],
     });

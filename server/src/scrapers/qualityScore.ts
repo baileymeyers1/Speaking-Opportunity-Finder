@@ -16,6 +16,11 @@ export interface ScraperResult {
   deadlineTimezone?: string | null;
   format: string;
   industries: string[];
+  /**
+   * Sector ids (lib/sectors.ts). Scrapers leave this out and the row is placed
+   * by its tags when stored; a stored row brings the sectors it already has.
+   */
+  sectors?: string[];
   compensationType?: string;
   compensationAmount?: number;
   compensationDetails?: string;

@@ -4,6 +4,7 @@ import type { Opportunity, SavedCategory } from '../types';
 import { useAuth } from '../hooks/useAuth';
 import { useSaveOpportunity } from '../hooks/useSaveOpportunity';
 import { isDeadlinePast } from '../lib/dates';
+import { sectorLabel } from '../lib/sectors';
 import { getQualityColor, getQualityLabel } from '../lib/opportunityDisplay';
 import { SaveOpportunityMenu } from './SaveOpportunityMenu';
 import { DeadlineBadge } from './DeadlineBadge';
@@ -177,10 +178,15 @@ export function OpportunityCard({ opportunity, showSave = true, isPast }: Opport
           <EventHintLines opportunity={current} />
         </div>
 
-        {/* Industry tags -- show ALL, wrap naturally */}
-        {current.industries && current.industries.length > 0 && (
+        {/* Sectors first (what the filter uses), then every free-text tag */}
+        {((current.sectors?.length ?? 0) > 0 || (current.industries?.length ?? 0) > 0) && (
           <div className="flex flex-wrap gap-1.5 pt-1">
-            {current.industries.map((industry) => (
+            {current.sectors?.map((sector) => (
+              <Badge key={sector} variant="secondary" className="text-[11px] px-2 py-0 font-medium">
+                {sectorLabel(sector)}
+              </Badge>
+            ))}
+            {current.industries?.map((industry) => (
               <Badge
                 key={industry}
                 variant="outline"

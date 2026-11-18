@@ -22,6 +22,7 @@ function merged(overrides: Partial<MergedOpportunity> = {}): MergedOpportunity {
     cfpDeadline: new Date('2027-01-15T00:00:00Z'),
     format: 'conference',
     industries: ['devops'],
+    sectors: ['cloud-devops'],
     compensationType: 'travel',
     compensationAmount: 800,
     applyUrl: 'https://example.test/cfp',
@@ -130,6 +131,11 @@ describe('buildVerificationUpdate', () => {
     expect(update.qualityScore).toBeGreaterThan(50);
   });
 
+  it('writes the sectors the check found', () => {
+    const update = buildVerificationUpdate(LISTED, merged({ sectors: ['healthcare', 'ai'] }), NOW);
+    expect(update.sectors).toEqual(['healthcare', 'ai']);
+  });
+
   it('does not touch title, organization or industries, nor the relevance of a listed call', () => {
     const update = buildVerificationUpdate(LISTED, merged({ isRelevant: false }), NOW);
     expect(update).not.toHaveProperty('title');
@@ -151,6 +157,7 @@ describe('buildEnrichmentUpdate', () => {
       title: 'KubeCon 2027',
       organization: 'Org',
       industries: JSON.stringify(['devops', 'cloud']),
+      sectors: ['cloud-devops'],
       location: 'Denver, CO',
       isClosed: false,
       isRelevant: true,

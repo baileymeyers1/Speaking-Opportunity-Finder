@@ -4,7 +4,7 @@ import * as liveSearchService from '../services/liveSearchService.js';
 import { recordSearch } from '../services/searchLog.js';
 import * as profileService from '../services/profileService.js';
 import { scoreOpportunities } from '../services/matchScore.js';
-import { buildFilters } from './opportunityFilters.js';
+import { buildFilters, liveSearchTopics } from './opportunityFilters.js';
 import { AppError } from '../middleware/errorHandler.js';
 import { isValidTimezone } from '../lib/deadlines.js';
 import type {
@@ -33,6 +33,7 @@ function liveResultToOpportunity(r: liveSearchService.EnrichedLiveResult): Oppor
     deadlineTimezone: r.deadlineTimezone ?? null,
     format: r.format as OpportunityFormat,
     industries: r.industries,
+    sectors: r.sectors,
     compensationType: r.compensationType as CompensationType | null,
     compensationAmount: r.compensationAmount,
     compensationDetails: r.compensationDetails,
@@ -89,13 +90,10 @@ export async function getOpportunities(
 
     // If liveSearch requested, also run live search
     let liveOutcome: liveSearchService.LiveSearchOutcome | null = null;
-    if (doLiveSearch === 'true' && (queryParams.search || queryParams.industries)) {
+    // A live search needs something to look for: the query text, or a selected sector.
+    const industryList = liveSearchTopics(queryParams);
+    if (doLiveSearch === 'true' && (queryParams.search || industryList.length > 0)) {
       const searchQuery = queryParams.search ? String(queryParams.search) : '';
-      const industryList = queryParams.industries
-        ? Array.isArray(queryParams.industries)
-          ? (queryParams.industries as string[]).map(String)
-          : [String(queryParams.industries)]
-        : [];
       const locationList = queryParams.locations
         ? Array.isArray(queryParams.locations)
           ? (queryParams.locations as string[]).map(String)
@@ -194,9 +192,9 @@ export async function getFilterOptions(
   next: NextFunction
 ): Promise<void> {
   try {
-    const [locations, industries, compensationRange, compensationStats] = await Promise.all([
+    const [locations, sectors, compensationRange, compensationStats] = await Promise.all([
       opportunityService.getUniqueLocations(),
-      opportunityService.getUniqueIndustries(),
+      opportunityService.getSectorOptions(),
       opportunityService.getCompensationRange(),
       opportunityService.getCompensationStats(),
     ]);
@@ -205,7 +203,7 @@ export async function getFilterOptions(
       success: true,
       data: {
         locations,
-        industries,
+        sectors,
         compensationRange,
         compensationStats,
         formats: ['conference', 'meetup', 'podcast', 'webinar', 'workshop', 'panel', 'other'],
@@ -224,14 +222,10 @@ export async function liveSearch(
   next: NextFunction
 ): Promise<void> {
   try {
-    const { query, industries, locations, isRemote, format, compensationType } = req.query;
+    const { query, locations, isRemote, format, compensationType } = req.query;
 
     const searchQuery = query ? String(query) : '';
-    const industryList = industries
-      ? Array.isArray(industries)
-        ? industries.map(String)
-        : [String(industries)]
-      : [];
+    const industryList = liveSearchTopics(req.query);
     const locationList = locations
       ? Array.isArray(locations)
         ? locations.map(String)
@@ -297,6 +291,7 @@ export async function saveLiveResult(
       deadlineTimezone,
       format,
       industries,
+      sectors,
       compensationType,
       compensationAmount,
       compensationDetails,
@@ -328,6 +323,7 @@ export async function saveLiveResult(
       deadlineTimezone: cfpDeadline && isValidTimezone(deadlineTimezone) ? deadlineTimezone : undefined,
       format: format || 'conference',
       industries: industries || [],
+      sectors: sectors || [],
       compensationType: compensationType || undefined,
       compensationAmount: compensationAmount || undefined,
       compensationDetails: compensationDetails || undefined,

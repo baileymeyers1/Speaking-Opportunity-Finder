@@ -1,5 +1,6 @@
 import { Prisma } from '../generated/prisma/client.js';
 import type { SortBy } from 'shared';
+import type { Sector } from '../lib/sectors.js';
 import { SEARCH_SOURCES } from './searchSources.js';
 import { matchesAllTerms, searchTerms, termAlternatives, termMatches } from './searchTerms.js';
 
@@ -7,7 +8,8 @@ import { matchesAllTerms, searchTerms, termAlternatives, termMatches } from './s
 export interface OpportunityFilters {
   search?: string;
   format?: string[];
-  industries?: string[];
+  /** Sector ids (lib/sectors.ts); a row matches when it carries any of them. */
+  sectors?: Sector[];
   isRemote?: boolean;
   location?: string;
   compensationType?: string[];
@@ -61,6 +63,14 @@ export function listedConditions(now: Date = new Date()): Prisma.OpportunityWher
   return [{ NOT: UNREAD_SEARCH_HIT }, deadlineOrUpcomingEvent(now)];
 }
 
+/**
+ * Rows no sector was found for. A row stored before the column existed holds
+ * NULL, which `isEmpty` does not match, so both spellings of "none" are asked.
+ */
+export const WITHOUT_SECTOR: Prisma.OpportunityWhereInput = {
+  OR: [{ sectors: { equals: null } }, { sectors: { isEmpty: true } }],
+};
+
 /** Case-insensitive `contains` (Postgres `ILIKE`). */
 export function containsInsensitive(value: string): Prisma.StringFilter {
   return { contains: value, mode: 'insensitive' };
@@ -100,12 +110,10 @@ export function buildOpportunityWhere(filters: OpportunityFilters, now: Date = n
     where.format = { in: filters.format };
   }
 
-  // Industry filter (OR logic - match ANY selected industry). `industries` is a
-  // JSON-encoded array; match the quoted token so "ai" does not match "retail".
-  if (filters.industries && filters.industries.length > 0) {
-    andConditions.push({
-      OR: filters.industries.map((industry) => ({ industries: containsInsensitive(`"${industry}"`) })),
-    });
+  // Sector filter: any of the selected sectors. The free-text `industries`
+  // tags are searched by the text search above, never filtered on.
+  if (filters.sectors && filters.sectors.length > 0) {
+    andConditions.push({ sectors: { hasSome: filters.sectors } });
   }
 
   if (filters.isRemote !== undefined) {

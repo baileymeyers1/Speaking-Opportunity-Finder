@@ -28,6 +28,7 @@ function toSaveLivePayload(opportunity: Opportunity) {
     deadlineTimezone: opportunity.deadlineTimezone ?? null,
     format: opportunity.format,
     industries: opportunity.industries,
+    sectors: opportunity.sectors,
     compensationType: opportunity.compensationType,
     compensationAmount: opportunity.compensationAmount,
     compensationDetails: opportunity.compensationDetails,

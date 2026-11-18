@@ -32,6 +32,10 @@ model Opportunity {
   cfpDeadline         DateTime?
   format              String             // conference, meetup, podcast, etc.
   industries          String             @default("[]") // JSON array stored as string
+  // One or two ids from server/src/lib/sectors.ts; what the filter and counts use.
+  // No @default on purpose: a default fills every existing row, and from then on
+  // `prisma db push` from any branch without this column fails (docs/STATUS.md, Deploy Gotchas).
+  sectors             String[]
   compensationType    String?            // paid, travel, exposure
   compensationAmount  Int?               // Amount in USD (for range filtering)
   compensationDetails String?
@@ -83,6 +87,7 @@ model Opportunity {
   @@index([cfpDeadline, verifiedAt])
   @@index([eventId])
   @@index([possibleEventScore])
+  @@index([sectors], type: Gin)
 }
 
 // One conference across sources and years. Opportunity rows are its editions:

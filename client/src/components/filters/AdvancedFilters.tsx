@@ -6,6 +6,7 @@ import { MultiLocationInput } from '../MultiLocationInput';
 import { useFilterOptions } from '../../hooks/useFilterOptions';
 import { COMPENSATION_MAX, COMPENSATION_TYPES, OPPORTUNITY_FORMATS } from '../../filters/constants';
 import { formatCompensationValue } from '../../filters/activeFilterPills';
+import { SECTORS, sectorLabel } from '../../lib/sectors';
 import type { CompensationType, OpportunityFilters, OpportunityFormat } from '../../types';
 
 interface AdvancedFiltersProps {
@@ -35,7 +36,8 @@ export function AdvancedFilters({
   const formats = filterOptions?.formats || OPPORTUNITY_FORMATS;
   const compensationTypes = filterOptions?.compensationTypes || COMPENSATION_TYPES;
   const hasCompensation = filterOptions?.compensationStats?.hasCompensation ?? true;
-  const industries = filterOptions?.industries || [];
+  // The list of sectors is fixed; the API adds how many cards each one has.
+  const sectorCounts = new Map((filterOptions?.sectors || []).map((sector) => [sector.id, sector.count]));
   const selectedLocations = filters.locations || [];
 
   const handleFormatChange = (format: OpportunityFormat) =>
@@ -61,7 +63,7 @@ export function AdvancedFilters({
         <Separator className="mb-4" />
 
         <div className="space-y-6">
-          {/* Location + Industry row */}
+          {/* Location + Sector row */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
               <h3 className="text-sm font-medium text-foreground mb-2">Location</h3>
@@ -87,15 +89,17 @@ export function AdvancedFilters({
             </div>
 
             <div>
-              <h3 className="text-sm font-medium text-foreground mb-2">Industry</h3>
+              <h3 className="text-sm font-medium text-foreground mb-2">Sector</h3>
               <MultiSelectDropdown
-                label="Industries"
-                options={industries}
-                selected={filters.industries || []}
+                label="Sectors"
+                options={SECTORS.map((sector) => sector.id)}
+                selected={filters.sectors || []}
                 onChange={(selected) =>
-                  onFiltersChange({ ...filters, industries: selected.length > 0 ? selected : undefined })
+                  onFiltersChange({ ...filters, sectors: selected.length > 0 ? selected : undefined })
                 }
-                placeholder="Search industries..."
+                placeholder="Search sectors..."
+                getLabel={sectorLabel}
+                getCount={(sector) => sectorCounts.get(sector)}
               />
             </div>
           </div>

@@ -1,5 +1,6 @@
 import type { CompensationType, OpportunityFilters, OpportunityFormat, SortBy } from '../types';
 import { COMPENSATION_TYPES, OPPORTUNITY_FORMATS, SORT_OPTIONS } from './constants';
+import { isSector } from '../lib/sectors';
 
 /**
  * Everything the browse page needs to render a list: the filters plus the page.
@@ -12,6 +13,9 @@ export interface BrowseFilters extends OpportunityFilters {
 /** URL parameter names. Kept short because they are user-visible. */
 const URL_KEYS = {
   search: 'q',
+  sectors: 'sectors',
+  // Links and saved searches made before sectors carry free-text industries;
+  // they are still read and sent on, and the server maps each to a sector.
   industries: 'industries',
   locations: 'locations',
   format: 'types',
@@ -51,6 +55,7 @@ function nonEmpty(values: string[]): string[] | undefined {
 export function filtersToSearchParams(filters: BrowseFilters): URLSearchParams {
   const params = new URLSearchParams();
   if (filters.search?.trim()) params.set(URL_KEYS.search, filters.search.trim());
+  filters.sectors?.forEach((sector) => params.append(URL_KEYS.sectors, sector));
   filters.industries?.forEach((industry) => params.append(URL_KEYS.industries, industry));
   filters.locations?.forEach((location) => params.append(URL_KEYS.locations, location));
   filters.format?.forEach((format) => params.append(URL_KEYS.format, format));
@@ -76,6 +81,9 @@ export function searchParamsToFilters(params: URLSearchParams): BrowseFilters {
 
   const search = params.get(URL_KEYS.search)?.trim();
   if (search) filters.search = search;
+
+  const sectors = [...new Set(params.getAll(URL_KEYS.sectors).filter(isSector))];
+  if (sectors.length > 0) filters.sectors = sectors;
 
   const industries = nonEmpty(params.getAll(URL_KEYS.industries));
   if (industries) filters.industries = industries;
@@ -117,6 +125,7 @@ export function searchParamsToFilters(params: URLSearchParams): BrowseFilters {
 export function serializeFilters(filters: BrowseFilters): string {
   const canonical: BrowseFilters = {
     ...filters,
+    sectors: filters.sectors ? [...filters.sectors].sort() : undefined,
     industries: filters.industries ? [...filters.industries].sort() : undefined,
     locations: filters.locations ? [...filters.locations].sort() : undefined,
     format: filters.format ? [...filters.format].sort() : undefined,
@@ -140,6 +149,7 @@ export function filtersToApiQuery(
   if (filters.qualityMin !== undefined) params.set('qualityMin', String(filters.qualityMin));
   filters.locations?.forEach((location) => params.append('locations', location));
   filters.format?.forEach((format) => params.append('format', format));
+  filters.sectors?.forEach((sector) => params.append('sectors', sector));
   filters.industries?.forEach((industry) => params.append('industries', industry));
   filters.compensationType?.forEach((type) => params.append('compensationType', type));
   if (options.liveSearch) params.set('liveSearch', 'true');
@@ -150,6 +160,7 @@ export function filtersToApiQuery(
 export function countActiveFilters(filters: BrowseFilters): number {
   return [
     filters.format?.length,
+    filters.sectors?.length,
     filters.industries?.length,
     filters.compensationType?.length,
     filters.isRemote,
@@ -160,9 +171,9 @@ export function countActiveFilters(filters: BrowseFilters): number {
   ].filter(Boolean).length;
 }
 
-/** Live search needs something to search for: a term or at least one industry. */
+/** Live search needs something to search for: a term or at least one sector. */
 export function canLiveSearch(filters: BrowseFilters): boolean {
-  return Boolean(filters.search?.trim()) || Boolean(filters.industries?.length);
+  return Boolean(filters.search?.trim()) || Boolean(filters.sectors?.length) || Boolean(filters.industries?.length);
 }
 
 /** Interpret the loosely typed JSON stored on a saved search as filters. */
@@ -171,6 +182,7 @@ export function savedSearchToFilters(query: string | null, saved: Record<string,
   const asStringArray = (value: unknown): string[] =>
     Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
   if (query) params.set(URL_KEYS.search, query);
+  asStringArray(saved.sectors).forEach((value) => params.append(URL_KEYS.sectors, value));
   asStringArray(saved.industries).forEach((value) => params.append(URL_KEYS.industries, value));
   asStringArray(saved.locations).forEach((value) => params.append(URL_KEYS.locations, value));
   asStringArray(saved.format).forEach((value) => params.append(URL_KEYS.format, value));
