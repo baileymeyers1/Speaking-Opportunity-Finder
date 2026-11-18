@@ -3,10 +3,12 @@ import { cleanTitle, extractOrganization, normalizeIndustries } from '../service
 import { LINKUP_QUERIES, type LinkupQuery } from './linkupQueries.js';
 import { parseHumanDate } from './lib/html.js';
 import { endOfCalendarDay } from '../lib/deadlines.js';
+import { looksLikeArticle } from '../services/liveHitTriage.js';
+import { LINKUP_SEARCH_SOURCE } from '../services/searchSources.js';
 
 export { LINKUP_QUERY_COUNT, type LinkupQuery } from './linkupQueries.js';
 
-interface LinkupSearchResult {
+export interface LinkupSearchResult {
   name: string;
   url: string;
   content: string;
@@ -16,15 +18,20 @@ interface LinkupResponse {
   results?: LinkupSearchResult[];
 }
 
-function isLikelyCFP(content: string, url: string): boolean {
+/** "CFP" as a call for papers, not the Certified Financial Planner credential ("Jane Doe, CFP®"). */
+const CFP_ABBREVIATION = /\bcfp\b(?!\s*[®™])/i;
+
+export function isLikelyCFP(content: string, url: string): boolean {
   const lowerContent = content.toLowerCase();
   const lowerUrl = url.toLowerCase();
+
+  if (CFP_ABBREVIATION.test(content) && !/certified financial planner/i.test(content)) return true;
+  if (/[/\-_.]cfp([/\-_.?#]|$)/.test(lowerUrl)) return true;
 
   const cfpIndicators = [
     'call for papers',
     'call for speakers',
     'call for presentations',
-    'cfp',
     'submit a talk',
     'speaker submission',
     'proposal submission',
@@ -173,12 +180,17 @@ async function searchWithLinkup(
   return results;
 }
 
-function mapToScraperResult(
+export function mapToScraperResult(
   result: LinkupSearchResult,
   industries: string[],
   format: string
 ): ScraperResult | null {
   if (!isLikelyCFP(result.content, result.url)) {
+    return null;
+  }
+
+  // Same triage as a live search: articles and social posts are never an event's own page.
+  if (looksLikeArticle({ title: result.name, description: result.content, applyUrl: result.url })) {
     return null;
   }
 
@@ -210,7 +222,7 @@ function mapToScraperResult(
     compensationAmount: compensation.compensationAmount,
     compensationDetails: compensation.compensationType ? result.content.substring(0, 300) : undefined,
     applyUrl: result.url,
-    source: 'Linkup Search',
+    source: LINKUP_SEARCH_SOURCE,
     sourceUrl: result.url,
   };
 }

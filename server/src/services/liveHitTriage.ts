@@ -1,7 +1,8 @@
 /**
- * Cheap triage of live-search hits before any page is read. Broad queries
- * bring back many articles about the topic; these rules drop the ones whose
- * title says they are an article, and rank the rest so the request's few
+ * Cheap triage of search hits, live and scheduled, before any page is read.
+ * Broad queries bring back many articles about the topic; these rules drop
+ * the ones whose title says they are an article and the ones on hosts that
+ * are never an event's own page, and rank the rest so a live search's few
  * Claude reads go to pages that look like a call for speakers.
  */
 
@@ -25,7 +26,23 @@ const ARTICLE_TITLE_PATTERNS: readonly RegExp[] = [
   /\bpodcasts? to (follow|pitch|listen)\b/i,
 ];
 
-const ARTICLE_HOSTS: readonly string[] = ['reddit.com', 'quora.com', 'medium.com'];
+/**
+ * Hosts that are never an event's own page: forums and blogs, and social
+ * networks, where a hit is a profile or a post about an event (and sits
+ * behind a login, so it could not be read anyway).
+ */
+const NON_EVENT_HOSTS: readonly string[] = [
+  'reddit.com',
+  'quora.com',
+  'medium.com',
+  'linkedin.com',
+  'facebook.com',
+  'instagram.com',
+  'x.com',
+  'twitter.com',
+  'youtube.com',
+  'tiktok.com',
+];
 
 function hostname(url: string): string {
   try {
@@ -37,7 +54,7 @@ function hostname(url: string): string {
 
 export function looksLikeArticle(hit: TriageInput): boolean {
   const host = hostname(hit.applyUrl);
-  if (ARTICLE_HOSTS.some((article) => host === article || host.endsWith(`.${article}`))) return true;
+  if (NON_EVENT_HOSTS.some((blocked) => host === blocked || host.endsWith(`.${blocked}`))) return true;
   return ARTICLE_TITLE_PATTERNS.some((pattern) => pattern.test(hit.title));
 }
 
