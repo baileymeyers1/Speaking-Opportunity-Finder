@@ -59,7 +59,6 @@ npm run dev
 | `ANTHROPIC_API_KEY` | No | -- | Enables AI enrichment of opportunities |
 | `WEB_SEARCH_API_KEY` | No | -- | Linkup API key for live search and CFP discovery |
 | `CRON_SECRET` | Prod | -- | Authenticates Vercel cron job requests |
-| `ENABLE_AUTO_SYNC` | No | `false` | Enable periodic scraper sync on server start |
 
 ## Architecture
 

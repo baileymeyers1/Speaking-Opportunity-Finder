@@ -27,7 +27,6 @@ import { buildGoneUpdate, buildVerificationErrorUpdate, buildVerificationUpdate 
  * so they survive serverless cold starts.
  */
 interface BackgroundEnrichmentState {
-  isRunning: boolean;
   processed: number;
   enriched: number;
   skipped: number;
@@ -40,7 +39,6 @@ interface BackgroundEnrichmentState {
 }
 
 const state: BackgroundEnrichmentState = {
-  isRunning: false,
   processed: 0,
   enriched: 0,
   skipped: 0,
@@ -51,8 +49,6 @@ const state: BackgroundEnrichmentState = {
   lastRunTime: null,
   dailyEnrichmentCount: 0,
 };
-
-let enrichmentTimer: NodeJS.Timeout | null = null;
 
 type OpportunityRow = NonNullable<Awaited<ReturnType<typeof claimNextUnenriched>>>;
 type VerificationRow = NonNullable<Awaited<ReturnType<typeof claimNextForVerification>>>;
@@ -369,33 +365,6 @@ async function verifyNext(): Promise<WorkerOutcome> {
       }
     }
     return 'processed';
-  }
-}
-
-/**
- * Start the background enrichment loop (long-running process mode only).
- */
-export function startBackgroundEnrichment(): void {
-  if (enrichmentTimer) {
-    console.log('Background enrichment: Already running');
-    return;
-  }
-
-  console.log('Background enrichment: Starting (1 opportunity every 1 minute)');
-  state.isRunning = true;
-
-  processNextUnenriched();
-  enrichmentTimer = setInterval(() => {
-    processNextUnenriched();
-  }, 60 * 1000);
-}
-
-export function stopBackgroundEnrichment(): void {
-  if (enrichmentTimer) {
-    clearInterval(enrichmentTimer);
-    enrichmentTimer = null;
-    state.isRunning = false;
-    console.log('Background enrichment: Stopped');
   }
 }
 
