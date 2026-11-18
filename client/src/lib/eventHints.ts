@@ -13,6 +13,7 @@ const SOURCE_LABELS: Record<string, string> = {
   'pretalx.com': 'Pretalx',
   'sessionize.com': 'Sessionize',
   'ruralhealthinfo.org': 'Rural Health Information Hub',
+  'radioguestlist.com': 'RadioGuestList',
   'wikicfp.com': 'WikiCFP',
   'conferencealerts.com': 'Conference Alerts',
   linkup: 'web search',
