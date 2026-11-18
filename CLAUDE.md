@@ -10,7 +10,7 @@ Aggregates speaking opportunities (CFPs, conferences, podcasts, meetups) from mu
 - **Database:** PostgreSQL everywhere. Dev: `postgres:16` from `docker-compose.yml` (`docker compose up -d db`, host port 5433). Prod: `DATABASE_URL` set in Vercel. Prisma 7 with the `pg` driver adapter (`@prisma/adapter-pg`); one schema, `prisma/schema.prisma`; the connection string lives in `prisma.config.ts`.
 - **AI:** Anthropic Claude SDK 1.x (opportunity enrichment)
 - **Auth:** bcryptjs + JWT (custom, no third-party auth)
-- **Hosting:** Vercel. Express app runs as one serverless function (`api/index.ts` imports `server/dist/app.js`); Vercel Cron drives syncs and enrichment (`vercel.json`). 60s function limit.
+- **Hosting:** Vercel. Express app runs as one serverless function (`api/index.ts` imports `server/dist/app.js`); Vercel Cron drives syncs and enrichment (`vercel.json`) and is the only scheduler: `server/src/index.ts` only listens. 60s function limit.
 
 ## Key Conventions
 - Prisma for all DB access through the shared client in `server/src/lib/prisma.ts` (never `new PrismaClient()` in a module). The client is generated into `server/src/generated/prisma` (gitignored; `npx prisma generate`); import `PrismaClient`, `Prisma` and model types from `../generated/prisma/client.js`, never from `@prisma/client`.
@@ -18,7 +18,8 @@ Aggregates speaking opportunities (CFPs, conferences, podcasts, meetups) from mu
 - Server tests run against the `speaking_finder_test` database (`server/vitest.config.ts` pushes the schema there first); `*.db.test.ts` files hit it for real, everything else mocks `lib/prisma.js`.
 - Live search results show "Live" badges; save them via `POST /api/opportunities/save-live`.
 - Client uses localStorage caching for instant load while the serverless API cold-starts; it pings the health endpoint on mount.
-- Default query filter: only future-deadline opportunities shown; `isClosed`/`isRelevant` rows never shown.
+- Default query filter (`listedConditions` in `opportunityQuery.ts`, mirrored in SQL in `eventContext.ts`): only future-deadline opportunities shown; `isClosed`/`isRelevant` rows never shown; a search hit (`Live Search`, `Linkup Search`) only once its own page was read (`verifiedAt` set, no `verificationError`); no row with no deadline and a past event date. Change the rule in both places.
+- A search hit is only a URL and a snippet; a CFP listing vouches for its rows. Code that treats them differently goes through `services/searchSources.ts` (`isSearchSource`, `isUnreadSearchHit`, `openCallAfterRead`), never a source-name comparison of its own.
 - Scraped re-syncs never overwrite Claude-enriched fields or enrichment bookkeeping (`server/src/scrapers/persistData.ts`).
 - Enrichment budget and row claims live in the DB (`server/src/services/enrichmentBudget.ts`), not process memory. Verification shares both.
 - All Claude extraction goes through `extraction.ts` (structured outputs, strict schema); never add a second prompt or regex-parse model output.
@@ -30,7 +31,7 @@ Aggregates speaking opportunities (CFPs, conferences, podcasts, meetups) from mu
 - `server/src/services/liveSearchService.ts` -- Live search integration
 - `server/src/services/extraction.ts` -- The one Claude call (structured outputs) and the merge rules; `pageText.ts` fetches apply pages
 - `server/src/services/enrichmentService.ts` -- Enrichment of a row via extraction; `backgroundEnrichment.ts` -- cron worker (enrich, then verify)
-- `server/src/services/verification.ts` -- Which stored rows are re-verified when, and what a check updates
+- `server/src/services/verification.ts` -- Which stored rows are re-verified when, and what a check or an enrichment writes; `searchSources.ts` -- search hits versus listed calls
 - `server/src/scrapers/index.ts` -- Scraper registry, per-scraper runs with time budget, persistence
 - `server/src/scrapers/` -- confs.tech, javaconferences, callingallpapers, developers.events, pretalx (hosted API + CFP pages), sessionize (public event pages via the events sitemap) and a Linkup slice (daily); WikiCFP, ConferenceAlerts (weekly). `linkupQueries.ts` holds the Linkup query set, each entry with its `format`; `services/searchLog.ts` promotes frequent live-search queries into the daily Linkup run
 - `client/src/pages/Home.tsx` -- Main grid with unified live+stored results
