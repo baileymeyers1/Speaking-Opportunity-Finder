@@ -95,7 +95,11 @@ function parseIndustries(value: string | null | undefined): string[] {
 
 /** Scraped fields with compensation inferred from the description when the scraper gave none. */
 function scrapedFields(result: ScraperResult) {
-  const inferred = inferCompensation(result.description);
+  // A scraper that states the compensation is not second-guessed from the prose
+  // (a travel podcast's description says "travel"; that is not travel covered).
+  const inferred: ReturnType<typeof inferCompensation> = result.compensationType
+    ? {}
+    : inferCompensation(result.description);
   // Text-parsed dates can come out absurd; only storable ones are written (lib/storableDate.ts).
   const cfpDeadline = storableDate(result.cfpDeadline);
   return {
