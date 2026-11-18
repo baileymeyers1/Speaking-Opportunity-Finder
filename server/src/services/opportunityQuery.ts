@@ -1,5 +1,6 @@
 import { Prisma } from '../generated/prisma/client.js';
 import type { SortBy } from 'shared';
+import { SEARCH_SOURCES } from './searchSources.js';
 import { matchesAllTerms, searchTerms, termAlternatives, termMatches } from './searchTerms.js';
 
 /** Filters accepted by `getOpportunities`, as the controller builds them from the query string. */
@@ -21,18 +22,44 @@ export interface OpportunityFilters {
 /** Rows with almost no metadata (base score 5) never surface. */
 const MIN_QUALITY_SCORE = 15;
 
-/** Source of rows stored from a live search (see liveSearchService). */
-export const LIVE_SEARCH_SOURCE = 'Live Search';
+export { LIVE_SEARCH_SOURCE } from './searchSources.js';
 
 /**
- * A live-search hit is stored with only what the search snippet said; it is
- * listed once its page has been read (enriched). Hits not read yet, and hits
- * whose read failed or was skipped, would be empty cards, so they stay hidden.
+ * A search hit, live or scheduled, is stored with only what the search
+ * snippet said. It is listed once its own page has been read: enriched from
+ * the page (`verifiedAt` is set by a page read, never by a snippet) and
+ * readable at the last check. Hits not read yet, hits whose page cannot be
+ * fetched and hits whose last check failed stay hidden; they would be cards
+ * nobody has checked. `isUnreadSearchHit` in searchSources is the same rule
+ * for one row, and `shadowedEditionIds` in eventContext mirrors it in SQL.
  */
-export const UNREAD_LIVE_HIT: Prisma.OpportunityWhereInput = {
-  source: LIVE_SEARCH_SOURCE,
-  OR: [{ enrichmentStatus: null }, { enrichmentStatus: { not: 'enriched' } }],
+export const UNREAD_SEARCH_HIT: Prisma.OpportunityWhereInput = {
+  source: { in: [...SEARCH_SOURCES] },
+  OR: [
+    { enrichmentStatus: null },
+    { enrichmentStatus: { not: 'enriched' } },
+    { verifiedAt: null },
+    { verificationError: { not: null } },
+  ],
 };
+
+/**
+ * A row with no deadline is open until its event starts; after that there is
+ * nothing left to apply to. Written as what stays listed, because a negated
+ * comparison drops rows whose event date is null.
+ */
+export function deadlineOrUpcomingEvent(now: Date): Prisma.OpportunityWhereInput {
+  return { OR: [{ cfpDeadline: { not: null } }, { eventDate: null }, { eventDate: { gte: now } }] };
+}
+
+/**
+ * What a listed row meets beyond the closed and relevant flags and the
+ * deadline: its page was read if it came from a search, and its event has not
+ * already happened.
+ */
+export function listedConditions(now: Date = new Date()): Prisma.OpportunityWhereInput[] {
+  return [{ NOT: UNREAD_SEARCH_HIT }, deadlineOrUpcomingEvent(now)];
+}
 
 /** Case-insensitive `contains` (Postgres `ILIKE`). */
 export function containsInsensitive(value: string): Prisma.StringFilter {
@@ -40,8 +67,8 @@ export function containsInsensitive(value: string): Prisma.StringFilter {
 }
 
 /**
- * The Prisma `where` for a filter set: future or missing deadline, visible,
- * plus every active filter. A search term narrows by ILIKE on each word; the
+ * The Prisma `where` for a filter set: future or missing deadline, visible
+ * (`listedConditions`), plus every active filter. A search term narrows by ILIKE on each word; the
  * caller applies the whole-word rule with `matchesSearch` afterwards.
  */
 export function buildOpportunityWhere(filters: OpportunityFilters, now: Date = new Date()): Prisma.OpportunityWhereInput {
@@ -52,7 +79,7 @@ export function buildOpportunityWhere(filters: OpportunityFilters, now: Date = n
     isClosed: false,
     isRelevant: true,
   };
-  const andConditions: Prisma.OpportunityWhereInput[] = [{ NOT: UNREAD_LIVE_HIT }];
+  const andConditions: Prisma.OpportunityWhereInput[] = listedConditions(now);
 
   // Text search: every word must appear in one of the fields.
   if (filters.search) {

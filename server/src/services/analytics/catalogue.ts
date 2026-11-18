@@ -3,6 +3,7 @@ import { startOfUtcDay } from '../../scrapers/lib/html.js';
 import type { AdminCatalogueResponse } from 'shared';
 import { countJsonArrayValues, DAY_MS, daysAgo } from './shared.js';
 import { getEventStats } from './events.js';
+import { listedConditions } from '../opportunityQuery.js';
 
 /** What the catalogue looks like to a visitor: active rows by format, industry, deadline and location. */
 
@@ -12,10 +13,13 @@ const INDUSTRY_SCAN_LIMIT = 5000;
 
 export async function getCatalogue(now: Date = new Date()): Promise<AdminCatalogueResponse> {
   const today = startOfUtcDay(now);
+  // Listed rows only: an unread search hit or a past event is not something a visitor sees.
+  const listed = listedConditions(now);
   const active = {
     isClosed: false,
     isRelevant: true,
     OR: [{ cfpDeadline: { gte: today } }, { cfpDeadline: null }],
+    AND: listed,
   };
   // A deadline is stored as the end of its day in its zone, AoE (UTC-12) by
   // default, so "day N" closes at 11:59:59 UTC on day N+1. An edge at noon UTC
@@ -26,6 +30,7 @@ export async function getCatalogue(now: Date = new Date()): Promise<AdminCatalog
   const deadlineBetween = (fromDays: number, toDays: number | null) => ({
     isClosed: false,
     isRelevant: true,
+    AND: listed,
     cfpDeadline: {
       gte: fromDays === 0 ? today : bucketEdge(fromDays),
       ...(toDays === null ? {} : { lt: bucketEdge(toDays) }),
@@ -60,7 +65,7 @@ export async function getCatalogue(now: Date = new Date()): Promise<AdminCatalog
     prisma.opportunity.count({ where: deadlineBetween(7, 30) }),
     prisma.opportunity.count({ where: deadlineBetween(30, 90) }),
     prisma.opportunity.count({ where: deadlineBetween(90, null) }),
-    prisma.opportunity.count({ where: { isClosed: false, isRelevant: true, cfpDeadline: null } }),
+    prisma.opportunity.count({ where: { isClosed: false, isRelevant: true, cfpDeadline: null, AND: listed } }),
     // There is no closedAt column; a closed row's updatedAt moves when the flag is set.
     prisma.opportunity.count({ where: { isClosed: true, updatedAt: { gte: daysAgo(7, now) } } }),
     prisma.opportunity.count({ where: { ...active, isRemote: true } }),

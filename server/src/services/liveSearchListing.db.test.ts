@@ -1,12 +1,13 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { prisma } from '../lib/prisma.js';
 import { MAX_ENRICHMENT_ATTEMPTS } from './enrichmentBudget.js';
-import { getListedByApplyUrls, getOpportunities } from './opportunityService.js';
+import { getListedByApplyUrls, getOpportunities, getUniqueIndustries, getUniqueLocations } from './opportunityService.js';
 
 /**
  * Against the test Postgres database: a search matches every word of the
- * query as a word (not the exact phrase), live-search hits stay hidden until
- * their page has been read, and stored copies of live hits are found by URL.
+ * query as a word (not the exact phrase), search hits (live and scheduled)
+ * stay hidden until their own page has been read, rows whose event has
+ * happened drop out, and stored copies of live hits are found by URL.
  */
 const MARKER = 'live listing test row';
 const now = new Date('2026-11-05T12:00:00Z');
@@ -20,6 +21,11 @@ interface StoreInput {
   enrichmentStatus?: string | null;
   isClosed?: boolean;
   industries?: string[];
+  /** When the page was last checked; defaults to "read today" for an enriched row. */
+  verifiedAt?: Date | null;
+  verificationError?: string | null;
+  cfpDeadline?: Date | null;
+  eventDate?: Date | null;
 }
 
 async function store(input: StoreInput) {
@@ -30,7 +36,10 @@ async function store(input: StoreInput) {
       applyUrl: input.applyUrl,
       format: 'conference',
       source: input.source ?? 'test-live-listing',
-      cfpDeadline: inDays(30),
+      cfpDeadline: input.cfpDeadline === undefined ? inDays(30) : input.cfpDeadline,
+      eventDate: input.eventDate ?? null,
+      verifiedAt: input.verifiedAt === undefined ? (input.enrichmentStatus === undefined ? now : null) : input.verifiedAt,
+      verificationError: input.verificationError ?? null,
       qualityScore: 50,
       industries: JSON.stringify(input.industries ?? []),
       description: `${input.description ?? ''} ${MARKER}`.trim(),
@@ -61,8 +70,28 @@ describe('stored search and live-search hits', () => {
     // A live hit whose read failed: still only the snippet, so it stays hidden too.
     await store({ title: 'AI PR Unreadable', applyUrl: url('failed'), source: 'Live Search', enrichmentStatus: 'failed' });
     // The same kind of hit once the worker has read it.
-    await store({ title: 'AI PR Awards Call', applyUrl: url('read'), source: 'Live Search', enrichmentStatus: 'enriched' });
+    await store({ title: 'AI PR Awards Call', applyUrl: url('read'), source: 'Live Search', enrichmentStatus: 'enriched', verifiedAt: now });
     await store({ title: 'AI PR Closed Call', applyUrl: url('closed'), isClosed: true });
+
+    // Scheduled search hits follow the same rule as live ones.
+    await store({ title: 'Gatecheck Waiting Hit', applyUrl: url('linkup-waiting'), source: 'Linkup Search', enrichmentStatus: null });
+    // Enriched from the snippet because the page answered 403: never verified.
+    await store({ title: 'Gatecheck Snippet Only', applyUrl: url('linkup-snippet'), source: 'Linkup Search', enrichmentStatus: 'enriched', verifiedAt: null });
+    // Read once, but the last check could not fetch the page.
+    await store({ title: 'Gatecheck Blocked Now', applyUrl: url('linkup-blocked'), source: 'Linkup Search', enrichmentStatus: 'enriched', verifiedAt: now, verificationError: 'HTTP 403' });
+    // Skipped without a read: its page was unreadable.
+    await store({ title: 'Gatecheck Unreadable', applyUrl: url('linkup-unreadable'), source: 'Linkup Search', enrichmentStatus: 'skipped' });
+    await store({ title: 'Gatecheck Read Hit', applyUrl: url('linkup-read'), source: 'Linkup Search', enrichmentStatus: 'enriched', verifiedAt: now });
+    // A CFP listing vouches for its rows: a failed check does not hide them.
+    await store({ title: 'Gatecheck Listed Call', applyUrl: url('listed-blocked'), source: 'sessionize.com', verifiedAt: now, verificationError: 'HTTP 403' });
+    await store({ title: 'Gatecheck Listed Unverified', applyUrl: url('listed-unverified'), source: 'confs.tech', enrichmentStatus: 'skipped' });
+
+    // No deadline: listed until the event starts.
+    await store({ title: 'Gatecheck Past Event', applyUrl: url('past-event'), cfpDeadline: null, eventDate: inDays(-3) });
+    await store({ title: 'Gatecheck Upcoming Event', applyUrl: url('upcoming-event'), cfpDeadline: null, eventDate: inDays(40) });
+    await store({ title: 'Gatecheck Rolling Call', applyUrl: url('rolling'), cfpDeadline: null, eventDate: null });
+    // A deadline still open outranks an event date that looks past.
+    await store({ title: 'Gatecheck Open Deadline', applyUrl: url('open-deadline'), cfpDeadline: inDays(10), eventDate: inDays(-3) });
   });
 
   afterAll(async () => {
@@ -105,6 +134,51 @@ describe('stored search and live-search hits', () => {
   it('finds the listed stored copies of live hits by URL, with the list visibility rules', async () => {
     const rows = await getListedByApplyUrls([url('ai-for-pr'), url('read'), url('pending'), url('closed'), url('unknown')], {}, { now });
     expect(rows.map((row) => row.title).sort()).toEqual(['AI PR Awards Call', 'AI for PR Conference 2027']);
+  });
+
+  it('lists a scheduled search hit only once its own page has been read', async () => {
+    const page = await getOpportunities({ search: 'Gatecheck' }, { page: 1, pageSize: 50 }, { now });
+    const titles = page.items.map((item) => item.title);
+    expect(titles).toContain('Gatecheck Read Hit');
+    expect(titles).not.toContain('Gatecheck Waiting Hit');
+    expect(titles).not.toContain('Gatecheck Snippet Only');
+    expect(titles).not.toContain('Gatecheck Blocked Now');
+    expect(titles).not.toContain('Gatecheck Unreadable');
+  });
+
+  it('keeps a listed call whose page could not be checked', async () => {
+    const page = await getOpportunities({ search: 'Gatecheck' }, { page: 1, pageSize: 50 }, { now });
+    const titles = page.items.map((item) => item.title);
+    expect(titles).toContain('Gatecheck Listed Call');
+    expect(titles).toContain('Gatecheck Listed Unverified');
+  });
+
+  it('drops a row with no deadline once its event has happened', async () => {
+    const page = await getOpportunities({ search: 'Gatecheck' }, { page: 1, pageSize: 50 }, { now });
+    const titles = page.items.map((item) => item.title);
+    expect(titles).not.toContain('Gatecheck Past Event');
+    expect(titles).toContain('Gatecheck Upcoming Event');
+    expect(titles).toContain('Gatecheck Rolling Call');
+    expect(titles).toContain('Gatecheck Open Deadline');
+    expect(page.total).toBe(titles.length);
+  });
+
+  it('offers filter options from listed rows only', async () => {
+    // The options read the clock, not the test's `now`: keep these two open whenever the test runs.
+    const farDeadline = new Date('2099-01-01T00:00:00Z');
+    await prisma.opportunity.updateMany({
+      where: { applyUrl: url('linkup-snippet') },
+      data: { location: 'Closes Sep', industries: '["hiddentag"]', cfpDeadline: farDeadline },
+    });
+    await prisma.opportunity.updateMany({
+      where: { applyUrl: url('linkup-read') },
+      data: { location: 'Gatecheck City, NL', industries: '["listedtag"]', cfpDeadline: farDeadline },
+    });
+    const [locations, industries] = await Promise.all([getUniqueLocations(), getUniqueIndustries()]);
+    expect(locations).toContain('Gatecheck City, NL');
+    expect(locations).not.toContain('Closes Sep');
+    expect(industries).toContain('listedtag');
+    expect(industries).not.toContain('hiddentag');
   });
 
   it('applies the other active filters to stored copies', async () => {

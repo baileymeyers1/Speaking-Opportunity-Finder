@@ -114,4 +114,26 @@ describe('one card per event', () => {
     expect(detail.eventEditions?.at(-1)?.year).toBe(2026);
     expect(detail.alsoListedOn).toEqual([`${SOURCE}-b`, `${SOURCE}-c`]);
   });
+
+  // Last on purpose: these rows share the Brussels location the totals above count.
+  it('never lets an unread search hit or a past event shadow the listed row of the same event', async () => {
+    const eventDate = new Date('2027-03-01');
+    const rows = [
+      await store({ title: 'Shadowcheck Summit 2027', applyUrl: 'https://shadowcheck.example/cfp', source: `${SOURCE}-a`, cfpDeadline: inDays(30), eventDate }),
+      // Enriched from its snippet, page never read: hidden, though its deadline is nearer.
+      await store({ title: 'Shadowcheck Summit 2027', applyUrl: 'https://directory.example/shadowcheck', source: 'Linkup Search', cfpDeadline: inDays(5), eventDate }),
+      await store({ title: 'Pastcheck Forum 2026', applyUrl: 'https://pastcheck.example/cfp', source: `${SOURCE}-a`, cfpDeadline: inDays(20), eventDate: inDays(60) }),
+      // No deadline and the event has happened: hidden.
+      await store({ title: 'Pastcheck Forum 2026', applyUrl: 'https://pastcheck.example/2026', source: `${SOURCE}-b`, cfpDeadline: null, eventDate: inDays(-10) }),
+    ];
+    await assignEvents(prisma, rows, now);
+
+    const shadowed = await shadowedEditionIds(now);
+    expect(shadowed).not.toContain(rows[0].id);
+    expect(shadowed).not.toContain(rows[2].id);
+    const shadowcheck = await getOpportunities({ search: 'Shadowcheck' }, { page: 1, pageSize: 20 }, { now });
+    expect(shadowcheck.items.map((item) => item.id)).toEqual([rows[0].id]);
+    const pastcheck = await getOpportunities({ search: 'Pastcheck' }, { page: 1, pageSize: 20 }, { now });
+    expect(pastcheck.items.map((item) => item.id)).toEqual([rows[2].id]);
+  });
 });
