@@ -10,6 +10,7 @@ import { scrapeSessionize } from './sessionize.js';
 import { scrapeWikiCFP } from './wikicfp.js';
 import { scrapeConferenceAlertsUSA } from './conferenceAlerts.js';
 import { scrapeDevelopersEvents } from './developersEvents.js';
+import { scrapeRuralHealthInfo } from './ruralHealthInfo.js';
 import { config } from '../config/index.js';
 import { promotedLinkupQueries } from '../services/searchLog.js';
 import { computeQualityScore, type ScraperResult } from './qualityScore.js';
@@ -198,6 +199,8 @@ export const SCRAPERS: ScraperDefinition[] = [
   { name: 'developers.events', cadence: 'daily', run: scrapeDevelopersEvents },
   { name: 'pretalx.com', cadence: 'daily', run: scrapePretalx },
   { name: 'sessionize.com', cadence: 'daily', run: scrapeSessionize },
+  // Two or three listing pages a run, no per-row page fetches: under a second.
+  { name: 'ruralhealthinfo.org', cadence: 'daily', run: scrapeRuralHealthInfo },
   {
     name: 'linkup',
     cadence: 'daily',
