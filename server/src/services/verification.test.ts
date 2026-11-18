@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
+  buildEnrichmentUpdate,
   buildGoneUpdate,
   buildVerificationErrorUpdate,
   buildVerificationUpdate,
@@ -40,6 +41,7 @@ describe('verificationWindows', () => {
     expect(windows.deadlineSoonUntil.toISOString()).toBe('2026-11-16T00:00:00.000Z');
     expect(windows.soonStaleBefore.toISOString()).toBe('2026-10-31T15:30:00.000Z');
     expect(windows.staleBefore.toISOString()).toBe('2026-10-26T15:30:00.000Z');
+    expect(windows.unreadableGiveUpBefore.toISOString()).toBe('2026-10-03T15:30:00.000Z');
   });
 });
 
@@ -65,16 +67,52 @@ describe('verificationCandidates', () => {
       expect(where).toContain('"enrichmentClaimedAt":null');
     }
   });
+
+  it('leaves out rows with no deadline whose event has happened', () => {
+    for (const candidate of verificationCandidates(NOW)) {
+      expect(JSON.stringify(candidate.where)).toContain(
+        '{"OR":[{"cfpDeadline":{"not":null}},{"eventDate":null},{"eventDate":{"gte":"2026-11-02T00:00:00.000Z"}}]}'
+      );
+    }
+  });
+
+  it('stops retrying a search hit that could not be read for a month', () => {
+    for (const candidate of verificationCandidates(NOW)) {
+      expect(JSON.stringify(candidate.where)).toContain(
+        '{"NOT":{"source":{"in":["Live Search","Linkup Search"]},"enrichmentStatus":{"not":"enriched"},"createdAt":{"lt":"2026-10-03T15:30:00.000Z"}}}'
+      );
+    }
+  });
 });
 
+const LISTED = { source: 'confs.tech', isRelevant: true };
+const SEARCH_HIT = { source: 'Linkup Search', isRelevant: true };
+
 describe('buildVerificationUpdate', () => {
-  it('follows the page on whether a call is open, so a listed event turns into an open call', () => {
-    expect(buildVerificationUpdate({ isRelevant: true }, merged({ hasOpenCall: true }), NOW).hasOpenCall).toBe(true);
-    expect(buildVerificationUpdate({ isRelevant: true }, merged({ hasOpenCall: false }), NOW).hasOpenCall).toBe(false);
+  it('follows the page of a search hit on whether a call is open, so a listed event turns into an open call', () => {
+    expect(buildVerificationUpdate(SEARCH_HIT, merged({ hasOpenCall: true }), NOW).hasOpenCall).toBe(true);
+    expect(buildVerificationUpdate(SEARCH_HIT, merged({ hasOpenCall: false }), NOW).hasOpenCall).toBe(false);
+  });
+
+  it('lets a page confirm a listed call but not deny it', () => {
+    expect(buildVerificationUpdate(LISTED, merged({ hasOpenCall: true }), NOW).hasOpenCall).toBe(true);
+    // An event home page that mentions no call: back to "not judged", which is read as open.
+    expect(buildVerificationUpdate(LISTED, merged({ hasOpenCall: false }), NOW).hasOpenCall).toBeNull();
+  });
+
+  it('drops a search hit the page shows to be a directory or an article', () => {
+    const update = buildVerificationUpdate(SEARCH_HIT, merged({ isRelevant: false, hasOpenCall: false }), NOW);
+    expect(update).toMatchObject({ isRelevant: false, hasOpenCall: false, qualityScore: 0 });
+  });
+
+  it('brings a search hit back when a later read finds an event after all', () => {
+    const update = buildVerificationUpdate({ source: 'Live Search', isRelevant: false }, merged(), NOW);
+    expect(update.isRelevant).toBe(true);
+    expect(update.qualityScore).toBeGreaterThan(0);
   });
 
   it('writes dates, location, remote, compensation, closed flag and confidence, and stamps verifiedAt', () => {
-    const update = buildVerificationUpdate({ isRelevant: true }, merged(), NOW);
+    const update = buildVerificationUpdate(LISTED, merged(), NOW);
     expect(update).toMatchObject({
       eventDate: new Date('2027-04-20T00:00:00Z'),
       cfpDeadline: new Date('2027-01-15T00:00:00Z'),
@@ -92,16 +130,53 @@ describe('buildVerificationUpdate', () => {
     expect(update.qualityScore).toBeGreaterThan(50);
   });
 
-  it('does not touch title, organization, industries or relevance', () => {
-    const update = buildVerificationUpdate({ isRelevant: true }, merged({ isRelevant: false }), NOW);
+  it('does not touch title, organization or industries, nor the relevance of a listed call', () => {
+    const update = buildVerificationUpdate(LISTED, merged({ isRelevant: false }), NOW);
     expect(update).not.toHaveProperty('title');
     expect(update).not.toHaveProperty('organization');
     expect(update).not.toHaveProperty('industries');
     expect(update).not.toHaveProperty('isRelevant');
+    expect(update.qualityScore).toBeGreaterThan(0);
   });
 
   it('zeroes the quality score when the page says the call is closed', () => {
-    expect(buildVerificationUpdate({ isRelevant: true }, merged({ isClosed: true }), NOW).qualityScore).toBe(0);
+    expect(buildVerificationUpdate(LISTED, merged({ isClosed: true }), NOW).qualityScore).toBe(0);
+  });
+});
+
+describe('buildEnrichmentUpdate', () => {
+  it('writes the cleaned fields and marks the row enriched', () => {
+    const update = buildEnrichmentUpdate(merged({ title: 'KubeCon 2027', industries: ['devops', 'cloud'] }), { pageRead: true, now: NOW });
+    expect(update).toMatchObject({
+      title: 'KubeCon 2027',
+      organization: 'Org',
+      industries: JSON.stringify(['devops', 'cloud']),
+      location: 'Denver, CO',
+      isClosed: false,
+      isRelevant: true,
+      hasOpenCall: true,
+      enrichmentStatus: 'enriched',
+      enrichedAt: NOW,
+      enrichmentError: null,
+      enrichmentClaimedAt: null,
+    });
+  });
+
+  it('counts as a verification only when the page itself was read', () => {
+    expect(buildEnrichmentUpdate(merged(), { pageRead: true, now: NOW })).toMatchObject({ verifiedAt: NOW, verificationError: null });
+    const fromDescription = buildEnrichmentUpdate(merged(), { pageRead: false, now: NOW });
+    expect(fromDescription).not.toHaveProperty('verifiedAt');
+    expect(fromDescription).not.toHaveProperty('verificationError');
+  });
+
+  it('keeps a listed call open when its page mentions none, and takes a search hit at its word', () => {
+    expect(buildEnrichmentUpdate(merged({ hasOpenCall: false }), { pageRead: true, now: NOW }).hasOpenCall).toBeNull();
+    expect(buildEnrichmentUpdate(merged({ source: 'Live Search', hasOpenCall: false }), { pageRead: true, now: NOW }).hasOpenCall).toBe(false);
+  });
+
+  it('hides a row the page shows not to be an event, whatever its source', () => {
+    const update = buildEnrichmentUpdate(merged({ isRelevant: false, hasOpenCall: false }), { pageRead: true, now: NOW });
+    expect(update).toMatchObject({ isRelevant: false, hasOpenCall: false, qualityScore: 0 });
   });
 });
 

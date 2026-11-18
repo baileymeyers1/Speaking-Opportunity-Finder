@@ -3,10 +3,11 @@ import type { ScraperResult } from '../scrapers/qualityScore.js';
 import {
   extractOpportunity,
   mergeExtraction,
-  type DateConfidence,
   type ExtractionInput,
+  type MergedOpportunity,
 } from './extraction.js';
 import type { PageFetchResult } from './pageText.js';
+import { isSearchSource } from './searchSources.js';
 
 /**
  * Enrichment of a scraped row: one Claude extraction (see extraction.ts)
@@ -16,14 +17,10 @@ import type { PageFetchResult } from './pageText.js';
 
 export type EnrichmentStatus = 'enriched' | 'failed' | 'skipped';
 
-export interface EnrichedOpportunity extends ScraperResult {
-  enrichmentStatus: EnrichmentStatus;
-  enrichedAt: Date;
-  enrichmentError?: string;
-  isClosed?: boolean;
-  isRelevant?: boolean;
-  dateConfidence?: DateConfidence;
-}
+/** The merged row when the extraction ran; otherwise the row as it was, with why. */
+export type EnrichedOpportunity =
+  | (MergedOpportunity & { enrichmentStatus: 'enriched'; enrichedAt: Date })
+  | (ScraperResult & { enrichmentStatus: 'failed' | 'skipped'; enrichedAt: Date; enrichmentError?: string });
 
 export interface EnrichOptions {
   /** Visible text of `applyUrl`, when it was fetched. */
@@ -31,10 +28,17 @@ export interface EnrichOptions {
   now?: Date;
 }
 
+/** Reason recorded on a search hit whose page could not be read (see `planEnrichment`). */
+export const PAGE_UNREADABLE = 'page unreadable';
+
 /**
  * Cheap pre-checks that decide whether Claude should be called at all.
  * Returns a reason string when enrichment should be skipped, else null.
  * Exported so the background worker can skip rows without spending budget.
+ *
+ * "Already complete" holds for a CFP listing only: a search hit's fields were
+ * guessed from a snippet by regex, and its page still has to say whether it
+ * is an event at all.
  */
 export function shouldSkipEnrichment(result: ScraperResult, pageText?: string | null): string | null {
   const hasCompleteData =
@@ -43,7 +47,7 @@ export function shouldSkipEnrichment(result: ScraperResult, pageText?: string | 
     result.industries?.length > 0 &&
     result.location &&
     result.compensationType;
-  if (hasCompleteData) return 'already complete';
+  if (hasCompleteData && !isSearchSource(result.source)) return 'already complete';
 
   const text = `${pageText || ''}${result.description || ''}`;
   if (text.length < 30) return 'description too short';
@@ -59,11 +63,17 @@ export type EnrichmentPlan =
 /**
  * Decide what to do with a row given the outcome of fetching its apply page.
  * A page that is gone (404/410) closes the listing without spending Claude
- * budget. Other fetch failures fall back to the scraped description.
+ * budget. Other fetch failures fall back to the scraped description for a CFP
+ * listing, which vouches for the call. A search hit has only its page: when
+ * that cannot be read, no Claude call is made and the row stays unlisted
+ * (verification retries the page and enriches the row when it can be read).
  */
 export function planEnrichment(result: ScraperResult, page: PageFetchResult): EnrichmentPlan {
   if (!page.ok && page.reason === 'gone') {
     return { action: 'closed', reason: page.message };
+  }
+  if (!page.ok && isSearchSource(result.source)) {
+    return { action: 'skip', reason: `${PAGE_UNREADABLE}: ${page.message}` };
   }
   const pageText = page.ok ? page.text : null;
   const skipReason = shouldSkipEnrichment(result, pageText);

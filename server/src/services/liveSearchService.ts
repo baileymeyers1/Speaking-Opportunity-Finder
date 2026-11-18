@@ -851,10 +851,11 @@ async function enrichResultsFromPages(
   const fetchedCount = pageTexts.filter(t => t !== null).length;
   console.log(`[LiveSearch] Page fetch: ${fetchedCount}/${results.length} pages returned content`);
 
+  // Only a page that was read is extracted: a snippet alone would make a card
+  // nobody checked. Unread hits are stored and left to the worker.
   const indexesForClaude: number[] = [];
   for (let i = 0; i < results.length; i++) {
-    const text = pageTexts[i] || results[i].description || '';
-    if (text.length > 20 && !results[i].isClosed) indexesForClaude.push(i);
+    if (pageTexts[i] && !results[i].isClosed) indexesForClaude.push(i);
   }
 
   const extracted = new Set<number>();

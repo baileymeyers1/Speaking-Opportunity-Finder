@@ -20,13 +20,15 @@ vi.mock('./enrichmentService.js', async (importOriginal) => {
       enrichedAt: new Date(),
       isClosed: false,
       isRelevant: true,
-      dateConfidence: null,
+      hasOpenCall: true,
+      dateConfidence: { eventDate: 'low' as const, cfpDeadline: 'low' as const, location: 'low' as const },
     })),
   };
 });
 
 import { prisma } from '../lib/prisma.js';
 import { enrichRowsNow } from './backgroundEnrichment.js';
+import { fetchPageText } from './pageText.js';
 import {
   claimNextUnenriched,
   claimUnenrichedByIds,
@@ -58,15 +60,22 @@ function opportunityRow(suffix: string) {
 
 const today = utcDateKey(new Date());
 
+const SEARCH_HIT_URL = 'https://budget-test.example/hit/';
+
+/** A hit the scheduled search stored, waiting to be read. */
+function searchHit(suffix: string) {
+  return { ...opportunityRow(suffix), applyUrl: `${SEARCH_HIT_URL}${suffix}`, source: 'Linkup Search' };
+}
+
 describe('enrichment budget against Postgres', () => {
   beforeEach(async () => {
     await prisma.enrichmentUsage.deleteMany({ where: { date: { in: [utcDateKey(now), today] } } });
-    await prisma.opportunity.deleteMany({ where: { source: 'test' } });
+    await prisma.opportunity.deleteMany({ where: { OR: [{ source: 'test' }, { applyUrl: { startsWith: SEARCH_HIT_URL } }] } });
   });
 
   afterAll(async () => {
     await prisma.enrichmentUsage.deleteMany({ where: { date: { in: [utcDateKey(now), today] } } });
-    await prisma.opportunity.deleteMany({ where: { source: 'test' } });
+    await prisma.opportunity.deleteMany({ where: { OR: [{ source: 'test' }, { applyUrl: { startsWith: SEARCH_HIT_URL } }] } });
     await prisma.$disconnect();
   });
 
@@ -130,5 +139,34 @@ describe('enrichment budget against Postgres', () => {
     expect(stored.enrichmentClaimedAt).toBeNull();
     // Counted in today's usage, so the admin page shows the spend.
     expect(await getTodayEnrichmentCount(prisma)).toBe(DAILY_ENRICHMENT_LIMIT + 1);
+  });
+
+  it('spends no Claude call on a search hit whose page cannot be read, and leaves it unverified', async () => {
+    vi.mocked(fetchPageText).mockResolvedValueOnce({ ok: false, reason: 'http_error', status: 403, message: 'HTTP 403' });
+    const row = await prisma.opportunity.create({ data: searchHit('blocked') });
+
+    await enrichRowsNow([row.id]);
+
+    const stored = await prisma.opportunity.findUniqueOrThrow({ where: { id: row.id } });
+    expect(stored).toMatchObject({
+      enrichmentStatus: 'skipped',
+      enrichmentError: 'page unreadable: HTTP 403',
+      verifiedAt: null,
+      enrichmentClaimedAt: null,
+    });
+    expect(await getTodayEnrichmentCount(prisma)).toBe(0);
+  });
+
+  it('marks a search hit verified when it was enriched from its own page', async () => {
+    const row = await prisma.opportunity.create({ data: searchHit('readable') });
+
+    expect(await enrichRowsNow([row.id])).toEqual({ claimed: 1, read: 1 });
+
+    const stored = await prisma.opportunity.findUniqueOrThrow({ where: { id: row.id } });
+    expect(stored.enrichmentStatus).toBe('enriched');
+    expect(stored.verifiedAt).not.toBeNull();
+    expect(stored.verificationError).toBeNull();
+    expect(stored.hasOpenCall).toBe(true);
+    expect(await getTodayEnrichmentCount(prisma)).toBe(1);
   });
 });
