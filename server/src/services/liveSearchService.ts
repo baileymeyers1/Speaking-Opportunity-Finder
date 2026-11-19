@@ -6,7 +6,7 @@ import { assignEvents } from './eventAssignment.js';
 import { cleanTitle, extractOrganization, normalizeIndustries, decodeHtmlEntities, isJunkResult } from './dataNormalization.js';
 import { sectorsFromTags } from './sectorMapping.js';
 import {
-  extractOpportunitiesBatch,
+  extractOpportunity,
   mergeExtraction,
   serializeDateConfidence,
   type DateConfidence,
@@ -837,7 +837,7 @@ export function applyExtractionToLiveResult(result: EnrichedLiveResult, extracti
 }
 
 /**
- * Fetch result pages in parallel, then run one Claude extraction per result.
+ * Read each result's page and run one Claude extraction on it.
  * Falls back to regex extraction over the page text when Claude is unavailable.
  */
 /** A visitor is waiting: the reader gets less time than the worker gives it. */
@@ -847,55 +847,41 @@ async function enrichResultsFromPages(
   results: EnrichedLiveResult[],
   searchIndustries: string[]
 ): Promise<void> {
-  const FETCH_CONCURRENCY = SYNC_ENRICH_LIMIT;
-  const pageTexts = await mapWithConcurrency(results, FETCH_CONCURRENCY, async (r) => {
+  let pagesRead = 0;
+  let sentToClaude = 0;
+  let extractedCount = 0;
+
+  // Each hit reads its page and is extracted as soon as that page arrives, all
+  // hits at once. The request then waits for its slowest hit, not for the
+  // slowest page and after that the slowest extraction.
+  await mapWithConcurrency(results, SYNC_ENRICH_LIMIT, async (r) => {
     const page = await readPage(r.applyUrl, { readerTimeoutMs: LIVE_READER_TIMEOUT_MS });
     if (!page.ok && page.reason === 'gone') r.isClosed = true;
     r.pageFetched = page.ok;
-    return page.ok ? page.text : null;
-  });
+    const pageText = page.ok ? page.text : null;
+    if (pageText) pagesRead++;
 
-  const fetchedCount = pageTexts.filter(t => t !== null).length;
-  console.log(`[LiveSearch] Page fetch: ${fetchedCount}/${results.length} pages returned content`);
-
-  // Only a page that was read is extracted: a snippet alone would make a card
-  // nobody checked. Unread hits are stored and left to the worker.
-  const indexesForClaude: number[] = [];
-  for (let i = 0; i < results.length; i++) {
-    if (pageTexts[i] && !results[i].isClosed) indexesForClaude.push(i);
-  }
-
-  const extracted = new Set<number>();
-  if (config.claude.apiKey && indexesForClaude.length > 0) {
-    console.log(`[LiveSearch] Extracting metadata via Claude for ${indexesForClaude.length} results...`);
-    const outcomes = await extractOpportunitiesBatch(
-      indexesForClaude.map((i) => ({
-        title: results[i].title,
-        organization: results[i].organization,
-        description: results[i].description,
-        pageText: pageTexts[i],
-        applyUrl: results[i].applyUrl,
-      })),
-      SYNC_ENRICH_LIMIT
-    );
-    outcomes.forEach((outcome, position) => {
-      const index = indexesForClaude[position];
+    // Only a page that was read is extracted: a snippet alone would make a card
+    // nobody checked. Unread hits are stored and left to the worker.
+    if (pageText && !r.isClosed && config.claude.apiKey) {
+      sentToClaude++;
+      const outcome = await extractOpportunity({
+        title: r.title,
+        organization: r.organization,
+        description: r.description,
+        pageText,
+        applyUrl: r.applyUrl,
+      });
       if (outcome.status === 'ok') {
-        applyExtractionToLiveResult(results[index], outcome.result);
-        results[index].extracted = true;
-        extracted.add(index);
+        applyExtractionToLiveResult(r, outcome.result);
+        r.extracted = true;
+        extractedCount++;
       } else if (outcome.status === 'failed') {
-        console.warn(`[LiveSearch] Extraction failed for ${results[index].applyUrl}: ${outcome.error}`);
+        console.warn(`[LiveSearch] Extraction failed for ${r.applyUrl}: ${outcome.error}`);
       }
-    });
-    console.log(`[LiveSearch] Claude extracted metadata for ${extracted.size}/${indexesForClaude.length} results`);
-  }
+    }
 
-  for (let i = 0; i < results.length; i++) {
-    const r = results[i];
-    const pageText = pageTexts[i];
-
-    if (!extracted.has(i) && pageText) {
+    if (!r.extracted && pageText) {
       // Fallback: regex extraction from page text (only when Claude did not run)
       const pageMeta = extractMetadata(pageText, r.title, searchIndustries);
       if (!r.location && pageMeta.location) r.location = pageMeta.location;
@@ -917,7 +903,11 @@ async function enrichResultsFromPages(
       compensationType: r.compensationType,
       description: r.description,
     });
-  }
+  });
+
+  console.log(
+    `[LiveSearch] Read ${pagesRead}/${results.length} pages; Claude extracted ${extractedCount}/${sentToClaude}`
+  );
 }
 
 async function performLinkupSearch(
@@ -1095,11 +1085,15 @@ export async function persistLiveResults(
   }
   if (created > 0) {
     // Inside the request on purpose: nothing runs after the response on Vercel.
+    // Only the hits read here: they are the ones listed now. A hit nobody has
+    // read is hidden, so it gets its event when the worker reads it
+    // (`assignEventIfMissing`), by then under its cleaned-up name. Matching
+    // every stored hit here was most of what a search spent after Claude.
     const stored = await prisma.opportunity.findMany({
       where: { applyUrl: { in: fresh.map((r) => r.applyUrl) }, eventId: null },
-      select: { id: true, title: true, organization: true, applyUrl: true, eventDate: true, location: true, eventId: true },
+      select: { id: true, title: true, organization: true, applyUrl: true, eventDate: true, location: true, eventId: true, enrichmentStatus: true },
     });
-    await assignEvents(prisma, stored, now);
+    await assignEvents(prisma, stored.filter((row) => row.enrichmentStatus === 'enriched'), now);
   }
   return { created, existing: existingUrls.size };
 }

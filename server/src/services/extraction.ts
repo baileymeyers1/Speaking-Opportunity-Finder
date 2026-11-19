@@ -1,7 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { config } from '../config/index.js';
 import { normalizeIndustries } from './dataNormalization.js';
-import { mapWithConcurrency } from '../scrapers/lib/html.js';
 import { calendarDate, instantInZone, isDeadlinePast, isValidTimezone } from '../lib/deadlines.js';
 import { storableDate } from '../lib/storableDate.js';
 import { SECTORS, SECTOR_IDS, normalizeSectors, type Sector } from '../lib/sectors.js';
@@ -338,15 +337,6 @@ export async function extractOpportunity(
   } catch (error) {
     return { status: 'failed', error: error instanceof Error ? error.message : 'Unknown extraction error' };
   }
-}
-
-/** Extract several inputs with bounded concurrency. Results keep input order. */
-export function extractOpportunitiesBatch(
-  inputs: readonly ExtractionInput[],
-  concurrency: number = 5,
-  options: { now?: Date } = {}
-): Promise<ExtractionOutcome[]> {
-  return mapWithConcurrency(inputs, concurrency, (input) => extractOpportunity(input, options));
 }
 
 export interface MergedOpportunity extends ScraperResult {

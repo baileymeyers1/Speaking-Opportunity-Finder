@@ -70,10 +70,11 @@ vi.mock('./backgroundEnrichment.js', () => ({ enrichRowsNow: mocks.enrichRowsNow
 
 vi.mock('./extraction.js', async (importOriginal) => {
   const actual = await importOriginal<typeof Extraction>();
-  return { ...actual, extractOpportunitiesBatch: mocks.extract };
+  return { ...actual, extractOpportunity: mocks.extract };
 });
 
 import { buildSearchQueries, performLiveSearch, SYNC_ENRICH_LIMIT } from './liveSearchService.js';
+import { assignEvents } from './eventAssignment.js';
 import { readPage, type PageReadResult } from './pageReader.js';
 import { DAILY_ENRICHMENT_LIMIT } from './enrichmentBudget.js';
 
@@ -137,13 +138,12 @@ function linkupReturns(items: LinkupItem[]) {
   );
 }
 
-const extractedUrls = () =>
-  mocks.extract.mock.calls.flatMap(([inputs]) => (inputs as Array<{ applyUrl: string }>).map((i) => i.applyUrl));
+const extractedUrls = () => mocks.extract.mock.calls.map(([input]) => (input as { applyUrl: string }).applyUrl);
 
 beforeEach(() => {
   mocks.table.clear();
   mocks.usageToday = 0;
-  mocks.extract.mockImplementation(async (inputs: unknown[]) => inputs.map(() => extractionOk()));
+  mocks.extract.mockImplementation(async () => extractionOk());
   // The worker's per-row read: mark each claimed row enriched and open.
   mocks.enrichRowsNow.mockImplementation(async (ids: string[]) => {
     for (const row of mocks.table.values()) {
@@ -244,12 +244,46 @@ describe('performLiveSearch', () => {
     }
   });
 
+  it('extracts each hit as soon as its own page is read, without waiting for the slowest page', async () => {
+    linkupReturns([hit('fast'), hit('slow')]);
+    const readable: PageReadResult = { ok: true, text: 'Call for speakers on AI in PR. Submit by the deadline.', status: 200 };
+    let releaseSlowPage: () => void = () => undefined;
+    const slowPage = new Promise<PageReadResult>((resolve) => {
+      releaseSlowPage = () => resolve(readable);
+    });
+    vi.mocked(readPage).mockImplementation(async (url) => (url === urlOf('slow') ? slowPage : readable));
+    try {
+      const search = performLiveSearch('AI for PR', []);
+      // The fast hit is with Claude while the slow page is still loading.
+      await vi.waitFor(() => expect(extractedUrls()).toEqual([urlOf('fast')]));
+      releaseSlowPage();
+      const outcome = await search;
+      expect(extractedUrls()).toEqual([urlOf('fast'), urlOf('slow')]);
+      expect(outcome.results.map((r) => r.applyUrl).sort()).toEqual([urlOf('fast'), urlOf('slow')]);
+    } finally {
+      vi.mocked(readPage).mockImplementation(async () => readable);
+    }
+  });
+
+  it('matches only the hits it read to an event; the worker matches the rest when it reads them', async () => {
+    vi.mocked(assignEvents).mockClear();
+    linkupReturns(Array.from({ length: SYNC_ENRICH_LIMIT + 3 }, (_, i) => hit(`new-${i}`)));
+
+    const outcome = await performLiveSearch('AI for PR', []);
+
+    expect(outcome.waiting).toHaveLength(3);
+    expect(assignEvents).toHaveBeenCalledTimes(1);
+    const matched = vi.mocked(assignEvents).mock.calls[0][1].map((row) => row.applyUrl).sort();
+    expect(matched).toEqual(outcome.results.map((r) => r.applyUrl).sort());
+    expect(matched).toHaveLength(SYNC_ENRICH_LIMIT);
+  });
+
   it('counts hits read now or earlier that are not open calls', async () => {
     linkupReturns([hit('listicle'), hit('closed-before'), hit('vendor-before'), hit('open-before')]);
     storedBefore('closed-before', { isClosed: true });
     storedBefore('vendor-before', { isRelevant: false });
     storedBefore('open-before');
-    mocks.extract.mockImplementation(async (inputs: unknown[]) => inputs.map(() => extractionOk({ isRelevant: false })));
+    mocks.extract.mockImplementation(async () => extractionOk({ isRelevant: false }));
 
     const outcome = await performLiveSearch('AI for PR', []);
 

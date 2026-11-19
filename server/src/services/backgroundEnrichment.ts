@@ -2,6 +2,7 @@ import { prisma } from '../lib/prisma.js';
 import { storableDate } from '../lib/storableDate.js';
 import { enrichOpportunity, planEnrichment, toExtractionInput } from './enrichmentService.js';
 import { extractOpportunity, mergeExtraction } from './extraction.js';
+import { assignEvents } from './eventAssignment.js';
 import { readPage } from './pageReader.js';
 import { config } from '../config/index.js';
 import type { ScraperResult } from '../scrapers/qualityScore.js';
@@ -131,6 +132,25 @@ async function recordFailure(opportunity: OpportunityRow, message: string): Prom
 export type WorkerOutcome = 'processed' | 'none' | 'budget_exhausted';
 
 /**
+ * Give a row its canonical event once a read has shown it to be one, if it
+ * has none: a search hit stored unread (live search matches only the hits it
+ * read itself), or a row a killed sync wrote before matching ran. Matched now
+ * it goes by the cleaned-up title. A matching failure never fails the row.
+ */
+async function assignEventIfMissing(id: string): Promise<void> {
+  try {
+    const row = await prisma.opportunity.findUnique({
+      where: { id },
+      select: { id: true, title: true, organization: true, applyUrl: true, eventDate: true, location: true, eventId: true, isRelevant: true },
+    });
+    if (!row || row.eventId || !row.isRelevant) return;
+    await assignEvents(prisma, [row]);
+  } catch (error) {
+    console.error('[BackgroundEnrichment] Could not assign an event:', error instanceof Error ? error.message : error);
+  }
+}
+
+/**
  * Fetch the apply page and enrich the row from its text (the scraped
  * description is often 50-80 chars of boilerplate). A 404/410 closes the
  * listing without a Claude call.
@@ -227,6 +247,7 @@ async function enrichClaimedRow(
         data: buildEnrichmentUpdate(enriched, { pageRead: plan.pageText !== null, now: enriched.enrichedAt }),
       });
 
+      await assignEventIfMissing(opportunity.id);
       state.enriched++;
       if (enriched.isClosed) console.log(`Background enrichment: Marked "${opportunity.title}" as closed CFP`);
       if (!enriched.isRelevant) console.log(`Background enrichment: Marked "${opportunity.title}" as not a speaking opportunity`);
@@ -326,6 +347,7 @@ async function verifyNext(): Promise<WorkerOutcome> {
       where: { id: row.id },
       data: firstRead ? buildEnrichmentUpdate(merged, { pageRead: true, now }) : buildVerificationUpdate(row, merged, now),
     });
+    if (firstRead) await assignEventIfMissing(row.id);
     state.verified++;
     const deadlineChanged = (merged.cfpDeadline?.getTime() ?? null) !== (row.cfpDeadline?.getTime() ?? null);
     console.log(

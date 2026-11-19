@@ -2,6 +2,7 @@
   "buildCommand": "npx prisma generate && npx prisma db push && npm run build",
   "outputDirectory": "client/dist",
   "framework": "vite",
+  "regions": ["pdx1"],
   "functions": {
     "api/**/*.ts": {
       "maxDuration": 60

@@ -2,6 +2,17 @@
 
 Reverse chronological. Current state lives in `docs/STATUS.md`.
 
+## 2026-11-19 — Functions next to the database; a live search answers in about half the time
+
+A test search on production took 27.2s. Its request log, step by step: Linkup search 2.7s, reading eight pages (all refused, so through the reader) 8.9s, Claude 4.6s, storing 20 new hits 10.7s, building the reply 0.5s.
+- **Root cause of the largest part.** The functions ran in Vercel's default region, `iad1` (Washington, D.C.), and the database is Render's Oregon region, so every query was a round trip across the country. Storing a hit and matching it to a canonical event is about five queries, one after another: 0.53s a row. The same latency is behind the sync writes that overran the 60s limit before 11-16.
+- **`vercel.json` `regions: ["pdx1"]`.** Measured from the US east coast, production in `iad1` against the preview in `pdx1`, eight runs each: default list of 20, 0.48s → 0.33s; list of 100, 0.53s → 0.43s; filter options, 0.32s → 0.25s; `/api/health`, which makes no query, 0.10s → 0.19s, because an east-coast caller is now the far end. Server time for the list is about 130 ms. Storing a live hit: 0.53s → 0.17s a row.
+- **Per-hit pipeline.** A live search read all eight pages, waited for the slowest, then sent the eight to Claude. Each hit now reads its page and is extracted in one go, all at once. `extractOpportunitiesBatch` had no other caller and is gone.
+- **Event matching left to the worker for unread hits.** The request matched every stored hit to an event, most of them hits nobody had read and nobody can see. It now matches the hits it read; `assignEventIfMissing` in the worker matches a row when it has read it and found it to be an event, under its cleaned-up title. That also picks up rows a killed sync left without an event, and stops creating events for hits that turn out not to be events.
+- **Measured on previews against the production database** (three different queries, so orders of magnitude, not a controlled comparison): 27.2s before; 15.2s with the region and the pipeline (25 hits stored in 4.3s); 11.4s with the matching deferred as well (12 hits stored in 1.5s). What remains is the search (2.5s), the pages and Claude (7 to 8s together).
+- The first attempt at timing the preview measured the sign-in redirect, not the API (the share cookie was not set yet); those numbers were discarded and the run repeated with the response body checked.
+- Tests: server 690 → 693, three runs; client 66. No schema change.
+
 ## 2026-11-19 — The format the page states is stored; rows without a deadline are ranked by when they close
 
 Two open items from the audit.
