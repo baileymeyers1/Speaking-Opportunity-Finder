@@ -1,0 +1,139 @@
+/* JCI Intelligence components, ported from the brand kit (shared/kit.css, showcase/system.css).
+   Only what Tailwind utilities cannot say: the button's pointer fill, the field halo, the glass bezel the
+   kit's liquid-glass.js draws into, and the theme reveal. Colours come from styles/tokens.css. */
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    background: rgb(var(--page));
+    accent-color: rgb(var(--check-on));
+  }
+  body {
+    font-family: var(--font-sans);
+    font-size: 15px;
+    line-height: 1.55;
+  }
+  :focus-visible { outline: 2px solid rgb(var(--focus)); outline-offset: 2px; }
+  ::selection { background: rgb(var(--red) / 0.16); }
+  ::placeholder { color: rgb(var(--ink-3)); }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 1ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 1ms !important;
+    }
+  }
+}
+
+@layer components {
+  /* ---------- type ---------- */
+  /* Title: 30/1.1, weight 400. The page's one headline. */
+  .title { font-size: clamp(1.625rem, 1.2rem + 1.6vw, 1.875rem); font-weight: 400; line-height: 1.1; letter-spacing: -0.03em; text-wrap: balance; }
+  /* Heading: 15, weight 500. Sections and sheets. */
+  .heading { font-size: 0.9375rem; font-weight: 500; line-height: 1.35; letter-spacing: -0.01em; }
+  /* JCI's signature accent: Fraunces italic in red. Once per screen, never for numbers. */
+  .accent-word { font-family: var(--font-accent); font-style: italic; font-weight: 400; font-variation-settings: 'opsz' 144; letter-spacing: -0.03em; color: rgb(var(--red)); }
+
+  /* Inline links: ink, with a hairline underline that firms up on hover. Red is kept for the primary action. */
+  .link { color: rgb(var(--ink)); text-decoration: underline; text-decoration-color: var(--rule-2); text-decoration-thickness: 1px; text-underline-offset: 0.22em; transition: text-decoration-color var(--dur-2) var(--ease-out); }
+  .link:hover { text-decoration-color: currentColor; }
+
+  /* ---------- buttons ---------- */
+  /* The fill grows from where the pointer entered (--ex, --ey: set by Button) and drains toward where it
+     left. Buttons never move toward the pointer; a press is 90ms to scale(.97) and a spring back. */
+  .btn {
+    position: relative; isolation: isolate; overflow: hidden; border-color: transparent;
+    transition: color var(--dur-2) var(--ease-out), border-color var(--dur-2) var(--ease-out),
+      background-color var(--dur-2) var(--ease-out), box-shadow var(--dur-2) var(--ease-out), transform 420ms var(--ease-spring);
+  }
+  .btn::before {
+    content: ''; position: absolute; inset: -1px; z-index: -1; border-radius: inherit; background: var(--btn-fill, transparent);
+    clip-path: circle(0% at var(--ex, 50%) var(--ey, 50%)); transition: clip-path 560ms var(--ease-out);
+  }
+  @media (hover: hover) {
+    .btn:hover::before { clip-path: circle(150% at var(--ex, 50%) var(--ey, 50%)); }
+    .btn--secondary:hover { color: rgb(var(--page)); border-color: transparent; }
+    .btn--danger:hover { color: rgb(var(--red-ink)); border-color: transparent; }
+    .btn--icon:hover { border-color: var(--rule-hover); }
+    .btn--words:hover { background-size: 100% 1px; }
+  }
+  .btn:active { transform: scale(0.97); transition-duration: 90ms; }
+  .btn:disabled::before, .btn[aria-disabled='true']::before { display: none; }
+
+  .btn--primary { background: rgb(var(--red)); color: rgb(var(--red-ink)); box-shadow: var(--btn-primary-shadow); --btn-fill: rgb(var(--red-deep)); }
+  .btn--secondary { border-color: var(--rule-2); color: rgb(var(--ink)); --btn-fill: rgb(var(--ink)); }
+  .btn--danger { border-color: rgb(var(--critical) / 0.4); color: rgb(var(--critical)); --btn-fill: rgb(var(--critical)); }
+  .btn--icon { border-color: var(--rule-2); color: rgb(var(--ink)); }
+  /* Secondary actions are words with an underline that draws in. The line sits under the label, wherever
+     the button's own height puts it. */
+  .btn--words {
+    color: rgb(var(--ink));
+    background: linear-gradient(currentColor, currentColor) no-repeat;
+    background-origin: content-box; background-clip: content-box;
+    background-position: 0 calc(50% + 0.85em); background-size: 0 1px;
+    transition: background-size 420ms var(--ease-out), color var(--dur-2) var(--ease-out), transform 420ms var(--ease-spring);
+  }
+
+  /* ---------- fields ---------- */
+  .field {
+    height: var(--control-height); background: rgb(var(--surface)); color: rgb(var(--ink));
+    border: 1px solid var(--rule-2); border-radius: var(--radius-control);
+    transition: border-color var(--dur-2) var(--ease-out), box-shadow var(--dur-2) var(--ease-out), background-color var(--dur-2) var(--ease-out);
+  }
+  .field:hover { border-color: var(--rule-hover); }
+  .field:focus, .field:focus-visible, .field:focus-within, .field[data-state='open'] {
+    outline: none; border-color: rgb(var(--focus)); box-shadow: 0 0 0 4px var(--focus-ring);
+  }
+  .field:disabled { cursor: not-allowed; opacity: 0.5; }
+
+  /* ---------- liquid glass ---------- */
+  /* vendor/jci/liquid-glass.js adds .lg-lens behind an element's content and points its backdrop-filter at
+     a displacement map; this draws the bezel. Per element: --lg-a (tint at rest), --lg-a-lift (tint while
+     lifted). --lift (0..1) is written by the script while the element travels.
+     Nothing between the glass and what it bends may isolate it: no opacity, filter, mask or clip-path on
+     the glass or an ancestor, or it refracts nothing. */
+  .lg-surface { isolation: isolate; }
+  .lg-surface > :not(.lg-lens) { position: relative; z-index: 1; }
+  .lg-lens {
+    position: absolute; inset: 0; z-index: 0; border-radius: inherit; pointer-events: none;
+    background: rgb(var(--lg-fill, 255 255 255) / calc(var(--lg-a, 0.2) * (1 - var(--lift, 0)) + var(--lg-a-lift, 0.04) * var(--lift, 0)));
+    box-shadow:
+      inset 0 0 0 0.5px rgb(var(--lg-rim, 255 255 255) / var(--lg-rim-a, 0.6)),
+      inset 1.5px 1.5px 0.5px -0.5px rgb(var(--lg-rim, 255 255 255) / var(--lg-key-a, 0.9)),
+      inset -1px -1.5px 0.5px -0.5px rgb(var(--lg-rim, 255 255 255) / var(--lg-back-a, 0.4)),
+      inset 0 -10px 18px -14px rgb(0 0 0 / var(--lg-depth-a, 0.12)),
+      0 0.5px 1px rgb(0 0 0 / var(--lg-drop-a, 0.12)),
+      0 calc(4px + 2px * var(--lift, 0)) calc(12px + 4px * var(--lift, 0)) -8px rgb(0 0 0 / calc(var(--lg-drop-a, 0.12) * 2));
+  }
+  .lg-lens::after {
+    content: ''; position: absolute; inset: 0; border-radius: inherit;
+    background: linear-gradient(180deg, rgb(255 255 255 / calc(var(--lg-sheen-a, 0.4) * (0.35 + 0.65 * var(--lift, 0)))), transparent 52%);
+  }
+
+  /* Glass switch: the knob is a clear bead. It magnifies the track icon it rests on and bends the other as
+     it crosses; the icons brighten with --p (the knob's position, 0 to 1, set on the button). */
+  .lswitch {
+    position: relative; flex: none; width: 60px; height: 30px; padding: 0; border: 0; border-radius: 999px; cursor: pointer;
+    background: var(--lswitch-track); box-shadow: inset 0 0 0 1px var(--rule), inset 0 1px 2px rgb(0 0 0 / 0.06);
+  }
+  .lswitch > svg { position: absolute; top: 50%; width: 14px; height: 14px; margin-top: -7px; color: rgb(var(--ink)); transition: none; }
+  .lswitch > svg:first-of-type { left: 12px; opacity: calc(0.42 + 0.58 * (1 - var(--p, 0))); }
+  .lswitch > svg:last-of-type { right: 12px; opacity: calc(0.42 + 0.58 * var(--p, 0)); }
+  .lswitch__knob {
+    position: absolute; top: 3px; left: 3px; width: 32px; height: 24px; border-radius: 999px; will-change: transform;
+    --lg-a: var(--lswitch-knob-a, 0.14); --lg-a-lift: var(--lswitch-knob-a, 0.14);
+  }
+  .lswitch:focus-visible { outline: 2px solid rgb(var(--focus)); outline-offset: 3px; }
+}
+
+/* Theme switch: everything holds still while the new theme opens from where the knob lands; the switch
+   rides on its own live layer, so the knob never freezes. Unlayered on purpose: these must win. */
+.theme-swap *, .theme-swap *::before, .theme-swap *::after { transition: none !important; animation-play-state: paused !important; }
+::view-transition-old(root), ::view-transition-new(root) { animation: none; mix-blend-mode: normal; }
+::view-transition-new(root) { z-index: 2; }
+::view-transition-group(jci-theme-switch) { z-index: 3; animation: none; }
+::view-transition-old(jci-theme-switch) { display: none; }
+::view-transition-new(jci-theme-switch) { animation: none; }
