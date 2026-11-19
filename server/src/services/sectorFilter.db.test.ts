@@ -1,13 +1,17 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { prisma } from '../lib/prisma.js';
 import { buildFilters } from '../controllers/opportunityFilters.js';
-import { createOpportunity, getOpportunities, getSectorOptions } from './opportunityService.js';
+import { getOpportunities, getSectorOptions } from './opportunityService.js';
 import { WITHOUT_SECTOR } from './opportunityQuery.js';
 
 /**
  * Against the test Postgres database: the sector filter on the native array
  * column, including rows stored before the column existed (NULL), and the
  * mapping of old free-text `industries` values onto it.
+ *
+ * Every row here is stored as enriched. An unread row (`enrichmentStatus`
+ * null, no claim) in the shared test database is claimable by the worker
+ * tests in enrichmentBudget.db.test.ts, which run alongside.
  */
 const MARKER = 'sector filter test row';
 const SEARCH = 'Sectorprobe';
@@ -114,29 +118,5 @@ describe('the sector filter', () => {
     const count = (id: string) => options.find((option) => option.id === id)!.count;
     expect(count('healthcare')).toBeGreaterThanOrEqual(2);
     expect(count('finance')).toBeGreaterThanOrEqual(1);
-  });
-
-  it('places a saved live result by its tags when it brings no sectors', async () => {
-    const saved = await createOpportunity({
-      title: `${SEARCH} saved-live`,
-      organization: 'Sector Test Org',
-      description: MARKER,
-      format: 'conference',
-      industries: ['public relations', 'ai'],
-      applyUrl: url('saved-live'),
-      source: 'Live Search',
-    });
-    expect(saved.sectors).toEqual(['pr-communications', 'ai']);
-    const given = await createOpportunity({
-      title: `${SEARCH} saved-live-given`,
-      organization: 'Sector Test Org',
-      description: MARKER,
-      format: 'conference',
-      industries: ['ai'],
-      sectors: ['marketing', 'bogus'],
-      applyUrl: url('saved-live-given'),
-      source: 'Live Search',
-    });
-    expect(given.sectors).toEqual(['marketing']);
   });
 });
