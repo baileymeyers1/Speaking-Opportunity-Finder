@@ -8,6 +8,7 @@ import {
   parenthesisedAcronyms,
   deriveEditionYear,
   displayName,
+  eventDomain,
   isHostingDomain,
   nameSimilarity,
   nameTokens,
@@ -95,6 +96,13 @@ describe('registrableDomain', () => {
     expect(isHostingDomain('meetup.com')).toBe(true);
     expect(isHostingDomain('linuxfoundation.org')).toBe(true);
     expect(isHostingDomain('bsidesrocketcity.org')).toBe(false);
+  });
+
+  it('treats form platforms and the guest-request listing as shared', () => {
+    expect(eventDomain('https://msu.co1.qualtrics.com/jfe/form/SV_1')).toBeNull();
+    expect(eventDomain('https://fs16.formsite.com/MEAGHAN/form75/index')).toBeNull();
+    expect(eventDomain('https://radioguestlist.com/guestrequests/8271-a-show-seeks-guests')).toBeNull();
+    expect(eventDomain('https://www.ruralhealth.us/events/schedule/annual-rural-health-conference')).toBe('ruralhealth.us');
   });
 });
 

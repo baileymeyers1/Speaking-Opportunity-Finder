@@ -6,6 +6,7 @@ import {
   detectPlaceholderDescription,
   normalizeIndustries,
   decodeHtmlEntities,
+  isFileUrl,
   isJunkResult,
 } from './dataNormalization.js';
 
@@ -281,6 +282,16 @@ describe('normalizeIndustries', () => {
     expect(normalizeIndustries(['', 'technology', '  '])).toEqual([
       'technology',
     ]);
+  });
+});
+
+describe('isFileUrl', () => {
+  it('is true for a link to a document or media file, whatever its query string', () => {
+    expect(isFileUrl('https://www.ohsu.edu/sites/default/files/2026-09/2027-forum-rfp.pdf')).toBe(true);
+    expect(isFileUrl('https://example.org/Call.DOCX?download=1')).toBe(true);
+    expect(isFileUrl('https://example.org/call-for-proposals')).toBe(false);
+    expect(isFileUrl('https://example.org/pdf-guide/')).toBe(false);
+    expect(isFileUrl('not a url')).toBe(false);
   });
 });
 
