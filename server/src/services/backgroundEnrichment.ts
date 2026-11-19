@@ -2,7 +2,7 @@ import { prisma } from '../lib/prisma.js';
 import { storableDate } from '../lib/storableDate.js';
 import { enrichOpportunity, planEnrichment, toExtractionInput } from './enrichmentService.js';
 import { extractOpportunity, mergeExtraction } from './extraction.js';
-import { fetchPageText } from './pageText.js';
+import { readPage } from './pageReader.js';
 import { config } from '../config/index.js';
 import type { ScraperResult } from '../scrapers/qualityScore.js';
 import {
@@ -185,7 +185,7 @@ async function enrichClaimedRow(
 ): Promise<WorkerOutcome> {
   try {
     const scraperResult = toScraperResult(opportunity);
-    const page = await fetchPageText(opportunity.applyUrl);
+    const page = await readPage(opportunity.applyUrl);
     const plan = planEnrichment(scraperResult, page);
     state.processed++;
     state.lastRunTime = new Date();
@@ -282,7 +282,7 @@ async function verifyNext(): Promise<WorkerOutcome> {
     }
 
     const now = new Date();
-    const page = await fetchPageText(row.applyUrl);
+    const page = await readPage(row.applyUrl);
     state.processed++;
     state.lastRunTime = now;
 

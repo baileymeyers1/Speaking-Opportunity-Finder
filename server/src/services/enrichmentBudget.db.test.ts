@@ -7,8 +7,8 @@ vi.mock('../config/index.js', async (importOriginal) => {
   const actual = await importOriginal<typeof Config>();
   return { ...actual, config: { ...actual.config, claude: { ...actual.config.claude, apiKey: 'test-key' } } };
 });
-vi.mock('./pageText.js', () => ({
-  fetchPageText: vi.fn(async () => ({ ok: true, text: 'Call for speakers: submit a talk on AI in communications by the deadline.' })),
+vi.mock('./pageReader.js', () => ({
+  readPage: vi.fn(async () => ({ ok: true, text: 'Call for speakers: submit a talk on AI in communications by the deadline.' })),
 }));
 vi.mock('./enrichmentService.js', async (importOriginal) => {
   const actual = await importOriginal<typeof EnrichmentService>();
@@ -28,15 +28,19 @@ vi.mock('./enrichmentService.js', async (importOriginal) => {
 
 import { prisma } from '../lib/prisma.js';
 import { enrichRowsNow } from './backgroundEnrichment.js';
-import { fetchPageText } from './pageText.js';
+import { readPage } from './pageReader.js';
 import {
   claimNextUnenriched,
   claimUnenrichedByIds,
   DAILY_ENRICHMENT_LIMIT,
   getTodayEnrichmentCount,
+  getTodayPageReaderCount,
   MAX_ENRICHMENT_ATTEMPTS,
+  pageReaderUsageKey,
+  parseReaderLimit,
   releaseEnrichmentSlot,
   reserveEnrichmentSlot,
+  reservePageReaderSlot,
   utcDateKey,
 } from './enrichmentBudget.js';
 
@@ -69,12 +73,12 @@ function searchHit(suffix: string) {
 
 describe('enrichment budget against Postgres', () => {
   beforeEach(async () => {
-    await prisma.enrichmentUsage.deleteMany({ where: { date: { in: [utcDateKey(now), today] } } });
+    await prisma.enrichmentUsage.deleteMany({ where: { date: { in: [utcDateKey(now), today, pageReaderUsageKey(now)] } } });
     await prisma.opportunity.deleteMany({ where: { OR: [{ source: 'test' }, { applyUrl: { startsWith: SEARCH_HIT_URL } }] } });
   });
 
   afterAll(async () => {
-    await prisma.enrichmentUsage.deleteMany({ where: { date: { in: [utcDateKey(now), today] } } });
+    await prisma.enrichmentUsage.deleteMany({ where: { date: { in: [utcDateKey(now), today, pageReaderUsageKey(now)] } } });
     await prisma.opportunity.deleteMany({ where: { OR: [{ source: 'test' }, { applyUrl: { startsWith: SEARCH_HIT_URL } }] } });
     await prisma.$disconnect();
   });
@@ -86,6 +90,28 @@ describe('enrichment budget against Postgres', () => {
 
     await releaseEnrichmentSlot(prisma, now);
     expect(await getTodayEnrichmentCount(prisma, now)).toBe(1);
+  });
+
+  it('keeps the reader cap apart from the Claude budget, in the same table', async () => {
+    expect(pageReaderUsageKey(now)).toBe('2026-11-03:reader');
+    expect(await reservePageReaderSlot(prisma, 2, now)).toEqual({ reserved: true, count: 1 });
+    expect(await reservePageReaderSlot(prisma, 2, now)).toEqual({ reserved: true, count: 2 });
+    expect(await reservePageReaderSlot(prisma, 2, now)).toEqual({ reserved: false, count: 2 });
+    expect(await getTodayPageReaderCount(prisma, now)).toBe(2);
+    // The Claude count is read by the plain date and never sees reader calls.
+    expect(await getTodayEnrichmentCount(prisma, now)).toBe(0);
+    expect(await reserveEnrichmentSlot(prisma, 1, now)).toEqual({ reserved: true, count: 1 });
+    expect(await getTodayPageReaderCount(prisma, now)).toBe(2);
+  });
+
+  it('reserves nothing when the reader cap is 0, which is how it is switched off', async () => {
+    expect(await reservePageReaderSlot(prisma, 0, now)).toEqual({ reserved: false, count: 0 });
+    expect(await getTodayPageReaderCount(prisma, now)).toBe(0);
+    expect(parseReaderLimit('0')).toBe(0);
+    expect(parseReaderLimit('40')).toBe(40);
+    expect(parseReaderLimit(undefined)).toBe(300);
+    expect(parseReaderLimit('-5')).toBe(300);
+    expect(parseReaderLimit('many')).toBe(300);
   });
 
   it('claims an unenriched row once and increments its attempt counter', async () => {
@@ -142,7 +168,7 @@ describe('enrichment budget against Postgres', () => {
   });
 
   it('spends no Claude call on a search hit whose page cannot be read, and leaves it unverified', async () => {
-    vi.mocked(fetchPageText).mockResolvedValueOnce({ ok: false, reason: 'http_error', status: 403, message: 'HTTP 403' });
+    vi.mocked(readPage).mockResolvedValueOnce({ ok: false, reason: 'http_error', status: 403, message: 'HTTP 403 (reader: FETCH_TARGET_NOT_FOUND)' });
     const row = await prisma.opportunity.create({ data: searchHit('blocked') });
 
     await enrichRowsNow([row.id]);
@@ -150,7 +176,7 @@ describe('enrichment budget against Postgres', () => {
     const stored = await prisma.opportunity.findUniqueOrThrow({ where: { id: row.id } });
     expect(stored).toMatchObject({
       enrichmentStatus: 'skipped',
-      enrichmentError: 'page unreadable: HTTP 403',
+      enrichmentError: 'page unreadable: HTTP 403 (reader: FETCH_TARGET_NOT_FOUND)',
       verifiedAt: null,
       enrichmentClaimedAt: null,
     });

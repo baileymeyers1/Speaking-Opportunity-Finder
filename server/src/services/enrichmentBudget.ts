@@ -2,7 +2,8 @@ import type { PrismaClient } from '../generated/prisma/client.js';
 import { verificationCandidates } from './verification.js';
 
 /**
- * Daily Claude budget and per-row claims for the enrichment worker.
+ * Daily Claude budget, the daily cap on reader calls, and per-row claims for
+ * the enrichment worker.
  *
  * Both live in the database rather than module memory so they hold across
  * serverless cold starts and across concurrent cron invocations.
@@ -40,6 +41,31 @@ export function isClaimStale(claimedAt: Date | null, now: Date = new Date()): bo
 }
 
 /**
+ * Daily cap on pages read through the paid reader (services/pageReader.ts):
+ * what a refused page costs to read, a tenth of a cent each, is small, so the
+ * cap is there to bound a bad day, not the usual one. `PAGE_READER_DAILY_LIMIT`
+ * overrides it; 0 turns the reader off.
+ */
+export const DEFAULT_PAGE_READER_DAILY_LIMIT = 300;
+
+export function parseReaderLimit(value: string | undefined, fallback: number = DEFAULT_PAGE_READER_DAILY_LIMIT): number {
+  if (value === undefined || value.trim() === '') return fallback;
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed >= 0 ? parsed : fallback;
+}
+
+export const PAGE_READER_DAILY_LIMIT = parseReaderLimit(process.env.PAGE_READER_DAILY_LIMIT);
+
+/**
+ * The reader's counter is a row of the same table as the Claude budget, under
+ * its own key ("2026-11-19:reader"), so it needs no column of its own and the
+ * Claude count, read by the plain date, is untouched.
+ */
+export function pageReaderUsageKey(now: Date = new Date()): string {
+  return `${utcDateKey(now)}:reader`;
+}
+
+/**
  * Reserve one Claude call against today's budget. Call this immediately before
  * the API request; every request is billed whether or not it succeeds.
  */
@@ -48,8 +74,30 @@ export async function reserveEnrichmentSlot(
   limit: number = DAILY_ENRICHMENT_LIMIT,
   now: Date = new Date()
 ): Promise<{ reserved: boolean; count: number }> {
-  const date = utcDateKey(now);
+  return reserveDailySlot(prisma, utcDateKey(now), limit);
+}
 
+/** Reserve one reader call against today's cap. Every attempt counts, read or not. */
+export async function reservePageReaderSlot(
+  prisma: PrismaClient,
+  limit: number = PAGE_READER_DAILY_LIMIT,
+  now: Date = new Date()
+): Promise<{ reserved: boolean; count: number }> {
+  if (limit <= 0) return { reserved: false, count: 0 };
+  return reserveDailySlot(prisma, pageReaderUsageKey(now), limit);
+}
+
+export async function getTodayPageReaderCount(prisma: PrismaClient, now: Date = new Date()): Promise<number> {
+  const row = await prisma.enrichmentUsage.findUnique({ where: { date: pageReaderUsageKey(now) } });
+  return row?.count ?? 0;
+}
+
+/** One slot of a daily counter, taken only while the count is under the limit. */
+async function reserveDailySlot(
+  prisma: PrismaClient,
+  date: string,
+  limit: number
+): Promise<{ reserved: boolean; count: number }> {
   await prisma.enrichmentUsage.upsert({
     where: { date },
     create: { date, count: 0 },
