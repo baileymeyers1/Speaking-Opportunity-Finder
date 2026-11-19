@@ -165,7 +165,7 @@ export const SECTOR_PHRASES: Record<Sector, readonly string[]> = {
     'creativity', 'creative practice', 'photography', 'writing', 'author', 'comics', 'live streaming', 'audio',
     'multimedia', 'content creation', 'creator economy', 'popular culture', 'press freedom',
     'mass communication', 'interdisciplinary art', 'media studies', 'film studies', 'media policy',
-    'art history', 'history of art', 'art education', 'music education',
+    'art history', 'history of art', 'art education', 'music education', 'comedy', 'book',
   ],
   education: [
     'education', 'higher education', 'k12', 'k 12', 'school', 'teacher', 'teaching', 'university', 'college',
@@ -205,7 +205,7 @@ export const SECTOR_PHRASES: Record<Sector, readonly string[]> = {
     'personal growth', 'mindset', 'public speaking', 'productivity', 'soft skill', 'communication skill', 'teamwork',
     "women's leadership", 'women leadership', 'leadership development', 'engineering leadership',
     'change management', 'motivation', 'emotional intelligence', 'negotiation', 'time management', 'cto',
-    'ciso',
+    'ciso', 'self improvement', 'self help',
   ],
   business: [
     'business', 'entrepreneurship', 'entrepreneur', 'startup', 'founder', 'small business', 'smb', 'sme',

@@ -109,6 +109,21 @@ describe('sectorsFromTags', () => {
   });
 });
 
+describe('the tags of the sources outside software', () => {
+  it('places ruralhealthinfo.org calls in healthcare', () => {
+    expect(sectorsFromTags(['healthcare', 'rural health'])).toEqual(['healthcare']);
+  });
+
+  it('places radioguestlist.com guest requests by the subjects of their categories', () => {
+    expect(sectorsFromTags(['business', 'books', 'marketing'])).toEqual(['business', 'media']);
+    expect(sectorsFromTags(['comedy', 'film', 'television', 'music', 'sports'])[0]).toBe('media');
+    expect(sectorsFromTags(['health', 'wellness'])).toEqual(['healthcare', 'wellness']);
+    // "technology" is too broad to outvote a subject the request names.
+    expect(sectorsFromTags(['self improvement', 'technology', 'consumer affairs'])).toEqual(['leadership']);
+    expect(sectorsFromTags(['self-help'])).toEqual(['leadership']);
+  });
+});
+
 describe('words too broad to decide alone', () => {
   it('never lets "communications" decide PR on its own', () => {
     expect(sectorsFromTags(['communications'])).toEqual([]);
