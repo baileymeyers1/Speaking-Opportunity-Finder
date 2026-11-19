@@ -1,5 +1,7 @@
 import { prisma } from '../lib/prisma.js';
 import { storableDate } from '../lib/storableDate.js';
+import { SECTORS, normalizeSectors } from '../lib/sectors.js';
+import { sectorsFromTags } from './sectorMapping.js';
 import { AppError } from '../middleware/errorHandler.js';
 import { parseDateConfidence } from './extraction.js';
 import { assignEvents } from './eventAssignment.js';
@@ -12,7 +14,7 @@ import {
   matchesSearch,
   type OpportunityFilters,
 } from './opportunityQuery.js';
-import type { CompensationType, OpportunityFormat, OpportunityWithDates, PaginatedResponse } from 'shared';
+import type { CompensationType, OpportunityFormat, OpportunityWithDates, PaginatedResponse, SectorOption } from 'shared';
 
 export type { OpportunityFilters } from './opportunityQuery.js';
 
@@ -47,6 +49,7 @@ function transformOpportunity(opp: {
   deadlineTimezone?: string | null;
   format: string;
   industries: string;
+  sectors?: string[] | null;
   compensationType: string | null;
   compensationAmount: number | null;
   compensationDetails: string | null;
@@ -71,6 +74,7 @@ function transformOpportunity(opp: {
     format: opp.format as OpportunityFormat,
     compensationType: opp.compensationType as CompensationType | null,
     industries: parseJsonArray(opp.industries),
+    sectors: normalizeSectors(opp.sectors),
     dateConfidence: parseDateConfidence(opp.dateConfidence),
   };
 }
@@ -199,6 +203,8 @@ export interface OpportunityCreateInput {
   deadlineTimezone?: string;
   format: string;
   industries?: string[];
+  /** Sector ids; left out, the row is placed by its tags. */
+  sectors?: string[];
   compensationType?: string;
   compensationAmount?: number;
   compensationDetails?: string;
@@ -210,6 +216,7 @@ export interface OpportunityCreateInput {
 
 export async function createOpportunity(data: OpportunityCreateInput) {
   const cfpDeadline = storableDate(data.cfpDeadline);
+  const given = normalizeSectors(data.sectors);
   const opportunity = await prisma.opportunity.create({
     data: {
       ...data,
@@ -217,6 +224,7 @@ export async function createOpportunity(data: OpportunityCreateInput) {
       cfpDeadline,
       deadlineTimezone: cfpDeadline ? data.deadlineTimezone : null,
       industries: JSON.stringify(data.industries || []),
+      sectors: given.length > 0 ? given : sectorsFromTags(data.industries),
     },
   });
   const [assigned] = await assignEvents(prisma, [opportunity]);
@@ -248,20 +256,23 @@ export async function getUniqueLocations(): Promise<string[]> {
     .sort();
 }
 
-// Get unique industries for filter dropdown
-export async function getUniqueIndustries(): Promise<string[]> {
-  const opportunities = await prisma.opportunity.findMany({
-    where: buildOpportunityWhere({}),
-    select: { industries: true },
+/**
+ * Every sector with the number of cards the list shows for it (one card per
+ * event, like the list itself), in the order of lib/sectors.ts. A sector with
+ * no card is still returned: the filter always offers the whole list.
+ */
+export async function getSectorOptions(now?: Date): Promise<SectorOption[]> {
+  const rows = await prisma.opportunity.findMany({
+    where: await buildGroupedWhere({}, now),
+    select: { sectors: true },
   });
 
-  const allIndustries = new Set<string>();
-  for (const opp of opportunities) {
-    const industries = parseJsonArray(opp.industries);
-    industries.forEach((i) => allIndustries.add(i));
+  const counts = new Map<string, number>();
+  for (const row of rows) {
+    for (const sector of normalizeSectors(row.sectors)) counts.set(sector, (counts.get(sector) ?? 0) + 1);
   }
 
-  return Array.from(allIndustries).sort();
+  return SECTORS.map((sector) => ({ id: sector.id, label: sector.label, count: counts.get(sector.id) ?? 0 }));
 }
 
 // Get compensation range for slider bounds

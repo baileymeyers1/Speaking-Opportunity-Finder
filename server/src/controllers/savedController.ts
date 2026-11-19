@@ -1,6 +1,7 @@
 import { type Request, type Response, type NextFunction } from 'express';
 import { type Opportunity } from '../generated/prisma/client.js';
 import { prisma } from '../lib/prisma.js';
+import { normalizeSectors } from '../lib/sectors.js';
 import { AppError } from '../middleware/errorHandler.js';
 
 function parseJsonArray(value: string): string[] {
@@ -15,6 +16,7 @@ function transformOpportunity(opp: Opportunity) {
   return {
     ...opp,
     industries: parseJsonArray(opp.industries),
+    sectors: normalizeSectors(opp.sectors),
   };
 }
 

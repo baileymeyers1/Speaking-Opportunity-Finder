@@ -36,8 +36,8 @@ export function DemandSection({
               <CountList items={data.savedSearches.topQueries} emptyText="No saved queries yet." />
             </div>
             <div>
-              <h3 className="mb-2 text-sm font-semibold text-foreground">Saved industries</h3>
-              <CountList items={data.savedSearches.topIndustries} emptyText="No industry filters saved." />
+              <h3 className="mb-2 text-sm font-semibold text-foreground">Saved sectors</h3>
+              <CountList items={data.savedSearches.topSectors ?? []} emptyText="No sector filters saved." />
             </div>
             <div>
               <h3 className="mb-2 text-sm font-semibold text-foreground">Saved locations</h3>

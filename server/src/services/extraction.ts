@@ -4,6 +4,8 @@ import { normalizeIndustries } from './dataNormalization.js';
 import { mapWithConcurrency } from '../scrapers/lib/html.js';
 import { calendarDate, instantInZone, isDeadlinePast, isValidTimezone } from '../lib/deadlines.js';
 import { storableDate } from '../lib/storableDate.js';
+import { SECTORS, SECTOR_IDS, normalizeSectors, type Sector } from '../lib/sectors.js';
+import { sectorsFromTags } from './sectorMapping.js';
 import type { ScraperResult } from '../scrapers/qualityScore.js';
 
 /**
@@ -47,6 +49,8 @@ export interface ExtractionResult {
   compensationAmount: number | null;
   format: OpportunityFormat;
   industries: string[];
+  /** One or two ids from the fixed sector list (lib/sectors.ts); empty when the model found none that fits. */
+  sectors: Sector[];
   cleanTitle: string | null;
   cleanOrganization: string | null;
   confidence: DateConfidence;
@@ -88,6 +92,7 @@ export const EXTRACTION_SCHEMA = {
     'compensationAmount',
     'format',
     'industries',
+    'sectors',
     'cleanTitle',
     'cleanOrganization',
     'confidence',
@@ -116,6 +121,13 @@ export const EXTRACTION_SCHEMA = {
     compensationAmount: { type: ['integer', 'null'], description: 'Speaker fee or stipend in USD when a figure is given.' },
     format: { type: 'string', enum: [...OPPORTUNITY_FORMATS] },
     industries: { type: 'array', items: { type: 'string' }, description: 'Up to 5 short lowercase topic tags.' },
+    // Structured outputs do not enforce array lengths: the prompt asks for one
+    // or two and `parseExtractionOutput` cuts the list at MAX_SECTORS.
+    sectors: {
+      type: 'array',
+      items: { type: 'string', enum: [...SECTOR_IDS] },
+      description: 'The one or two sectors the event belongs to, best fit first.',
+    },
     cleanTitle: nullableString,
     cleanOrganization: nullableString,
     confidence: {
@@ -129,6 +141,9 @@ export const EXTRACTION_SCHEMA = {
 
 export const MAX_DESCRIPTION_CHARS = 1200;
 export const MAX_PAGE_TEXT_CHARS = 5000;
+
+/** The sector list as the prompt shows it: `id: label`, one per line. */
+const SECTOR_LINES = SECTORS.map((sector) => `  ${sector.id}: ${sector.label}`).join('\n');
 
 export function buildExtractionPrompt(input: ExtractionInput, now: Date = new Date()): string {
   const todayStr = now.toISOString().split('T')[0];
@@ -154,6 +169,8 @@ Rules:
 - compensationType: "paid" (speaker fee or stipend), "travel" (travel or hotel covered), "honorarium", "exposure" (explicitly unpaid), or null when not stated. compensationAmount is the USD figure when one is given.
 - format: conference, meetup, podcast, webinar, workshop, panel, or other.
 - industries: up to 5 short lowercase topic tags such as "healthcare", "ai", "devops".
+- sectors: the one sector from the list below that the event belongs to, or two when it truly sits in two, best fit first. Answer with the id before the colon. Go by who the event is for: a nursing conference with an AI track is healthcare, a conference about AI in healthcare is ai and healthcare. A general developer conference is software. Empty only when no sector fits.
+${SECTOR_LINES}
 - cleanTitle is the event name without suffixes like "Call for Speakers" or "| Company Name"; keep the year if it is part of the name. cleanOrganization is the body running the event, not the event name. Null when unknown.
 - confidence: "high" when the value is stated explicitly, "medium" when inferred (for example an assumed year), "low" when guessed from weak cues. For a null value, report how sure you are that the text does not state it.
 
@@ -261,6 +278,7 @@ export function parseExtractionOutput(raw: unknown): ParsedExtraction {
       industries: Array.isArray(data.industries)
         ? normalizeIndustries(data.industries.filter((tag): tag is string => typeof tag === 'string'))
         : [],
+      sectors: normalizeSectors(data.sectors),
       cleanTitle: optionalString(data.cleanTitle),
       cleanOrganization: optionalString(data.cleanOrganization),
       confidence: {
@@ -332,6 +350,7 @@ export function extractOpportunitiesBatch(
 }
 
 export interface MergedOpportunity extends ScraperResult {
+  sectors: Sector[];
   isClosed: boolean;
   isRelevant: boolean;
   hasOpenCall: boolean;
@@ -343,7 +362,9 @@ export interface MergedOpportunity extends ScraperResult {
  *
  * Claude read the actual page, so its non-null values overwrite scraped or
  * regex-derived ones; a null means "not stated" and keeps what we had.
- * Industries are replaced when the model returned any. The listing is closed
+ * Industries are replaced when the model returned any. Sectors are the
+ * model's when it named any; otherwise the row keeps the ones it has, and a
+ * row with none is placed by its tags (sectorMapping.ts). The listing is closed
  * when the model says so or when the merged deadline instant is already past
  * (a legacy midnight-UTC deadline is read as AoE end of day, see
  * lib/deadlines.ts). The deadline's zone travels with the deadline: an
@@ -364,6 +385,10 @@ export function mergeExtraction(
     ? extraction.deadlineTimezone
     : storedDeadline ? (existing.deadlineTimezone ?? null) : null;
   const deadlinePassed = isDeadlinePast({ cfpDeadline, deadlineTimezone }, now);
+  const industries = extraction.industries.length > 0 ? extraction.industries : existing.industries;
+  const storedSectors = normalizeSectors(existing.sectors);
+  const sectors =
+    extraction.sectors.length > 0 ? extraction.sectors : storedSectors.length > 0 ? storedSectors : sectorsFromTags(industries);
 
   return {
     ...existing,
@@ -375,7 +400,8 @@ export function mergeExtraction(
     cfpDeadline,
     deadlineTimezone,
     format: extraction.format,
-    industries: extraction.industries.length > 0 ? extraction.industries : existing.industries,
+    industries,
+    sectors,
     compensationType: extraction.compensationType ?? existing.compensationType,
     compensationAmount: extraction.compensationAmount ?? existing.compensationAmount,
     isClosed: extraction.isClosed || deadlinePassed,

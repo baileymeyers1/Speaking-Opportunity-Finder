@@ -101,6 +101,11 @@ const catalogue = {
     { label: 'conference', count: 280 },
     { label: 'podcast', count: 20 },
   ],
+  bySector: [
+    { label: 'Software Development', count: 180 },
+    { label: 'Healthcare & Medicine', count: 30 },
+  ],
+  withoutSector: 12,
   byIndustry: [
     { label: 'technology', count: 200 },
     { label: 'healthcare', count: 30 },
@@ -141,7 +146,7 @@ const demand = {
     withQuery: 4,
     remoteOnly: 1,
     topQueries: [{ label: 'kubernetes', count: 2 }],
-    topIndustries: [{ label: 'technology', count: 5 }],
+    topSectors: [{ label: 'Software Development', count: 5 }],
     topLocations: [],
     topFormats: [{ label: 'conference', count: 3 }],
   },

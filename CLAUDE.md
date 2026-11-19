@@ -1,7 +1,7 @@
 # Speaking Opportunity Finder
 
 ## What It Is
-Aggregates speaking opportunities (CFPs, conferences, podcasts, meetups) from multiple scrapers and live search. Users filter by industry/location, save opportunities, and get AI-enriched details.
+Aggregates speaking opportunities (CFPs, conferences, podcasts, meetups) from multiple scrapers and live search. Users filter by sector/location, save opportunities, and get AI-enriched details.
 
 ## Stack
 - **Monorepo** with npm workspaces: `client/`, `server/`, `shared/`
@@ -14,7 +14,8 @@ Aggregates speaking opportunities (CFPs, conferences, podcasts, meetups) from mu
 
 ## Key Conventions
 - Prisma for all DB access through the shared client in `server/src/lib/prisma.ts` (never `new PrismaClient()` in a module). The client is generated into `server/src/generated/prisma` (gitignored; `npx prisma generate`); import `PrismaClient`, `Prisma` and model types from `../generated/prisma/client.js`, never from `@prisma/client`.
-- JSON arrays stored as strings (`industries`, `topics` fields); the query code matches quoted JSON tokens (`"ai"`), so moving them to native arrays is a separate change.
+- JSON arrays stored as strings (`industries`, `topics` fields); the text search matches words inside the JSON string, so moving them to native arrays is a separate change. `sectors` is a native `String[]`.
+- Sectors, not tags, are what the list is filtered and counted by: one or two ids per row from the fixed list in `server/src/lib/sectors.ts` (ids are stored, sent to Claude and written into URLs: never rename one). Claude names them in the extraction; a row it has not read is placed by its tags (`services/sectorMapping.ts`). Free-text `industries` stay for search and the match score. A new sector needs its phrases in `sectorPhrases.ts` and a `searchTerm` that maps back to it (a test checks both).
 - Server tests run against the `speaking_finder_test` database (`server/vitest.config.ts` pushes the schema there first); `*.db.test.ts` files hit it for real, everything else mocks `lib/prisma.js`.
 - Live search results show "Live" badges; save them via `POST /api/opportunities/save-live`.
 - Client uses localStorage caching for instant load while the serverless API cold-starts; it pings the health endpoint on mount.
@@ -30,6 +31,7 @@ Aggregates speaking opportunities (CFPs, conferences, podcasts, meetups) from mu
 - `server/src/services/opportunityService.ts` -- Core queries + future-deadline filter
 - `server/src/services/liveSearchService.ts` -- Live search integration
 - `server/src/services/extraction.ts` -- The one Claude call (structured outputs) and the merge rules; `pageText.ts` fetches apply pages
+- `server/src/lib/sectors.ts` -- The fixed sector list (also read by the client); `services/sectorMapping.ts` + `sectorPhrases.ts` + `sectorBroadWords.ts` -- tags to sectors without a model call; `scripts/backfillSectors.ts` -- one-off for stored rows
 - `server/src/services/enrichmentService.ts` -- Enrichment of a row via extraction; `backgroundEnrichment.ts` -- cron worker (enrich, then verify)
 - `server/src/services/verification.ts` -- Which stored rows are re-verified when, and what a check or an enrichment writes; `searchSources.ts` -- search hits versus listed calls
 - `server/src/scrapers/index.ts` -- Scraper registry, per-scraper runs with time budget, persistence

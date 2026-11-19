@@ -177,7 +177,11 @@ export interface AdminCatalogueResponse {
     expired: number;
   };
   byFormat: AdminCount[];
-  /** Top 15 industries across active rows. */
+  /** Active rows per sector, largest first; a row in two sectors counts in both. Sectors with no row are left out. */
+  bySector: AdminCount[];
+  /** Active rows no sector was found for. */
+  withoutSector: number;
+  /** Top 15 free-text tags across active rows. */
   byIndustry: AdminCount[];
   /** Active rows by days until the deadline. */
   byDeadline: {
@@ -201,7 +205,8 @@ export interface AdminSavedSearchDemand {
   withQuery: number;
   remoteOnly: number;
   topQueries: AdminCount[];
-  topIndustries: AdminCount[];
+  /** Sectors saved searches filter on; a search saved with an old free-text industry counts under the sector it maps to. */
+  topSectors: AdminCount[];
   topLocations: AdminCount[];
   topFormats: AdminCount[];
 }

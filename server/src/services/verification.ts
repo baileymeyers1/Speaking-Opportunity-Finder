@@ -113,7 +113,9 @@ export interface VerifiedRowContext {
  * Column updates after a successful re-extraction. Dates, location, remote
  * flag, compensation, the closed flag and whether a call is open follow the
  * page (an event listed without a call becomes an open call once one is
- * posted); title, organization and industries stay as enrichment set them.
+ * posted), and so do the sectors: a check is a fresh reading of what the event
+ * is, and it replaces sectors the tag mapping guessed. Title, organization and
+ * industries stay as enrichment set them.
  *
  * Relevance follows the page for a search hit, where the page is the only
  * evidence that the row is an event at all: a directory or an article judged
@@ -136,6 +138,7 @@ export function buildVerificationUpdate(
     isRemote: merged.isRemote,
     compensationType: merged.compensationType ?? null,
     compensationAmount: merged.compensationAmount ?? null,
+    sectors: merged.sectors,
     isClosed: merged.isClosed,
     ...(fromSearch ? { isRelevant } : {}),
     hasOpenCall: openCallAfterRead(existing.source, { isRelevant, hasOpenCall: merged.hasOpenCall }),
@@ -167,6 +170,7 @@ export function buildEnrichmentUpdate(
     deadlineTimezone: merged.cfpDeadline ? (merged.deadlineTimezone ?? null) : null,
     eventDate: merged.eventDate || null,
     industries: JSON.stringify(merged.industries),
+    sectors: merged.sectors,
     location: merged.location || null,
     compensationType: merged.compensationType || null,
     compensationAmount: merged.compensationAmount || null,

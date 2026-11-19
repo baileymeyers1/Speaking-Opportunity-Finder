@@ -6,6 +6,10 @@ interface MultiSelectDropdownProps {
   selected: string[];
   onChange: (selected: string[]) => void;
   placeholder?: string;
+  /** Display text for an option whose value is an id; without it the value is shown, capitalized. */
+  getLabel?: (option: string) => string;
+  /** A count shown beside an option, e.g. how many results it has. */
+  getCount?: (option: string) => number | undefined;
 }
 
 export function MultiSelectDropdown({
@@ -14,7 +18,12 @@ export function MultiSelectDropdown({
   selected,
   onChange,
   placeholder = 'Search...',
+  getLabel,
+  getCount,
 }: MultiSelectDropdownProps) {
+  const labelOf = (option: string) => (getLabel ? getLabel(option) : option);
+  // Free-text values arrive lowercase; a label is already written as it should read.
+  const labelClass = getLabel ? '' : 'capitalize';
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState('');
   const containerRef = useRef<HTMLDivElement>(null);
@@ -37,7 +46,7 @@ export function MultiSelectDropdown({
   }, []);
 
   const filtered = options.filter((opt) =>
-    opt.toLowerCase().includes(search.toLowerCase())
+    labelOf(opt).toLowerCase().includes(search.toLowerCase())
   );
 
   const toggle = (option: string) => {
@@ -108,7 +117,10 @@ export function MultiSelectDropdown({
                   onChange={() => toggle(option)}
                   className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 h-4 w-4"
                 />
-                <span className="text-sm text-gray-700 capitalize">{option}</span>
+                <span className={`text-sm text-gray-700 ${labelClass}`}>{labelOf(option)}</span>
+                {getCount?.(option) !== undefined && (
+                  <span className="ml-auto pl-2 text-xs text-gray-500 tabular-nums">{getCount(option)}</span>
+                )}
               </label>
             ))}
           </div>
@@ -134,10 +146,10 @@ export function MultiSelectDropdown({
               key={item}
               className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-blue-50 text-blue-700 border border-blue-200"
             >
-              <span className="capitalize">{item}</span>
+              <span className={labelClass}>{labelOf(item)}</span>
               <button
                 onClick={() => removeChip(item)}
-                aria-label={`Remove ${item}`}
+                aria-label={`Remove ${labelOf(item)}`}
                 className="hover:text-blue-900"
               >
                 &times;

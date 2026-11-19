@@ -4,6 +4,7 @@ import type { AdminCatalogueResponse } from 'shared';
 import { countJsonArrayValues, DAY_MS, daysAgo } from './shared.js';
 import { getEventStats } from './events.js';
 import { listedConditions } from '../opportunityQuery.js';
+import { normalizeSectors, sectorLabel } from '../../lib/sectors.js';
 
 /** What the catalogue looks like to a visitor: active rows by format, industry, deadline and location. */
 
@@ -60,7 +61,7 @@ export async function getCatalogue(now: Date = new Date()): Promise<AdminCatalog
     prisma.opportunity.count({ where: { isRelevant: false } }),
     prisma.opportunity.count({ where: { isClosed: false, isRelevant: true, cfpDeadline: { lt: today } } }),
     prisma.opportunity.groupBy({ by: ['format'], _count: { id: true }, where: active }),
-    prisma.opportunity.findMany({ where: active, select: { industries: true }, take: INDUSTRY_SCAN_LIMIT }),
+    prisma.opportunity.findMany({ where: active, select: { industries: true, sectors: true }, take: INDUSTRY_SCAN_LIMIT }),
     prisma.opportunity.count({ where: deadlineBetween(0, 7) }),
     prisma.opportunity.count({ where: deadlineBetween(7, 30) }),
     prisma.opportunity.count({ where: deadlineBetween(30, 90) }),
@@ -72,11 +73,23 @@ export async function getCatalogue(now: Date = new Date()): Promise<AdminCatalog
     getEventStats(),
   ]);
 
+  const sectorCounts = new Map<string, number>();
+  let withoutSector = 0;
+  for (const row of industryRows) {
+    const sectors = normalizeSectors(row.sectors);
+    if (sectors.length === 0) withoutSector++;
+    for (const sector of sectors) sectorCounts.set(sector, (sectorCounts.get(sector) ?? 0) + 1);
+  }
+
   return {
     totals: { all, active: activeCount, closed, irrelevant, expired },
     byFormat: formatGroups
       .map((group) => ({ label: group.format, count: group._count.id }))
       .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label)),
+    bySector: [...sectorCounts.entries()]
+      .map(([sector, count]) => ({ label: sectorLabel(sector), count }))
+      .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label)),
+    withoutSector,
     byIndustry: countJsonArrayValues(
       industryRows.map((row) => row.industries),
       TOP_INDUSTRIES

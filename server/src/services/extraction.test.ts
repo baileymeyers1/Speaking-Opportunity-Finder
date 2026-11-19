@@ -9,6 +9,7 @@ import {
   type ExtractionResult,
 } from './extraction.js';
 import type { ScraperResult } from '../scrapers/qualityScore.js';
+import { SECTORS, SECTOR_IDS } from '../lib/sectors.js';
 
 const NOW = new Date('2026-11-02T12:00:00Z');
 
@@ -27,6 +28,7 @@ function fullOutput(overrides: Record<string, unknown> = {}): Record<string, unk
     compensationAmount: null,
     format: 'conference',
     industries: ['Healthcare', 'AI'],
+    sectors: ['healthcare', 'ai'],
     cleanTitle: 'HealthTech Summit 2027',
     cleanOrganization: 'HealthTech Alliance',
     confidence: { eventDate: 'high', cfpDeadline: 'high', location: 'medium' },
@@ -66,7 +68,27 @@ describe('EXTRACTION_SCHEMA', () => {
   });
 });
 
+describe('EXTRACTION_SCHEMA sectors', () => {
+  it('asks for sectors as a list of ids from the fixed list', () => {
+    expect(EXTRACTION_SCHEMA.required).toContain('sectors');
+    expect(EXTRACTION_SCHEMA.properties.sectors.type).toBe('array');
+    expect(EXTRACTION_SCHEMA.properties.sectors.items.enum).toEqual([...SECTOR_IDS]);
+  });
+
+  it('uses no array-length keywords, which structured outputs reject', () => {
+    expect(EXTRACTION_SCHEMA.properties.sectors).not.toHaveProperty('minItems');
+    expect(EXTRACTION_SCHEMA.properties.sectors).not.toHaveProperty('maxItems');
+  });
+});
+
 describe('buildExtractionPrompt', () => {
+  it('lists every sector with its id and label, and says how many to pick', () => {
+    const prompt = buildExtractionPrompt({ title: 'X' }, NOW);
+    for (const sector of SECTORS) expect(prompt).toContain(`  ${sector.id}: ${sector.label}`);
+    expect(prompt).toContain('- sectors: the one sector from the list below');
+    expect(prompt).toContain('or two when it truly sits in two');
+  });
+
   it('separates "is about an event" from "asks for speakers now"', () => {
     const prompt = buildExtractionPrompt({ title: 'Practical AI for Communications Virtual Conference' }, NOW);
     expect(prompt).toContain('whether or not it is asking for speakers right now');
@@ -153,6 +175,25 @@ describe('parseExtractionOutput', () => {
     if (!parsed.ok) throw new Error(parsed.error);
     expect(parsed.result.cfpDeadline).toBeNull();
     expect(parsed.result.deadlineTimezone).toBeNull();
+  });
+
+  it('keeps valid sector ids, in order', () => {
+    const parsed = parseExtractionOutput(fullOutput());
+    expect(parsed.ok && parsed.result.sectors).toEqual(['healthcare', 'ai']);
+  });
+
+  it('drops sector ids that are not on the list, and anything past the second', () => {
+    const invented = parseExtractionOutput(fullOutput({ sectors: ['Healthcare', 'medtech', 'finance'] }));
+    expect(invented.ok && invented.result.sectors).toEqual(['finance']);
+    const many = parseExtractionOutput(fullOutput({ sectors: ['ai', 'data', 'security', 'software'] }));
+    expect(many.ok && many.result.sectors).toEqual(['ai', 'data']);
+  });
+
+  it('reads missing or malformed sectors as none', () => {
+    for (const sectors of [undefined, null, 'healthcare', []]) {
+      const parsed = parseExtractionOutput(fullOutput({ sectors }));
+      expect(parsed.ok && parsed.result.sectors).toEqual([]);
+    }
   });
 
   it('rejects non-object output', () => {
@@ -320,6 +361,23 @@ describe('mergeExtraction', () => {
     const merged = mergeExtraction(scraped({ isRemote: false, format: 'conference' }), extraction({ isRemote: true, format: 'workshop' }), NOW);
     expect(merged.isRemote).toBe(true);
     expect(merged.format).toBe('workshop');
+  });
+
+  it('takes the sectors Claude named over the ones the row has', () => {
+    const merged = mergeExtraction(scraped({ sectors: ['software'] }), extraction({ sectors: ['healthcare', 'ai'] }), NOW);
+    expect(merged.sectors).toEqual(['healthcare', 'ai']);
+  });
+
+  it('keeps the sectors the row has when Claude named none', () => {
+    const merged = mergeExtraction(scraped({ sectors: ['finance'] }), extraction({ sectors: [] }), NOW);
+    expect(merged.sectors).toEqual(['finance']);
+  });
+
+  it('places a row with no sectors by its merged tags when Claude named none', () => {
+    const fromClaudeTags = mergeExtraction(scraped({ industries: ['technology'] }), extraction({ sectors: [], industries: ['nursing'] }), NOW);
+    expect(fromClaudeTags.sectors).toEqual(['healthcare']);
+    const fromScrapedTags = mergeExtraction(scraped({ industries: ['devops'] }), extraction({ sectors: [], industries: [] }), NOW);
+    expect(fromScrapedTags.sectors).toEqual(['cloud-devops']);
   });
 
   it('propagates irrelevance', () => {

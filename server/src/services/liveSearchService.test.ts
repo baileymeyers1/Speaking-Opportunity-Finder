@@ -16,6 +16,7 @@ function makeResult(overrides: Partial<EnrichedLiveResult> = {}): EnrichedLiveRe
     cfpDeadline: null,
     format: 'conference',
     industries: [],
+    sectors: [],
     compensationType: null,
     compensationAmount: null,
     compensationDetails: null,
@@ -45,6 +46,7 @@ function extraction(overrides: Partial<ExtractionResult> = {}): ExtractionResult
     compensationAmount: null,
     format: 'conference',
     industries: [],
+    sectors: [],
     cleanTitle: null,
     cleanOrganization: null,
     confidence: { eventDate: 'high', cfpDeadline: 'high', location: 'high' },
@@ -100,6 +102,7 @@ describe('applyExtractionToLiveResult', () => {
         format: 'workshop',
         isRemote: true,
         industries: ['ai', 'healthcare'],
+        sectors: ['healthcare', 'ai'],
         cleanTitle: 'Clean Title',
         cleanOrganization: 'Clean Org',
         confidence: { eventDate: 'low', cfpDeadline: 'medium', location: 'high' },
@@ -109,6 +112,7 @@ describe('applyExtractionToLiveResult', () => {
     expect(result.format).toBe('workshop');
     expect(result.isRemote).toBe(true);
     expect(result.industries).toEqual(['ai', 'healthcare']);
+    expect(result.sectors).toEqual(['healthcare', 'ai']);
     expect(result.title).toBe('Clean Title');
     expect(result.organization).toBe('Clean Org');
     expect(result.dateConfidence).toEqual({ eventDate: 'low', cfpDeadline: 'medium', location: 'high' });
@@ -163,6 +167,18 @@ describe('buildLiveCreateData', () => {
     expect(data.location).toBe('Denver, CO');
     expect(data.dateConfidence).toBe(JSON.stringify({ eventDate: 'low', cfpDeadline: 'high', location: 'high' }));
     expect(data.industries).toBe(JSON.stringify(['ai']));
+  });
+
+  it('stores the sectors Claude named for a hit it read', () => {
+    const result = makeResult({ industries: ['ai'], sectors: ['ai'] });
+    applyExtractionToLiveResult(result, extraction({ industries: ['pr', 'ai'], sectors: ['pr-communications', 'ai'] }), NOW);
+    result.extracted = true;
+    expect(buildLiveCreateData(result, NOW).sectors).toEqual(['pr-communications', 'ai']);
+  });
+
+  it('places a hit nobody has read by the tags of its snippet', () => {
+    const data = buildLiveCreateData(makeResult({ industries: ['healthcare', 'nursing'], sectors: [] }), NOW);
+    expect(data.sectors).toEqual(['healthcare']);
   });
 
   it('does not count an extraction from the snippet alone as a verification', () => {

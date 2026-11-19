@@ -4,6 +4,7 @@ import type { Prisma } from '../generated/prisma/client.js';
 import { prisma } from '../lib/prisma.js';
 import { assignEvents } from './eventAssignment.js';
 import { cleanTitle, extractOrganization, normalizeIndustries, decodeHtmlEntities, isJunkResult } from './dataNormalization.js';
+import { sectorsFromTags } from './sectorMapping.js';
 import {
   extractOpportunitiesBatch,
   mergeExtraction,
@@ -44,6 +45,8 @@ export interface EnrichedLiveResult {
   deadlineTimezone?: string | null;
   format: string;
   industries: string[];
+  /** Sector ids: from the tags until Claude reads the page, then Claude's. */
+  sectors: string[];
   compensationType: string | null;
   compensationAmount: number | null;
   compensationDetails: string | null;
@@ -824,6 +827,7 @@ export function applyExtractionToLiveResult(result: EnrichedLiveResult, extracti
   result.deadlineTimezone = merged.cfpDeadline ? (merged.deadlineTimezone ?? null) : null;
   result.format = merged.format;
   result.industries = merged.industries;
+  result.sectors = merged.sectors;
   result.compensationType = merged.compensationType ?? null;
   result.compensationAmount = merged.compensationAmount ?? null;
   result.isClosed = merged.isClosed;
@@ -969,6 +973,7 @@ async function performLinkupSearch(
           cfpDeadline: meta.cfpDeadline,
           format: meta.format,
           industries: meta.industries,
+          sectors: sectorsFromTags(meta.industries),
           compensationType: meta.compensationType,
           compensationAmount: meta.compensationAmount,
           compensationDetails: meta.compensationDetails,
@@ -1017,6 +1022,7 @@ function liveResultToScraperResult(result: EnrichedLiveResult): ScraperResult {
     deadlineTimezone: result.deadlineTimezone ?? null,
     format: result.format,
     industries: result.industries,
+    sectors: result.sectors,
     compensationType: result.compensationType || undefined,
     compensationAmount: result.compensationAmount || undefined,
     compensationDetails: result.compensationDetails || undefined,

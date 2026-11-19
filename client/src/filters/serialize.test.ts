@@ -12,6 +12,7 @@ import {
 
 const everyFilter: BrowseFilters = {
   search: 'react native',
+  sectors: ['software', 'ai'],
   industries: ['technology', 'ai'],
   locations: ['Los Angeles, CA', 'Remote'],
   format: ['conference', 'podcast'],
@@ -61,6 +62,16 @@ describe('filtersToSearchParams / searchParamsToFilters', () => {
     });
   });
 
+  it('reads sectors, dropping ids that are not on the list and repeats', () => {
+    const params = new URLSearchParams('sectors=healthcare&sectors=Healthcare&sectors=bogus&sectors=healthcare&sectors=pr-communications');
+    expect(searchParamsToFilters(params)).toEqual({ sectors: ['healthcare', 'pr-communications'] });
+    expect(searchParamsToFilters(new URLSearchParams('sectors=bogus'))).toEqual({});
+  });
+
+  it('still reads the free-text industries of a link made before sectors', () => {
+    expect(searchParamsToFilters(new URLSearchParams('industries=devops'))).toEqual({ industries: ['devops'] });
+  });
+
   it('accepts legacy remote=true', () => {
     expect(searchParamsToFilters(new URLSearchParams('remote=true'))).toEqual({ isRemote: true });
   });
@@ -83,6 +94,12 @@ describe('serializeFilters', () => {
     const a = serializeFilters({ industries: ['ai', 'technology'], format: ['podcast', 'conference'] });
     const b = serializeFilters({ industries: ['technology', 'ai'], format: ['conference', 'podcast'] });
     expect(a).toBe(b);
+    expect(serializeFilters({ sectors: ['legal', 'finance'] })).toBe(serializeFilters({ sectors: ['finance', 'legal'] }));
+  });
+
+  it('distinguishes sector selections', () => {
+    expect(serializeFilters({ sectors: ['legal'] })).not.toBe(serializeFilters({ sectors: ['finance'] }));
+    expect(serializeFilters({ sectors: ['legal'] })).not.toBe(serializeFilters({}));
   });
 
   it('distinguishes pages and search terms', () => {
@@ -97,6 +114,7 @@ describe('filtersToApiQuery', () => {
     expect(query.get('page')).toBe('3');
     expect(query.get('search')).toBe('react native');
     expect(query.getAll('format')).toEqual(['conference', 'podcast']);
+    expect(query.getAll('sectors')).toEqual(['software', 'ai']);
     expect(query.getAll('industries')).toEqual(['technology', 'ai']);
     expect(query.getAll('locations')).toEqual(['Los Angeles, CA', 'Remote']);
     expect(query.getAll('compensationType')).toEqual(['paid', 'travel']);
@@ -117,18 +135,25 @@ describe('filtersToApiQuery', () => {
 describe('countActiveFilters / canLiveSearch', () => {
   it('counts advanced filters but not search, sort or page', () => {
     expect(countActiveFilters({ search: 'x', sortBy: 'quality', page: 4 })).toBe(0);
-    expect(countActiveFilters(everyFilter)).toBe(8);
+    expect(countActiveFilters(everyFilter)).toBe(9);
+    expect(countActiveFilters({ sectors: ['healthcare', 'finance'] })).toBe(1);
   });
 
-  it('allows live search with a term or an industry', () => {
+  it('allows live search with a term or a sector', () => {
     expect(canLiveSearch({})).toBe(false);
     expect(canLiveSearch({ search: '  ' })).toBe(false);
     expect(canLiveSearch({ search: 'ai' })).toBe(true);
+    expect(canLiveSearch({ sectors: ['healthcare'] })).toBe(true);
     expect(canLiveSearch({ industries: ['ai'] })).toBe(true);
   });
 });
 
 describe('savedSearchToFilters', () => {
+  it('reads the sectors of a saved search, and the industries of one saved before sectors', () => {
+    expect(savedSearchToFilters(null, { sectors: ['healthcare', 'bogus', 7] })).toEqual({ sectors: ['healthcare'] });
+    expect(savedSearchToFilters(null, { industries: ['devops'] })).toEqual({ industries: ['devops'] });
+  });
+
   it('reads the loosely typed saved JSON and validates it', () => {
     const filters = savedSearchToFilters('ml', {
       industries: ['ai', 42],

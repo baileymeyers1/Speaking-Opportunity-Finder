@@ -61,8 +61,15 @@ export function CatalogueSection({
               <CountList items={data.byFormat} emptyText="No active rows." />
             </div>
             <div>
-              <h3 className="mb-2 text-sm font-semibold text-foreground">Top industries</h3>
-              <CountList items={data.byIndustry} emptyText="No industries tagged." />
+              <h3 className="mb-2 text-sm font-semibold text-foreground">By sector</h3>
+              <CountList items={data.bySector ?? []} emptyText="No row has a sector yet." />
+              <p className="mt-1 text-xs text-muted-foreground">
+                {data.withoutSector ?? 0} without a sector ({percentOf(data.withoutSector ?? 0, data.totals.active)}%)
+              </p>
+            </div>
+            <div>
+              <h3 className="mb-2 text-sm font-semibold text-foreground">Top tags</h3>
+              <CountList items={data.byIndustry} emptyText="No tags." />
             </div>
           </div>
 
