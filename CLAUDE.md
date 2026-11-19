@@ -29,6 +29,9 @@ Aggregates speaking opportunities (CFPs, conferences, podcasts, meetups) from mu
 - Live search persists every hit in the request and matches the hits it read to events; the worker enriches what the request did not and gives each row its event then. Nothing runs after the response on Vercel.
 - The functions run in `pdx1` (`regions` in `vercel.json`) because the database is in Render's Oregon region: a query from the default region costs a cross-country round trip. Keep the two together if either moves.
 - Dynamic year references throughout -- no hardcoded years.
+- The look is the JCI Intelligence kit (`~/projects/jci-brand-kit`; `BRAND.md` there is the reference). Colours come only from the tokens in `client/src/styles/tokens.css`, through the names `tailwind.config.js` gives them: never a Tailwind palette class (`text-emerald-600`), and never `hsl(var(--…))` (the variables hold R G B channels: `rgb(var(--ink))`). Change a token only when the kit changes it.
+- Status is an icon plus a word, with the colour on the icon (`Badge` variants `good` / `warning` / `critical`). Red (`primary`) is for the one primary action, focus, the current tab and an urgent deadline: never a data mark, never an inline link (`.link` is ink). Radii: `rounded-lg` sheets (14px), `rounded-md` controls (10px), `rounded-sm` tags (6px); pills only for switches. Emphasis is `font-medium`; nothing is bold, nothing is monospace, copy is sentence case.
+- Liquid glass goes only on things that move (today: the theme switch's knob), never on a header, card or panel. `client/src/vendor/jci/liquid-glass.js` is the kit's file byte for byte: update it by copying from the kit, never by editing it. No `opacity`, `filter`, `mask` or `clip-path` on the glass or an ancestor, or it refracts nothing.
 
 ## Key Files
 - `server/src/services/opportunityService.ts` -- Core queries + future-deadline filter
@@ -41,6 +44,8 @@ Aggregates speaking opportunities (CFPs, conferences, podcasts, meetups) from mu
 - `server/src/scrapers/` -- confs.tech, javaconferences, callingallpapers, developers.events, pretalx (hosted API + CFP pages), sessionize (public event pages via the events sitemap), ruralhealthinfo (health events with an open call for presentations), radioguestlist (podcast guest requests, RSS) and a Linkup slice (daily); WikiCFP, ConferenceAlerts (weekly). `linkupQueries.ts` holds the Linkup query set, each entry with its `format`; `services/searchLog.ts` promotes frequent live-search queries into the daily Linkup run
 - `client/src/pages/Home.tsx` -- Main grid with unified live+stored results
 - `client/src/components/` -- OpportunityCard (deadline badges), MultiSelectDropdown
+- `client/src/styles/tokens.css` -- JCI colours, radii and motion for both themes; `styles/jci.css` -- the button fill, `.field`, the glass bezel, the theme reveal; `client/tailwind.config.js` -- maps shadcn names onto the tokens
+- `client/src/components/Navbar.tsx` with `Lockup`, `NavTabs` (the red rule) and `ThemeSwitch` (glass knob + view-transition reveal); `client/src/lib/motion.ts` (frame loop, `Spring`), `lib/glass.ts`, `lib/themeReveal.ts`
 - `prisma/schema.prisma` -- Data model (User, Opportunity, SavedOpportunity, SavedSearch, EnrichmentUsage, ScraperRun, SearchLog, SpeakerProfile); `prisma.config.ts` -- schema path and `DATABASE_URL` for the Prisma CLI
 - `vercel.json` -- Build, routing and cron schedules
 - `docs/STATUS.md` -- Current state and deploy gotchas; `docs/plans/2026-11-02-architecture-review.md` -- full review
