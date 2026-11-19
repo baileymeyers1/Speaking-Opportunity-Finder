@@ -2,6 +2,15 @@
 
 Reverse chronological. Current state lives in `docs/STATUS.md`.
 
+## 2026-11-19 — PRs #23, #24 and #25 live; sector and event backfills run in production
+
+- **Merged and deployed, in this order:** #23 (listing quality, 15:36 UTC), #24 (sources outside software, 15:47), #25 (sectors, 15:53). #24 went before #25 on purpose: once the `sectors` column holds data, a branch without it fails its build. `main`'s build for #24 dropped the still-empty column that #25's preview had added and succeeded; #25's build added it again.
+- **Listing rule on production:** 768 listed cards against about 1,050 the day before. None of the first 100 cards by deadline is an unread search hit, and the location filter no longer offers regex-parsed junk.
+- **Sector backfill** (`scripts/backfillSectors.ts`, dry run first): 1,794 of 1,826 rows got a sector from their tags, 32 did not; a second dry run wrote 0. Until it ran, the live filter showed 34 sectors with a count of 0 each. Afterwards every sector has cards (AI & Machine Learning 234, Software Development 187, Healthcare & Medicine 37, PR & Communications 8) and an old `industries=devops` link returns its sector's 126 cards.
+- **Event backfill** (`scripts/backfillEvents.ts`, dry run first, links reviewed): 167 rows without an event, 69 linked to an existing one, 95 new events, 3 with no usable name. Listed cards 768 → 716. Titles on more than one card: 19 (39 cards), against 76 (158 cards) in the 11-18 audit; what is left is pairs the matcher leaves apart for review.
+- **After the three deploys:** `/api/health` 200, no runtime errors. The enrichment cron runs every 5 minutes and logs "Verification: nothing due" (the last check was 13:15 UTC), so Claude's sectors have not been written in production yet; two live extraction calls with the new schema returned sectors (`cloud-devops`, `software`; `healthcare`, `education`).
+- Still by hand: delete the two Render web services (keep the Postgres); rotate `CRON_SECRET` (Deploy Gotchas).
+
 ## 2026-11-19 — Sectors: one or two per opportunity from a fixed list of 34
 
 The audit's open item "industries are free text". Production on 11-18, through the public API: 1,056 listed cards carried 1,368 distinct tags, 925 of them used once, and case variants counted separately ("Artificial Intelligence" 9, "Technology" 8). The filter matched one exact tag, so "ai" missed "artificial intelligence", and no count of how diverse the catalogue is could be trusted. Branch `feature/sectors`, built on `fix/listing-quality` and pushed only once PR #23 was on `main`: the push is what adds the column to the production database (`docs/STATUS.md`, Deploy Gotchas).
