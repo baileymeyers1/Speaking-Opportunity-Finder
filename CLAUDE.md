@@ -23,6 +23,7 @@ Aggregates speaking opportunities (CFPs, conferences, podcasts, meetups) from mu
 - A search hit is only a URL and a snippet; a CFP listing vouches for its rows. Code that treats them differently goes through `services/searchSources.ts` (`isSearchSource`, `isUnreadSearchHit`, `openCallAfterRead`), never a source-name comparison of its own.
 - Scraped re-syncs never overwrite Claude-enriched fields or enrichment bookkeeping (`server/src/scrapers/persistData.ts`).
 - Enrichment budget and row claims live in the DB (`server/src/services/enrichmentBudget.ts`), not process memory. Verification shares both.
+- A page is read through `readPage` in `services/pageReader.ts`, never `fetchPageText` directly from a caller: that is what makes a page readable or not in the same way for the worker, verification and live search.
 - All Claude extraction goes through `extraction.ts` (structured outputs, strict schema); never add a second prompt or regex-parse model output.
 - Live search persists every hit in the request; the worker enriches what the request did not. Nothing runs after the response on Vercel.
 - Dynamic year references throughout -- no hardcoded years.
@@ -30,7 +31,7 @@ Aggregates speaking opportunities (CFPs, conferences, podcasts, meetups) from mu
 ## Key Files
 - `server/src/services/opportunityService.ts` -- Core queries + future-deadline filter
 - `server/src/services/liveSearchService.ts` -- Live search integration
-- `server/src/services/extraction.ts` -- The one Claude call (structured outputs) and the merge rules; `pageText.ts` fetches apply pages
+- `server/src/services/extraction.ts` -- The one Claude call (structured outputs) and the merge rules; `pageReader.ts` reads apply pages (`readPage`: our fetch in `pageText.ts`, then Linkup's fetch endpoint when that is refused)
 - `server/src/lib/sectors.ts` -- The fixed sector list (also read by the client); `services/sectorMapping.ts` + `sectorPhrases.ts` + `sectorBroadWords.ts` -- tags to sectors without a model call; `scripts/backfillSectors.ts` -- one-off for stored rows
 - `server/src/services/enrichmentService.ts` -- Enrichment of a row via extraction; `backgroundEnrichment.ts` -- cron worker (enrich, then verify)
 - `server/src/services/verification.ts` -- Which stored rows are re-verified when, and what a check or an enrichment writes; `searchSources.ts` -- search hits versus listed calls
@@ -58,4 +59,4 @@ Vercel. Push to main auto-deploys; the build runs `prisma generate`, then `prism
 ## Sync Schedule (Vercel Cron)
 - **Daily 06:00 UTC:** structured scrapers, least-recently-run first, within a 50s budget
 - **Weekly Mon 08:00 UTC:** slower sources (WikiCFP, ConferenceAlerts)
-- **Every 5 min:** batch of 5 within 50s: unenriched rows first (page fetch + extraction), then re-verification of stored rows (deadline within 14 days every 2 days, everything else weekly). DB-backed daily cap of Claude calls shared by both (600 by default; `ENRICHMENT_DAILY_LIMIT` overrides).
+- **Every 5 min:** batch of 5 within 50s: unenriched rows first (page fetch + extraction), then re-verification of stored rows (deadline within 14 days every 2 days, everything else weekly). DB-backed daily cap of Claude calls shared by both (600 by default; `ENRICHMENT_DAILY_LIMIT` overrides), and one of reader calls (300; `PAGE_READER_DAILY_LIMIT`, 0 turns the reader off).

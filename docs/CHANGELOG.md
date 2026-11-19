@@ -2,6 +2,16 @@
 
 Reverse chronological. Current state lives in `docs/STATUS.md`.
 
+## 2026-11-19 — Page reader: a refused page is read through Linkup's fetch endpoint
+
+The audit's open item "our fetch cannot read about a third of search hits". Since PR #23 such a hit is unlisted instead of listed unread, which is right for the directories among them and wrong for the real calls on sites that answer a plain fetch with 403.
+- **Measured first** (one page from each of the 30 hosts that blocked us most, production data of 11-18): our fetch read 2, Linkup's `POST /v1/fetch` read 20 more without rendering JavaScript, 1 more with it (a Google sign-in page), 7 not at all. It also returned the text of both PDF calls tried. JavaScript rendering did not help the JavaScript apps tried (app.advocu.com: `FETCH_ERROR` either way), and unreachable hosts took 7 to 18 seconds to fail.
+- **`services/pageReader.ts`, `readPage`:** our fetch, then the reader when the failure is a refusal, a non-HTML file, an empty shell or a timeout. Never after a 404/410 (that closes the listing) or a network failure. HTML from the reader goes through the same `visibleText` as our own fetch; other content comes as markdown reduced to text. A sign-in or anti-bot page is rejected rather than handed to the extraction, which would judge it "not an event" and drop the hit for good. When the reader fails too, the first failure stands with the reader's reason added, so nothing downstream changes.
+- **Cap:** every attempt counts against 300 a day (`PAGE_READER_DAILY_LIMIT`; 0 turns the reader off), a row of `EnrichmentUsage` keyed `<date>:reader`, so no schema change. At $0.001 a call the cap bounds a bad day, not the usual one.
+- **Callers:** the enrichment worker, verification and live search read through `readPage` (live search gives the reader 8s instead of 12s).
+- **Checked end to end on 12 real pages** (real reader, real cap on the local database, real extraction): 9 read through the reader. Two directory pages came back "not an event". A privacy symposium, RE//verse 2027 and the IEEE Aerospace call (a PDF) came back open with a deadline; three more are past or have no call. app.advocu.com and luminik.io stayed unread with the reader's reason recorded. 11 reader calls counted.
+- Tests: server 642 → 673. No schema change and no new secret.
+
 ## 2026-11-19 — PRs #23, #24 and #25 live; sector and event backfills run in production
 
 - **Merged and deployed, in this order:** #23 (listing quality, 15:36 UTC), #24 (sources outside software, 15:47), #25 (sectors, 15:53). #24 went before #25 on purpose: once the `sectors` column holds data, a branch without it fails its build. `main`'s build for #24 dropped the still-empty column that #25's preview had added and succeeded; #25's build added it again.
