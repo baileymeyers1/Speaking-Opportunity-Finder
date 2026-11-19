@@ -12,7 +12,7 @@ import {
   type DateConfidence,
   type ExtractionResult,
 } from './extraction.js';
-import { fetchPageText } from './pageText.js';
+import { readPage } from './pageReader.js';
 import { expandQuery, matchesAllTerms, searchTerms } from './searchTerms.js';
 import { callSignal, looksLikeArticle } from './liveHitTriage.js';
 import { LIVE_SEARCH_SOURCE } from './opportunityQuery.js';
@@ -840,13 +840,16 @@ export function applyExtractionToLiveResult(result: EnrichedLiveResult, extracti
  * Fetch result pages in parallel, then run one Claude extraction per result.
  * Falls back to regex extraction over the page text when Claude is unavailable.
  */
+/** A visitor is waiting: the reader gets less time than the worker gives it. */
+const LIVE_READER_TIMEOUT_MS = 8000;
+
 async function enrichResultsFromPages(
   results: EnrichedLiveResult[],
   searchIndustries: string[]
 ): Promise<void> {
   const FETCH_CONCURRENCY = SYNC_ENRICH_LIMIT;
   const pageTexts = await mapWithConcurrency(results, FETCH_CONCURRENCY, async (r) => {
-    const page = await fetchPageText(r.applyUrl);
+    const page = await readPage(r.applyUrl, { readerTimeoutMs: LIVE_READER_TIMEOUT_MS });
     if (!page.ok && page.reason === 'gone') r.isClosed = true;
     r.pageFetched = page.ok;
     return page.ok ? page.text : null;

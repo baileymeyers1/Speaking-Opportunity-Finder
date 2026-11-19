@@ -60,8 +60,8 @@ vi.mock('../lib/prisma.js', () => ({
   },
 }));
 
-vi.mock('./pageText.js', () => ({
-  fetchPageText: vi.fn(async () => ({ ok: true, text: 'Call for speakers on AI in PR. Submit by the deadline.' })),
+vi.mock('./pageReader.js', () => ({
+  readPage: vi.fn(async () => ({ ok: true, text: 'Call for speakers on AI in PR. Submit by the deadline.' })),
 }));
 
 vi.mock('./eventAssignment.js', () => ({ assignEvents: vi.fn(async () => undefined) }));
@@ -74,7 +74,7 @@ vi.mock('./extraction.js', async (importOriginal) => {
 });
 
 import { buildSearchQueries, performLiveSearch, SYNC_ENRICH_LIMIT } from './liveSearchService.js';
-import { fetchPageText, type PageFetchResult } from './pageText.js';
+import { readPage, type PageReadResult } from './pageReader.js';
 import { DAILY_ENRICHMENT_LIMIT } from './enrichmentBudget.js';
 
 interface LinkupItem {
@@ -227,8 +227,8 @@ describe('performLiveSearch', () => {
 
   it('makes no Claude call for a hit whose page cannot be read, and leaves it unchecked', async () => {
     linkupReturns([hit('readable'), hit('blocked')]);
-    const readable: PageFetchResult = { ok: true, text: 'Call for speakers on AI in PR. Submit by the deadline.', status: 200 };
-    vi.mocked(fetchPageText).mockImplementation(async (url) =>
+    const readable: PageReadResult = { ok: true, text: 'Call for speakers on AI in PR. Submit by the deadline.', status: 200 };
+    vi.mocked(readPage).mockImplementation(async (url) =>
       url === urlOf('blocked') ? { ok: false, reason: 'http_error', status: 403, message: 'HTTP 403' } : readable
     );
     try {
@@ -240,7 +240,7 @@ describe('performLiveSearch', () => {
       expect(mocks.table.get(urlOf('blocked'))?.enrichmentStatus).toBeNull();
       expect(outcome.waiting).toEqual([{ title: 'AI for PR Summit blocked', applyUrl: urlOf('blocked') }]);
     } finally {
-      vi.mocked(fetchPageText).mockImplementation(async () => readable);
+      vi.mocked(readPage).mockImplementation(async () => readable);
     }
   });
 

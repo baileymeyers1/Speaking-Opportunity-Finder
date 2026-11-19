@@ -57,7 +57,8 @@ npm run dev
 | `CORS_ORIGIN` | No | `http://localhost:5173` | Allowed CORS origin (frontend URL) |
 | `VITE_API_URL` | No | `http://localhost:3001/api` | API base URL for the client |
 | `ANTHROPIC_API_KEY` | No | -- | Enables AI enrichment of opportunities |
-| `WEB_SEARCH_API_KEY` | No | -- | Linkup API key for live search and CFP discovery |
+| `WEB_SEARCH_API_KEY` | No | -- | Linkup API key for live search, CFP discovery and reading pages that refuse a plain fetch |
+| `PAGE_READER_DAILY_LIMIT` | No | `300` | Daily cap on pages read through Linkup's fetch endpoint; `0` turns the reader off |
 | `CRON_SECRET` | Prod | -- | Authenticates Vercel cron job requests |
 
 ## Architecture
