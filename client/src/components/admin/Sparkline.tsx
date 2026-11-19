@@ -34,7 +34,7 @@ export function Sparkline({ points, label }: { points: AdminSparklinePoint[]; la
       viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
       width={WIDTH}
       height={HEIGHT}
-      className="shrink-0 overflow-visible text-primary"
+      className="shrink-0 overflow-visible text-foreground"
     >
       {coords.length > 1 && (
         <path d={path} fill="none" stroke="currentColor" strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
@@ -42,9 +42,9 @@ export function Sparkline({ points, label }: { points: AdminSparklinePoint[]; la
       {coords
         .filter((c) => c.point.status === 'error')
         .map((c) => (
-          <circle key={c.point.startedAt} cx={c.x} cy={c.y} r={3.5} fill="hsl(var(--background))" stroke="hsl(var(--destructive))" strokeWidth={2} />
+          <circle key={c.point.startedAt} cx={c.x} cy={c.y} r={3.5} fill="rgb(var(--surface))" stroke="rgb(var(--critical))" strokeWidth={2} />
         ))}
-      <circle cx={last.x} cy={last.y} r={3} fill="currentColor" stroke="hsl(var(--background))" strokeWidth={1.5} />
+      <circle cx={last.x} cy={last.y} r={3} fill="currentColor" stroke="rgb(var(--surface))" strokeWidth={1.5} />
     </svg>
   );
 }

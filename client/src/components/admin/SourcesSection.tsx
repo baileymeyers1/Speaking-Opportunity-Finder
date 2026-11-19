@@ -115,7 +115,7 @@ export function SourcesSection({
               {data.sources.map((source) => (
                 <TableRow
                   key={source.name}
-                  className={cn(source.status === 'failing' && 'bg-red-50/60 dark:bg-red-950/20')}
+                  className={cn(source.status === 'failing' && 'bg-critical/[0.06]')}
                 >
                   <TableCell>
                     <p className="font-medium text-foreground">{source.name}</p>

@@ -100,7 +100,7 @@ export function ProfileForm({ initial, onSubmit, isSaving, error, savedAt }: Pro
       )}
 
       <section className="space-y-6" aria-labelledby="profile-about">
-        <h2 id="profile-about" className="text-lg font-semibold text-foreground">About you</h2>
+        <h2 id="profile-about" className="text-lg font-medium text-foreground">About you</h2>
         <TopicTagInput topics={draft.topics} onChange={(topics) => update('topics', topics)} />
 
         <div className="space-y-2">
@@ -128,7 +128,7 @@ export function ProfileForm({ initial, onSubmit, isSaving, error, savedAt }: Pro
       </section>
 
       <section className="space-y-6" aria-labelledby="profile-where">
-        <h2 id="profile-where" className="text-lg font-semibold text-foreground">Where you will speak</h2>
+        <h2 id="profile-where" className="text-lg font-medium text-foreground">Where you will speak</h2>
         <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
           <div className="space-y-2">
             <Label htmlFor={cityId}>Home city</Label>
@@ -170,7 +170,7 @@ export function ProfileForm({ initial, onSubmit, isSaving, error, savedAt }: Pro
       </section>
 
       <section className="space-y-6" aria-labelledby="profile-terms">
-        <h2 id="profile-terms" className="text-lg font-semibold text-foreground">What you need</h2>
+        <h2 id="profile-terms" className="text-lg font-medium text-foreground">What you need</h2>
         <ChoiceField
           label="Compensation"
           value={draft.compensationRequirement}
@@ -189,7 +189,7 @@ export function ProfileForm({ initial, onSubmit, isSaving, error, savedAt }: Pro
                   type="checkbox"
                   checked={draft.preferredFormats.includes(format)}
                   onChange={() => toggleFormat(format)}
-                  className="h-4 w-4 rounded border-input text-primary focus:ring-ring"
+                  className="h-4 w-4"
                 />
                 <span className="capitalize">{format}</span>
               </label>
@@ -206,7 +206,7 @@ export function ProfileForm({ initial, onSubmit, isSaving, error, savedAt }: Pro
         <p role="status" aria-live="polite" className="flex items-center gap-1.5 text-sm text-muted-foreground">
           {savedAt && !isSaving && (
             <>
-              <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
+              <CheckCircle2 className="h-4 w-4 text-good" aria-hidden="true" />
               Saved. Match scores on the browse page now use this profile.
             </>
           )}

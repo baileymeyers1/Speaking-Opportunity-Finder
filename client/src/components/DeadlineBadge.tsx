@@ -31,7 +31,7 @@ export function DeadlineBadge({ opportunity }: DeadlineBadgeProps) {
         <TooltipTrigger asChild>
           <Badge
             variant="outline"
-            className="cursor-help text-[11px] px-1.5 py-0 border-amber-300 text-amber-800 dark:border-amber-700 dark:text-amber-300"
+            className="cursor-help border-warning/40 text-warning"
           >
             No open call
           </Badge>
@@ -50,7 +50,7 @@ export function DeadlineBadge({ opportunity }: DeadlineBadgeProps) {
   const pill = (
     <Badge
       variant={badge.variant}
-      className={cn('text-[11px] px-1.5 py-0', description && 'cursor-help', badge.className)}
+      className={cn('tabular-nums', description && 'cursor-help', badge.className)}
     >
       {approximate(badge.label, isApproximate)}
     </Badge>

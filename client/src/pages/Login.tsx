@@ -79,7 +79,7 @@ export function Login() {
                 <Label htmlFor="password">Password</Label>
                 <Link
                   to="/forgot-password"
-                  className="text-sm text-primary hover:underline"
+                  className="link text-sm"
                 >
                   Forgot your password?
                 </Link>
@@ -105,7 +105,7 @@ export function Login() {
               Don't have an account?{' '}
               <Link
                 to="/register"
-                className="text-primary hover:underline font-medium"
+                className="link font-medium"
               >
                 Sign up
               </Link>

@@ -14,9 +14,9 @@ interface SaveOpportunitySelectProps {
 export function SaveOpportunitySelect({ savedCategory, isSaving, onSave }: SaveOpportunitySelectProps) {
   if (savedCategory) {
     return (
-      <div className="flex items-center gap-2 px-4 py-2 rounded-md bg-primary/5 border border-primary/20">
-        <BookmarkCheck className="h-4 w-4 text-primary" />
-        <span className="text-sm font-medium text-primary capitalize">Saved as {savedCategory}</span>
+      <div className="flex items-center gap-2 px-4 py-2 rounded-md border">
+        <BookmarkCheck className="h-4 w-4 text-good" aria-hidden="true" />
+        <span className="text-sm font-medium text-foreground capitalize">Saved as {savedCategory}</span>
       </div>
     );
   }

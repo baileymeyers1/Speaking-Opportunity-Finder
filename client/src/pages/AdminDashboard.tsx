@@ -78,7 +78,7 @@ export function AdminDashboard() {
     <div className="mx-auto max-w-7xl space-y-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-foreground">Admin dashboard</h1>
+          <h1 className="title text-foreground">Admin dashboard</h1>
           <p className="mt-1 text-sm text-muted-foreground">
             {updatedAt > 0 ? `Updated ${formatRelative(new Date(updatedAt).toISOString(), now)}` : 'Loading…'}; the pipeline
             section refreshes itself every minute.

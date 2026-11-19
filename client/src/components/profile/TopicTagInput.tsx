@@ -65,14 +65,14 @@ export function TopicTagInput({ topics, onChange }: TopicTagInputProps) {
           {topics.map((topic) => (
             <li
               key={topic}
-              className="inline-flex items-center gap-1 rounded-full border bg-secondary px-2.5 py-0.5 text-xs font-medium text-secondary-foreground"
+              className="inline-flex h-6 items-center gap-1 rounded-sm border pl-2 pr-1 text-xs font-medium text-muted-foreground"
             >
               {topic}
               <button
                 type="button"
                 onClick={() => onChange(topics.filter((item) => item !== topic))}
                 aria-label={`Remove ${topic}`}
-                className="rounded-full p-0.5 hover:bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="rounded-sm p-0.5 hover:bg-muted hover:text-foreground"
               >
                 <X className="h-3 w-3" aria-hidden="true" />
               </button>

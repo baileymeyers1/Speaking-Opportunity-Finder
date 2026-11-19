@@ -84,7 +84,7 @@ export function EventEditionsList({
   if (!editions || editions.length < 2) return null;
   return (
     <section className="space-y-3" aria-labelledby="event-editions-heading">
-      <h2 id="event-editions-heading" className="text-base font-semibold text-foreground">
+      <h2 id="event-editions-heading" className="text-base font-medium text-foreground">
         Editions and sources
       </h2>
       <p className="text-sm text-muted-foreground">
@@ -101,7 +101,7 @@ export function EventEditionsList({
                 {isCurrent ? (
                   <span className="text-foreground">{edition.title}</span>
                 ) : (
-                  <Link to={`/opportunities/${edition.id}`} className="text-primary hover:underline">
+                  <Link to={`/opportunities/${edition.id}`} className="link">
                     {edition.title}
                   </Link>
                 )}

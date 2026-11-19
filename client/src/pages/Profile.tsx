@@ -29,7 +29,7 @@ export function Profile() {
   if (profileQuery.error) {
     return (
       <div role="alert" className="mx-auto max-w-2xl py-12 text-center">
-        <h1 className="text-xl font-semibold text-foreground">Could not load your profile</h1>
+        <h1 className="text-xl font-medium text-foreground">Could not load your profile</h1>
         <p className="mt-1 text-sm text-muted-foreground">{profileQuery.error.message}</p>
         <Button variant="outline" className="mt-4" onClick={() => profileQuery.refetch()}>
           Try again
@@ -44,11 +44,11 @@ export function Profile() {
   return (
     <div className="mx-auto max-w-2xl space-y-6">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight text-foreground">Speaker profile</h1>
+        <h1 className="title text-foreground">Speaker profile</h1>
         <p className="mt-1 text-muted-foreground">
           Tell the finder what you talk about and where you will go. Every opportunity then gets a match score
           with the reasons behind it, and you can sort the{' '}
-          <Link to="/?sort=match" className="font-medium text-primary hover:underline">
+          <Link to="/?sort=match" className="link font-medium">
             browse page by best match
           </Link>
           .
@@ -58,7 +58,7 @@ export function Profile() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
-            <Sparkles className="h-4 w-4 text-primary" aria-hidden="true" />
+            <Sparkles className="h-4 w-4" aria-hidden="true" />
             {profile ? 'Your profile' : 'Set up your profile'}
           </CardTitle>
           <CardDescription>

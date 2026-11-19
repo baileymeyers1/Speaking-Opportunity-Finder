@@ -104,7 +104,9 @@ export function Home() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight text-foreground">Find Speaking Opportunities</h1>
+        <h1 className="title text-foreground">
+          Find <em className="accent-word">speaking</em> opportunities
+        </h1>
         <p className="text-muted-foreground mt-1">
           Discover conferences, meetups, and events looking for speakers
         </p>
@@ -143,9 +145,9 @@ export function Home() {
 
       {needsProfile && (
         <p className="flex items-center gap-2 rounded-lg border bg-muted/50 px-4 py-3 text-sm text-muted-foreground">
-          <Sparkles className="h-4 w-4 flex-shrink-0 text-primary" aria-hidden="true" />
+          <Sparkles className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
           <span>
-            <Link to="/profile" className="font-medium text-primary hover:underline">Set up your speaker profile</Link>
+            <Link to="/profile" className="link font-medium">Set up your speaker profile</Link>
             {' '}to see a match score on every opportunity and sort by best match.
           </span>
         </p>
@@ -154,9 +156,9 @@ export function Home() {
       {!isAuthenticated && !bannerDismissed && (
         <div className="flex items-center justify-between gap-2 rounded-lg border bg-muted/50 px-4 py-3">
           <p className="text-sm text-muted-foreground">
-            <Link to="/register" className="font-medium text-primary hover:underline">Sign up</Link>
+            <Link to="/register" className="link font-medium">Sign up</Link>
             {' '}or{' '}
-            <Link to="/login" className="font-medium text-primary hover:underline">log in</Link>
+            <Link to="/login" className="link font-medium">log in</Link>
             {' '}to save opportunities and searches.
           </p>
           <Button variant="ghost" size="icon" onClick={handleDismissBanner} aria-label="Dismiss banner">
@@ -173,7 +175,7 @@ export function Home() {
           <div className="rounded-full bg-destructive/10 p-3 mb-4">
             <AlertCircle className="h-6 w-6 text-destructive" />
           </div>
-          <h3 className="text-lg font-semibold text-foreground">Something went wrong</h3>
+          <h3 className="text-lg font-medium text-foreground">Something went wrong</h3>
           <p className="text-sm text-muted-foreground mt-1 max-w-md">
             Failed to load opportunities. Please check your connection and try again.
           </p>

@@ -51,16 +51,16 @@ export function LiveSearchBanner({
     <>
       {rateLimited && (
         <div
-          className="flex items-center gap-2 rounded-md border border-amber-300 bg-amber-50 px-4 py-2 text-sm text-amber-800 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-300"
+          className="flex items-center gap-2 rounded-md border border-warning/40 bg-warning/[0.07] px-4 py-2 text-sm text-foreground"
           role="status"
           aria-live="polite"
         >
-          <Clock className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
+          <Clock className="h-4 w-4 flex-shrink-0 text-warning" aria-hidden="true" />
           Search limit reached. Showing cached results. Try again in a moment.
           <button
             type="button"
             onClick={onDismissRateLimit}
-            className="ml-auto rounded-full p-0.5 hover:bg-amber-200 dark:hover:bg-amber-800 transition-colors"
+            className="ml-auto rounded-sm p-0.5 hover:bg-warning/15 transition-colors"
             aria-label="Dismiss rate limit warning"
           >
             <X className="h-3.5 w-3.5" aria-hidden="true" />

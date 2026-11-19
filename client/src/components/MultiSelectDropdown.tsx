@@ -69,18 +69,18 @@ export function MultiSelectDropdown({
         aria-expanded={isOpen}
         aria-haspopup="listbox"
         aria-label={`Select ${label}${selected.length > 0 ? `, ${selected.length} selected` : ''}`}
-        className="w-full max-w-xs flex items-center justify-between rounded-md border border-gray-300 px-3 py-2 text-sm bg-white hover:bg-gray-50 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+        className="field w-full max-w-xs flex items-center justify-between px-3 py-2 text-sm"
       >
-        <span className="text-gray-700">
+        <span className="text-foreground">
           {label}
           {selected.length > 0 && (
-            <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-600 text-white">
+            <span className="ml-2 inline-flex h-5 min-w-5 items-center justify-center rounded-sm bg-foreground px-1.5 text-[11px] font-medium tabular-nums text-background">
               {selected.length}
             </span>
           )}
         </span>
         <svg
-          className={`ml-2 h-4 w-4 text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`}
+          className={`ml-2 h-4 w-4 text-faint transition-transform ${isOpen ? 'rotate-180' : ''}`}
           fill="none"
           stroke="currentColor"
           viewBox="0 0 24 24"
@@ -90,7 +90,7 @@ export function MultiSelectDropdown({
       </button>
 
       {isOpen && (
-        <div className="absolute z-20 mt-1 w-full max-w-xs bg-white border border-gray-200 rounded-md shadow-lg">
+        <div className="absolute z-20 mt-1 w-full max-w-xs bg-popover text-popover-foreground border rounded-md shadow-lg">
           <div className="p-2">
             <input
               type="text"
@@ -98,28 +98,28 @@ export function MultiSelectDropdown({
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               aria-label={`Search ${label}`}
-              className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              className="field h-9 w-full px-3 py-1.5 text-sm"
               ref={searchRef}
             />
           </div>
           <div className="max-h-48 overflow-y-auto px-2 pb-2" role="listbox" aria-label={label}>
             {filtered.length === 0 && (
-              <p className="text-sm text-gray-400 py-2 px-1">No matches</p>
+              <p className="text-sm text-muted-foreground py-2 px-1">No matches</p>
             )}
             {filtered.map((option) => (
               <label
                 key={option}
-                className="flex items-center gap-2 px-1 py-1.5 rounded hover:bg-gray-50 cursor-pointer"
+                className="flex items-center gap-2 px-1 py-1.5 rounded-sm hover:bg-accent cursor-pointer"
               >
                 <input
                   type="checkbox"
                   checked={selected.includes(option)}
                   onChange={() => toggle(option)}
-                  className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 h-4 w-4"
+                  className="h-4 w-4"
                 />
-                <span className={`text-sm text-gray-700 ${labelClass}`}>{labelOf(option)}</span>
+                <span className={`text-sm text-foreground ${labelClass}`}>{labelOf(option)}</span>
                 {getCount?.(option) !== undefined && (
-                  <span className="ml-auto pl-2 text-xs text-gray-500 tabular-nums">{getCount(option)}</span>
+                  <span className="ml-auto pl-2 text-xs text-muted-foreground tabular-nums">{getCount(option)}</span>
                 )}
               </label>
             ))}
@@ -129,7 +129,7 @@ export function MultiSelectDropdown({
               <button
                 onClick={() => onChange([])}
                 aria-label={`Clear all selected ${label}`}
-                className="text-xs text-blue-600 hover:text-blue-800"
+                className="text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
               >
                 Clear all
               </button>
@@ -144,13 +144,13 @@ export function MultiSelectDropdown({
           {selected.map((item) => (
             <span
               key={item}
-              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-blue-50 text-blue-700 border border-blue-200"
+              className="inline-flex h-6 items-center gap-1.5 rounded-sm border border-border px-2 text-xs font-medium text-muted-foreground"
             >
               <span className={labelClass}>{labelOf(item)}</span>
               <button
                 onClick={() => removeChip(item)}
                 aria-label={`Remove ${labelOf(item)}`}
-                className="hover:text-blue-900"
+                className="hover:text-foreground"
               >
                 &times;
               </button>

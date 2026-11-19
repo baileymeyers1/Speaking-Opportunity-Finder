@@ -10,9 +10,9 @@ export function hasMatchScore(opportunity: MatchFields): opportunity is MatchFie
 }
 
 function matchTone(score: number): string {
-  if (score >= 70) return 'border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-700 dark:bg-emerald-950 dark:text-emerald-300';
-  if (score >= 40) return 'border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-300';
-  return 'border-border bg-muted text-muted-foreground';
+  if (score >= 70) return 'border-border text-foreground [&_svg]:text-good';
+  if (score >= 40) return 'border-border text-foreground [&_svg]:text-warning';
+  return 'border-border text-muted-foreground';
 }
 
 function MatchList({ opportunity }: { opportunity: MatchFields }) {
@@ -27,7 +27,7 @@ function MatchList({ opportunity }: { opportunity: MatchFields }) {
         <ul className="space-y-1" aria-label="Why it matches">
           {reasons.map((reason) => (
             <li key={reason} className="flex items-start gap-2 text-sm">
-              <Check className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
+              <Check className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-good" aria-hidden="true" />
               <span>{reason}</span>
             </li>
           ))}
@@ -58,8 +58,7 @@ export function MatchPill({ opportunity }: { opportunity: MatchFields }) {
           type="button"
           aria-label={`${score}% match with your profile, see why`}
           className={cn(
-            'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-semibold',
-            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
+            'inline-flex h-6 items-center gap-1.5 rounded-sm border px-2 text-xs font-medium tabular-nums',
             matchTone(score)
           )}
         >
@@ -68,7 +67,7 @@ export function MatchPill({ opportunity }: { opportunity: MatchFields }) {
         </button>
       </PopoverTrigger>
       <PopoverContent align="end" className="w-72">
-        <p className="mb-2 text-sm font-semibold">{score}% match with your profile</p>
+        <p className="mb-2 text-sm font-medium">{score}% match with your profile</p>
         <MatchList opportunity={opportunity} />
       </PopoverContent>
     </Popover>
@@ -82,8 +81,8 @@ export function MatchExplanationBlock({ opportunity }: { opportunity: MatchField
   return (
     <section aria-labelledby="why-this-matches" className="space-y-3">
       <div className="flex items-center justify-between gap-3">
-        <h2 id="why-this-matches" className="text-base font-semibold text-foreground">Why this matches</h2>
-        <span className={cn('inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-semibold', matchTone(score))}>
+        <h2 id="why-this-matches" className="text-base font-medium text-foreground">Why this matches</h2>
+        <span className={cn('inline-flex h-6 items-center gap-1.5 rounded-sm border px-2 text-xs font-medium tabular-nums', matchTone(score))}>
           <Sparkles className="h-3 w-3" aria-hidden="true" />
           {score}% match
         </span>

@@ -23,7 +23,7 @@ function toggleValue<T>(values: T[] | undefined, value: T): T[] | undefined {
   return next.length > 0 ? next : undefined;
 }
 
-const checkboxClass = 'rounded border-input text-primary focus:ring-ring h-4 w-4';
+const checkboxClass = 'h-4 w-4';
 
 export function AdvancedFilters({
   filters,
@@ -160,7 +160,7 @@ export function AdvancedFilters({
                       onFiltersChange({ ...filters, compensationMin: value > 0 ? value : undefined });
                     }}
                     aria-label="Minimum compensation amount"
-                    className="w-32 accent-primary"
+                    className="w-32"
                   />
                   <span className="text-sm text-muted-foreground w-20">
                     {formatCompensationValue(filters.compensationMin || 0, false)}
@@ -183,7 +183,7 @@ export function AdvancedFilters({
                       });
                     }}
                     aria-label="Maximum compensation amount"
-                    className="w-32 accent-primary"
+                    className="w-32"
                   />
                   <span className="text-sm text-muted-foreground w-20">
                     {formatCompensationValue(filters.compensationMax ?? COMPENSATION_MAX, true)}
@@ -211,7 +211,7 @@ export function AdvancedFilters({
                   onFiltersChange({ ...filters, qualityMin: value > 0 ? value : undefined });
                 }}
                 aria-label="Minimum quality score"
-                className="w-48 accent-primary"
+                className="w-48"
               />
               <span className="text-sm text-muted-foreground w-16">{filters.qualityMin ?? 0}+</span>
             </div>
@@ -222,7 +222,7 @@ export function AdvancedFilters({
 
           {/* Footer */}
           <div className="flex items-center gap-4">
-            <Button variant="link" size="sm" onClick={onClearFilters} className="px-0 h-auto text-primary">
+            <Button variant="link" size="sm" onClick={onClearFilters} className="px-0 h-auto">
               Clear all filters
             </Button>
             {activeFilterCount > 0 && (

@@ -75,15 +75,15 @@ export function VerifiedBadge({ opportunity, variant }: VerifiedBadgeProps) {
       <TooltipTrigger asChild>
         {variant === 'line' ? (
           <div className="flex items-center gap-1.5 text-muted-foreground cursor-default">
-            <ShieldCheck className="h-3.5 w-3.5 flex-shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
+            <ShieldCheck className="h-3.5 w-3.5 flex-shrink-0 text-good" aria-hidden="true" />
             <span className="truncate">{label}</span>
           </div>
         ) : (
           <Badge
-            variant="outline"
-            className="gap-1 cursor-default text-emerald-700 border-emerald-300 dark:text-emerald-400 dark:border-emerald-700"
+            variant="good"
+            className="cursor-default"
           >
-            <ShieldCheck className="h-3 w-3" aria-hidden="true" />
+            <ShieldCheck aria-hidden="true" />
             {label}
           </Badge>
         )}

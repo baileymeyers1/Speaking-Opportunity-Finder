@@ -7,7 +7,7 @@ export function EventsBlock({ events }: { events: AdminEventStats }) {
   return (
     <div className="space-y-4">
       <div>
-        <h3 className="text-sm font-semibold text-foreground">Events</h3>
+        <h3 className="text-sm font-medium text-foreground">Events</h3>
         <p className="text-xs text-muted-foreground">
           One event per conference across sources and years; the list shows one card per event. Pairs scoring between{' '}
           {events.thresholds.review} and {events.thresholds.autoLink} are kept apart and listed here for tuning.
@@ -24,7 +24,7 @@ export function EventsBlock({ events }: { events: AdminEventStats }) {
         <StatTile label="Several years" value={events.multiYearEvents} note="events with an earlier edition stored" />
       </div>
       <div>
-        <h4 className="mb-2 text-sm font-semibold text-foreground">Possible duplicates</h4>
+        <h4 className="mb-2 text-sm font-medium text-foreground">Possible duplicates</h4>
         {events.possibleDuplicates.length === 0 ? (
           <p className="text-sm text-muted-foreground">No pairs in the review band.</p>
         ) : (

@@ -42,7 +42,7 @@ export function ForgotPassword() {
         {isSubmitted ? (
           <>
             <CardContent>
-              <div className="flex items-center gap-2 rounded-md border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800 dark:border-green-800 dark:bg-green-950 dark:text-green-200">
+              <div className="flex items-center gap-2 rounded-md border border-good/40 bg-good/[0.07] px-4 py-3 text-sm text-foreground">
                 <CheckCircle2 className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
                 If an account exists with that email, a reset link has been sent. Check your inbox.
               </div>
@@ -50,7 +50,7 @@ export function ForgotPassword() {
             <CardFooter className="flex flex-col gap-4">
               <Link
                 to="/login"
-                className="text-sm text-primary hover:underline font-medium"
+                className="link text-sm font-medium"
               >
                 Back to login
               </Link>
@@ -87,7 +87,7 @@ export function ForgotPassword() {
 
               <Link
                 to="/login"
-                className="text-sm text-primary hover:underline font-medium"
+                className="link text-sm font-medium"
               >
                 Back to login
               </Link>

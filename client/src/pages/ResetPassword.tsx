@@ -32,7 +32,7 @@ export function ResetPassword() {
           <CardFooter className="flex justify-center">
             <Link
               to="/forgot-password"
-              className="text-sm text-primary hover:underline font-medium"
+              className="link text-sm font-medium"
             >
               Request a new reset link
             </Link>
@@ -82,15 +82,15 @@ export function ResetPassword() {
         {isSuccess ? (
           <>
             <CardContent>
-              <div className="flex items-center gap-2 rounded-md border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800 dark:border-green-800 dark:bg-green-950 dark:text-green-200">
-                <CheckCircle2 className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
+              <div className="flex items-center gap-2 rounded-md border border-good/40 bg-good/[0.07] px-4 py-3 text-sm text-foreground">
+                <CheckCircle2 className="h-4 w-4 flex-shrink-0 text-good" aria-hidden="true" />
                 Password has been reset successfully. Redirecting to login...
               </div>
             </CardContent>
             <CardFooter className="flex justify-center">
               <Link
                 to="/login"
-                className="text-sm text-primary hover:underline font-medium"
+                className="link text-sm font-medium"
               >
                 Go to login
               </Link>
@@ -143,7 +143,7 @@ export function ResetPassword() {
 
               <Link
                 to="/login"
-                className="text-sm text-primary hover:underline font-medium"
+                className="link text-sm font-medium"
               >
                 Back to login
               </Link>
