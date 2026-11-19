@@ -10,8 +10,10 @@ import { MATCH_SORT_CANDIDATE_CAP, scoreOpportunities, type MatchProfile } from 
 import {
   buildOpportunityOrderBy,
   buildOpportunityWhere,
+  compareByClosing,
   computeSearchRelevance,
   matchesSearch,
+  sortsByClosing,
   type OpportunityFilters,
 } from './opportunityQuery.js';
 import type { CompensationType, OpportunityFormat, OpportunityWithDates, PaginatedResponse, SectorOption } from 'shared';
@@ -164,6 +166,31 @@ export async function getOpportunities(
     const ranked = withMatchScores(candidates.map(transformOpportunity), options, true);
     const result = paginate(ranked, page, pageSize, Math.min(count, MATCH_SORT_CANDIDATE_CAP));
     return { ...result, items: await attachEventContext(result.items) };
+  }
+
+  // Soonest to close first. A row without a deadline closes when its event
+  // starts, or is a rolling call, so the order is not one column's: sort the
+  // matching ids by `compareByClosing`, then load the page's rows.
+  if (sortsByClosing(filters.sortBy)) {
+    const now = options.now ?? new Date();
+    const keys = await prisma.opportunity.findMany({
+      where,
+      select: { id: true, cfpDeadline: true, eventDate: true, qualityScore: true },
+    });
+    const pageIds = keys
+      .sort((a, b) => compareByClosing(a, b, now))
+      .slice((page - 1) * pageSize, page * pageSize)
+      .map((key) => key.id);
+    const rows = pageIds.length > 0 ? await prisma.opportunity.findMany({ where: { id: { in: pageIds } } }) : [];
+    const byId = new Map(rows.map((row) => [row.id, row]));
+    const ordered = pageIds.flatMap((id) => byId.get(id) ?? []);
+    return {
+      items: await attachEventContext(withMatchScores(ordered.map(transformOpportunity), options)),
+      total: keys.length,
+      page,
+      pageSize,
+      totalPages: Math.ceil(keys.length / pageSize),
+    };
   }
 
   const [items, total] = await Promise.all([
