@@ -89,6 +89,13 @@ describe('buildExtractionPrompt', () => {
     expect(prompt).toContain('or two when it truly sits in two');
   });
 
+  it('defines the format as the kind of event, not the kind of session asked for', () => {
+    const prompt = buildExtractionPrompt({ title: 'Call for Panel Proposals: Annual Compliance Conference' }, NOW);
+    expect(prompt).toContain('format is the kind of event or program the speaker would appear at');
+    expect(prompt).toContain('its call for panels, workshops or lightning talks is still a conference');
+    expect(prompt).toContain('"other" when it is none of these or the page does not say');
+  });
+
   it('separates "is about an event" from "asks for speakers now"', () => {
     const prompt = buildExtractionPrompt({ title: 'Practical AI for Communications Virtual Conference' }, NOW);
     expect(prompt).toContain('whether or not it is asking for speakers right now');
@@ -361,6 +368,11 @@ describe('mergeExtraction', () => {
     const merged = mergeExtraction(scraped({ isRemote: false, format: 'conference' }), extraction({ isRemote: true, format: 'workshop' }), NOW);
     expect(merged.isRemote).toBe(true);
     expect(merged.format).toBe('workshop');
+  });
+
+  it('keeps the format the source gave when Claude cannot tell', () => {
+    expect(mergeExtraction(scraped({ format: 'podcast' }), extraction({ format: 'other' }), NOW).format).toBe('podcast');
+    expect(mergeExtraction(scraped({ format: 'conference' }), extraction({ format: 'meetup' }), NOW).format).toBe('meetup');
   });
 
   it('takes the sectors Claude named over the ones the row has', () => {

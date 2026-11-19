@@ -20,6 +20,7 @@ Aggregates speaking opportunities (CFPs, conferences, podcasts, meetups) from mu
 - Live search results show "Live" badges; save them via `POST /api/opportunities/save-live`.
 - Client uses localStorage caching for instant load while the serverless API cold-starts; it pings the health endpoint on mount.
 - Default query filter (`listedConditions` in `opportunityQuery.ts`, mirrored in SQL in `eventContext.ts`): only future-deadline opportunities shown; `isClosed`/`isRelevant` rows never shown; a search hit (`Live Search`, `Linkup Search`) only once its own page was read (`verifiedAt` set, no `verificationError`); no row with no deadline and a past event date. Change the rule in both places.
+- Default order is `compareByClosing` (`opportunityQuery.ts`): by deadline, else event date, else 30 days out for a rolling call. It is sorted in memory, so do not reintroduce `orderBy: cfpDeadline` for the default list: that puts every row without a deadline last.
 - A search hit is only a URL and a snippet; a CFP listing vouches for its rows. Code that treats them differently goes through `services/searchSources.ts` (`isSearchSource`, `isUnreadSearchHit`, `openCallAfterRead`), never a source-name comparison of its own.
 - Scraped re-syncs never overwrite Claude-enriched fields or enrichment bookkeeping (`server/src/scrapers/persistData.ts`).
 - Enrichment budget and row claims live in the DB (`server/src/services/enrichmentBudget.ts`), not process memory. Verification shares both.

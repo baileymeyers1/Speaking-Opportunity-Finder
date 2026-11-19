@@ -155,8 +155,51 @@ export function buildOpportunityWhere(filters: OpportunityFilters, now: Date = n
 }
 
 /**
+ * A call with neither a deadline nor an event date is rolling (a podcast that
+ * takes guests all year). It never closes, so it is ranked as if it closed
+ * this far from now: after what closes this month, before what closes later.
+ */
+export const ROLLING_CALL_HORIZON_DAYS = 30;
+
+export interface ClosingSortRow {
+  id: string;
+  cfpDeadline: Date | null;
+  eventDate: Date | null;
+  qualityScore: number | null;
+}
+
+/**
+ * When a call closes for sorting: its deadline; with none, the day the event
+ * starts (a call cannot stay open past its event); with neither, the rolling
+ * horizon. Sorting by the deadline column alone put every row without one
+ * after the last dated row, so podcast calls were never seen.
+ */
+export function effectiveClosing(row: ClosingSortRow, now: Date = new Date()): Date {
+  if (row.cfpDeadline) return row.cfpDeadline;
+  if (row.eventDate) return row.eventDate;
+  return new Date(now.getTime() + ROLLING_CALL_HORIZON_DAYS * 24 * 60 * 60 * 1000);
+}
+
+/** Soonest to close first; of two that close together the better row, then a stable order by id. */
+export function compareByClosing(a: ClosingSortRow, b: ClosingSortRow, now: Date = new Date()): number {
+  return (
+    effectiveClosing(a, now).getTime() - effectiveClosing(b, now).getTime() ||
+    (b.qualityScore ?? 0) - (a.qualityScore ?? 0) ||
+    a.id.localeCompare(b.id)
+  );
+}
+
+/** The default sort has no single column to order by (see `effectiveClosing`): it is sorted in memory. */
+export function sortsByClosing(sortBy: SortBy | undefined): boolean {
+  return sortBy === undefined || sortBy === 'deadline';
+}
+
+/**
  * Database ordering for a sort. `match` has no column to order by: the
  * candidate set comes out quality-first and is sorted in memory afterwards.
+ * The default (`deadline`) is ordered by `compareByClosing` instead wherever
+ * a whole list is paged; the column order here is its fallback for a search,
+ * which is re-ranked by relevance anyway.
  */
 export function buildOpportunityOrderBy(sortBy: SortBy | undefined): Prisma.OpportunityOrderByWithRelationInput[] {
   switch (sortBy) {

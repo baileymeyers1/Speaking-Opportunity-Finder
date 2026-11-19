@@ -150,6 +150,18 @@ describe('buildVerificationUpdate', () => {
   });
 });
 
+describe('format', () => {
+  it('is stored from a page read, at enrichment and at every check', () => {
+    expect(buildEnrichmentUpdate(merged({ format: 'webinar' }), { pageRead: true, now: NOW }).format).toBe('webinar');
+    expect(buildVerificationUpdate(LISTED, merged({ format: 'meetup' }), NOW).format).toBe('meetup');
+    expect(buildVerificationUpdate(SEARCH_HIT, merged({ format: 'podcast' }), NOW).format).toBe('podcast');
+  });
+
+  it('is left alone when enrichment only had the listing text to go by', () => {
+    expect(buildEnrichmentUpdate(merged({ format: 'webinar' }), { pageRead: false, now: NOW })).not.toHaveProperty('format');
+  });
+});
+
 describe('buildEnrichmentUpdate', () => {
   it('writes the cleaned fields and marks the row enriched', () => {
     const update = buildEnrichmentUpdate(merged({ title: 'KubeCon 2027', industries: ['devops', 'cloud'] }), { pageRead: true, now: NOW });

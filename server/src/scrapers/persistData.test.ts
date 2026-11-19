@@ -221,3 +221,15 @@ describe('buildCreateData', () => {
     expect(buildCreateData(makeScraped({ qualityScore: 77 })).qualityScore).toBe(77);
   });
 });
+
+describe('format on a re-scrape', () => {
+  it('keeps the format an enriched row has: the page said what kind of event it is', () => {
+    const update = buildUpdateData(makeScraped({ format: 'conference' }), makeExisting({ format: 'meetup', enrichmentStatus: 'enriched' }));
+    expect(update.format).toBe('meetup');
+  });
+
+  it('takes the scraper\'s format for a row nobody has read yet', () => {
+    const update = buildUpdateData(makeScraped({ format: 'podcast' }), makeExisting({ format: 'conference', enrichmentStatus: null }));
+    expect(update.format).toBe('podcast');
+  });
+});

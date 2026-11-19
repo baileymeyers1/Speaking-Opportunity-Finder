@@ -139,6 +139,7 @@ export function buildVerificationUpdate(
     compensationType: merged.compensationType ?? null,
     compensationAmount: merged.compensationAmount ?? null,
     sectors: merged.sectors,
+    format: merged.format,
     isClosed: merged.isClosed,
     ...(fromSearch ? { isRelevant } : {}),
     hasOpenCall: openCallAfterRead(existing.source, { isRelevant, hasOpenCall: merged.hasOpenCall }),
@@ -186,7 +187,8 @@ export function buildEnrichmentUpdate(
     enrichedAt: now,
     enrichmentError: null,
     enrichmentClaimedAt: null,
-    ...(pageRead ? { verifiedAt: now, verificationError: null } : {}),
+    // The format is taken from the page only: a listing's one-line description does not say what kind of event it is.
+    ...(pageRead ? { format: merged.format, verifiedAt: now, verificationError: null } : {}),
   };
 }
 
