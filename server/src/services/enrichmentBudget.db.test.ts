@@ -71,15 +71,24 @@ function searchHit(suffix: string) {
   return { ...opportunityRow(suffix), applyUrl: `${SEARCH_HIT_URL}${suffix}`, source: 'Linkup Search' };
 }
 
+/** This suite's rows, and the events the worker gave them. */
+async function removeTestRows() {
+  const where = { OR: [{ source: 'test' }, { applyUrl: { startsWith: SEARCH_HIT_URL } }] };
+  const rows = await prisma.opportunity.findMany({ where, select: { eventId: true } });
+  await prisma.opportunity.deleteMany({ where });
+  const eventIds = [...new Set(rows.map((row) => row.eventId).filter((id): id is string => id !== null))];
+  if (eventIds.length > 0) await prisma.event.deleteMany({ where: { id: { in: eventIds } } });
+}
+
 describe('enrichment budget against Postgres', () => {
   beforeEach(async () => {
     await prisma.enrichmentUsage.deleteMany({ where: { date: { in: [utcDateKey(now), today, pageReaderUsageKey(now)] } } });
-    await prisma.opportunity.deleteMany({ where: { OR: [{ source: 'test' }, { applyUrl: { startsWith: SEARCH_HIT_URL } }] } });
+    await removeTestRows();
   });
 
   afterAll(async () => {
     await prisma.enrichmentUsage.deleteMany({ where: { date: { in: [utcDateKey(now), today, pageReaderUsageKey(now)] } } });
-    await prisma.opportunity.deleteMany({ where: { OR: [{ source: 'test' }, { applyUrl: { startsWith: SEARCH_HIT_URL } }] } });
+    await removeTestRows();
     await prisma.$disconnect();
   });
 
@@ -179,6 +188,8 @@ describe('enrichment budget against Postgres', () => {
       enrichmentError: 'page unreadable: HTTP 403 (reader: FETCH_TARGET_NOT_FOUND)',
       verifiedAt: null,
       enrichmentClaimedAt: null,
+      // Nobody has read it, so nothing says it is an event yet.
+      eventId: null,
     });
     expect(await getTodayEnrichmentCount(prisma)).toBe(0);
   });
@@ -194,5 +205,16 @@ describe('enrichment budget against Postgres', () => {
     expect(stored.verificationError).toBeNull();
     expect(stored.hasOpenCall).toBe(true);
     expect(await getTodayEnrichmentCount(prisma)).toBe(1);
+  });
+
+  it('gives a row its event once it has read it, when live search stored it without one', async () => {
+    const row = await prisma.opportunity.create({ data: { ...searchHit('unmatched'), title: 'Budgetcheck Summit 2027' } });
+    expect(row.eventId).toBeNull();
+
+    await enrichRowsNow([row.id]);
+
+    const stored = await prisma.opportunity.findUniqueOrThrow({ where: { id: row.id }, include: { event: true } });
+    expect(stored.eventId).not.toBeNull();
+    expect(stored.event?.canonicalName).toBe('Budgetcheck Summit');
   });
 });

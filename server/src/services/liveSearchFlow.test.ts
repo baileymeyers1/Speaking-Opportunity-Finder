@@ -74,6 +74,7 @@ vi.mock('./extraction.js', async (importOriginal) => {
 });
 
 import { buildSearchQueries, performLiveSearch, SYNC_ENRICH_LIMIT } from './liveSearchService.js';
+import { assignEvents } from './eventAssignment.js';
 import { readPage, type PageReadResult } from './pageReader.js';
 import { DAILY_ENRICHMENT_LIMIT } from './enrichmentBudget.js';
 
@@ -262,6 +263,19 @@ describe('performLiveSearch', () => {
     } finally {
       vi.mocked(readPage).mockImplementation(async () => readable);
     }
+  });
+
+  it('matches only the hits it read to an event; the worker matches the rest when it reads them', async () => {
+    vi.mocked(assignEvents).mockClear();
+    linkupReturns(Array.from({ length: SYNC_ENRICH_LIMIT + 3 }, (_, i) => hit(`new-${i}`)));
+
+    const outcome = await performLiveSearch('AI for PR', []);
+
+    expect(outcome.waiting).toHaveLength(3);
+    expect(assignEvents).toHaveBeenCalledTimes(1);
+    const matched = vi.mocked(assignEvents).mock.calls[0][1].map((row) => row.applyUrl).sort();
+    expect(matched).toEqual(outcome.results.map((r) => r.applyUrl).sort());
+    expect(matched).toHaveLength(SYNC_ENRICH_LIMIT);
   });
 
   it('counts hits read now or earlier that are not open calls', async () => {

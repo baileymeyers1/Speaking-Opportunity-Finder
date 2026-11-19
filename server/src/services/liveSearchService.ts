@@ -1085,11 +1085,15 @@ export async function persistLiveResults(
   }
   if (created > 0) {
     // Inside the request on purpose: nothing runs after the response on Vercel.
+    // Only the hits read here: they are the ones listed now. A hit nobody has
+    // read is hidden, so it gets its event when the worker reads it
+    // (`assignEventIfMissing`), by then under its cleaned-up name. Matching
+    // every stored hit here was most of what a search spent after Claude.
     const stored = await prisma.opportunity.findMany({
       where: { applyUrl: { in: fresh.map((r) => r.applyUrl) }, eventId: null },
-      select: { id: true, title: true, organization: true, applyUrl: true, eventDate: true, location: true, eventId: true },
+      select: { id: true, title: true, organization: true, applyUrl: true, eventDate: true, location: true, eventId: true, enrichmentStatus: true },
     });
-    await assignEvents(prisma, stored, now);
+    await assignEvents(prisma, stored.filter((row) => row.enrichmentStatus === 'enriched'), now);
   }
   return { created, existing: existingUrls.size };
 }
