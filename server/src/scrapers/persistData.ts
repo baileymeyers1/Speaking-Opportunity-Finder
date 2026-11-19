@@ -182,7 +182,8 @@ export function buildUpdateData(
     eventDate: pick(storableDate(existing.eventDate), scraped.eventDate),
     cfpDeadline: keepExistingDeadline ? existingDeadline : scraped.cfpDeadline,
     deadlineTimezone: keepExistingDeadline ? existing.deadlineTimezone : scraped.deadlineTimezone,
-    format: scraped.format,
+    // Most scrapers say "conference" for everything; once a row is enriched its format is what the page said.
+    format: preserveEnriched ? existing.format : scraped.format,
     industries,
     compensationType: pick(existing.compensationType, scraped.compensationType),
     compensationAmount: pick(existing.compensationAmount, scraped.compensationAmount),

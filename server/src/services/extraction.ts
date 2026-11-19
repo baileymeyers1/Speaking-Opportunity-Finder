@@ -167,7 +167,7 @@ Rules:
 - isRelevant is true when the page is about one specific upcoming event, conference, podcast, webinar or speaking program that people can take part in, whether or not it is asking for speakers right now. False for job postings, news articles, how-to and opinion pieces, vendor or product pages, lists or directories of many events, speaker bureau or individual speaker profile pages, and unrelated pages.
 - hasOpenCall is true when the page invites people to apply or submit to speak, present, join a panel or be a podcast guest: a call for speakers, papers, proposals or abstracts, a speaker application form, "apply to speak". False when the page is about the event but gives no way to apply to speak (attendee registration, agenda, sponsorship). False when isRelevant is false.
 - compensationType: "paid" (speaker fee or stipend), "travel" (travel or hotel covered), "honorarium", "exposure" (explicitly unpaid), or null when not stated. compensationAmount is the USD figure when one is given.
-- format: conference, meetup, podcast, webinar, workshop, panel, or other.
+- format is the kind of event or program the speaker would appear at, not the kind of session it asks for: "conference" (an event with many sessions: a conference, summit, symposium, congress or forum; its call for panels, workshops or lightning talks is still a conference), "meetup" (a recurring local group or user group meeting), "podcast" (a show looking for guests), "webinar" (one online session or an online series), "workshop" (a stand-alone training or hands-on event), "panel" (a stand-alone panel discussion that is not part of a conference), or "other" when it is none of these or the page does not say.
 - industries: up to 5 short lowercase topic tags such as "healthcare", "ai", "devops".
 - sectors: the one sector from the list below that the event belongs to, or two when it truly sits in two, best fit first. Answer with the id before the colon. Go by who the event is for: a nursing conference with an AI track is healthcare, a conference about AI in healthcare is ai and healthcare. A general developer conference is software. Empty only when no sector fits.
 ${SECTOR_LINES}
@@ -399,7 +399,8 @@ export function mergeExtraction(
     eventDate: extraction.eventDate ?? storableDate(existing.eventDate) ?? undefined,
     cfpDeadline,
     deadlineTimezone,
-    format: extraction.format,
+    // "other" is Claude saying it cannot tell: what the source said stands.
+    format: extraction.format === 'other' ? existing.format : extraction.format,
     industries,
     sectors,
     compensationType: extraction.compensationType ?? existing.compensationType,
