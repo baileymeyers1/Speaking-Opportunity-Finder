@@ -26,7 +26,8 @@ Aggregates speaking opportunities (CFPs, conferences, podcasts, meetups) from mu
 - Enrichment budget and row claims live in the DB (`server/src/services/enrichmentBudget.ts`), not process memory. Verification shares both.
 - A page is read through `readPage` in `services/pageReader.ts`, never `fetchPageText` directly from a caller: that is what makes a page readable or not in the same way for the worker, verification and live search.
 - All Claude extraction goes through `extraction.ts` (structured outputs, strict schema); never add a second prompt or regex-parse model output.
-- Live search persists every hit in the request; the worker enriches what the request did not. Nothing runs after the response on Vercel.
+- Live search persists every hit in the request and matches the hits it read to events; the worker enriches what the request did not and gives each row its event then. Nothing runs after the response on Vercel.
+- The functions run in `pdx1` (`regions` in `vercel.json`) because the database is in Render's Oregon region: a query from the default region costs a cross-country round trip. Keep the two together if either moves.
 - Dynamic year references throughout -- no hardcoded years.
 
 ## Key Files
