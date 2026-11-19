@@ -2,6 +2,15 @@
 
 Reverse chronological. Current state lives in `docs/STATUS.md`.
 
+## 2026-11-19 — The format the page states is stored; rows without a deadline are ranked by when they close
+
+Two open items from the audit.
+- **Format.** The worker never wrote the extraction's `format`, so a scheduled row kept what its scraper or search query assumed, and a daily re-scrape reset it anyway. Now the prompt says what the word means (the kind of event the speaker would appear at; a conference's call for panels is still a conference), "other" keeps the source's format, enrichment stores the format when it read the page, verification at every check, and a re-scrape leaves an enriched row's format alone.
+- **What a sample showed** (57 listed rows read with the new prompt): 11 labels change, 8 of them to "conference": four Sessionize rows labelled "meetup" by the user-group heuristic (.NET Conf Amravati, ODTUG Kscope27, Workplace Ninjas Germany) and four search hits labelled by their query ("webinar", "panel"). Three conferences are workshops. So the labels were wrong in both directions, and the list is as conference-heavy as it looked: 42 of 57 before, 47 after. The earlier note that the missing write was "part of why the list is 93% conference" was wrong.
+- **Default order.** The list was ordered by the deadline column, which put every row without a deadline after the last dated row: on the live list of 715 cards, 169 have none, and the first sat at position 547 (page 28 of 36). `compareByClosing` ranks a row by its deadline, else its event date, else 30 days out for a rolling call. On the same data 1 of the first 20 cards and 5 of the first 100 have no deadline, and the 26 podcast cards move from positions 557–703 to 245–314. They still follow everything that closes within a month.
+- Sorted in memory over the matching ids and four columns, then the page's rows are loaded. Totals and page cuts are exact (database test with six rows over four pages).
+- Checked: server tests 673 → 690, three runs; client 66; typecheck, lint, build. The local API and the home page in the browser show the new order. No schema change.
+
 ## 2026-11-19 — Page reader: a refused page is read through Linkup's fetch endpoint
 
 The audit's open item "our fetch cannot read about a third of search hits". Since PR #23 such a hit is unlisted instead of listed unread, which is right for the directories among them and wrong for the real calls on sites that answer a plain fetch with 403.
