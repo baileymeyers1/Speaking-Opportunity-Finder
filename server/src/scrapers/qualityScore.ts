@@ -40,6 +40,9 @@ export const TRUSTED_SOURCES = [
   // First-party CFP platforms: the listing is the submission form itself.
   'pretalx.com',
   'sessionize.com',
+  // Staff-maintained listings: an editor posts each entry (the hub's event calendar, the site's guest request form).
+  'ruralhealthinfo.org',
+  'radioguestlist.com',
 ];
 
 export function computeQualityScore(result: ScraperResult): number {

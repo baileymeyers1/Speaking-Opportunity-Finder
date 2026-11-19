@@ -175,16 +175,20 @@ const JUNK_DESCRIPTION_PATTERNS = [
 ];
 const GENERIC_TITLE_PATTERN = /^\d{4}\s+call\s+for\s+(speakers?|papers?|presenters?)\s*$/i;
 
+/** A link to a file (PDF, slides, archive, media) rather than to a page someone can apply on. */
+export function isFileUrl(url: string): boolean {
+  try {
+    const urlPath = new URL(url).pathname.toLowerCase();
+    return JUNK_URL_EXTENSIONS.some(ext => urlPath.endsWith(ext));
+  } catch {
+    // Invalid URL — not necessarily a file
+    return false;
+  }
+}
+
 export function isJunkResult(result: { title: string; description?: string | null; applyUrl?: string }): boolean {
   // Check URL extension
-  if (result.applyUrl) {
-    try {
-      const urlPath = new URL(result.applyUrl).pathname.toLowerCase();
-      if (JUNK_URL_EXTENSIONS.some(ext => urlPath.endsWith(ext))) return true;
-    } catch {
-      // Invalid URL — not necessarily junk
-    }
-  }
+  if (result.applyUrl && isFileUrl(result.applyUrl)) return true;
 
   // Check description patterns
   if (result.description) {

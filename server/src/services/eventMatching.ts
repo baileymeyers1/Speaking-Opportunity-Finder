@@ -82,6 +82,10 @@ const HOSTING_DOMAINS = new Set([
   'cvent.com', 'ti.to', 'tito.io', 'google.com', 'forms.gle', 'typeform.com', 'airtable.com', 'notion.site',
   'notion.so', 'linkedin.com', 'facebook.com', 'x.com', 'twitter.com', 'youtube.com', 'github.com', 'github.io',
   'ieee.org', 'acm.org', 'hubspot.com', 'hsforms.com', 'jotform.com', 'swoogo.com', 'bizzabo.com', 'vfairs.com',
+  // Form and event platforms the calls listed by ruralhealthinfo.org submit through.
+  'qualtrics.com', 'formsite.com', 'monday.com', 'whova.com', 'goeshow.com', 'surveymonkey.com',
+  // Every guest request is a page on the listing's own site.
+  'radioguestlist.com',
 ]);
 
 const SECOND_LEVEL_LABELS = new Set(['co', 'com', 'org', 'net', 'ac', 'gov', 'edu', 'ne', 'or', 'go', 'gob', 'mil']);

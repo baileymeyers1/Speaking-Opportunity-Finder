@@ -146,6 +146,18 @@ describe('buildUpdateData', () => {
     expect(data.compensationType).toBe('honorarium');
     expect(data.compensationAmount).toBe(500);
   });
+
+  it('does not read compensation into the description when the scraper states it', () => {
+    const scraped = makeScraped({
+      description: 'A show about travel on $50 a day, for people who are paid to wander.',
+      compensationType: 'exposure',
+      compensationDetails: 'Unpaid guest interview.',
+    });
+    const data = buildUpdateData(scraped, makeExisting({ enrichmentStatus: null, compensationType: null }));
+    expect(data.compensationType).toBe('exposure');
+    expect(data.compensationAmount).toBeNull();
+    expect(data.compensationDetails).toBe('Unpaid guest interview.');
+  });
 });
 
 describe('buildCreateData', () => {
