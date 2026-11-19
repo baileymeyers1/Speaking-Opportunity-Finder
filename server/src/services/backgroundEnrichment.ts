@@ -1,10 +1,10 @@
 import { prisma } from '../lib/prisma.js';
 import { storableDate } from '../lib/storableDate.js';
 import { enrichOpportunity, planEnrichment, toExtractionInput } from './enrichmentService.js';
-import { extractOpportunity, mergeExtraction, serializeDateConfidence } from './extraction.js';
+import { extractOpportunity, mergeExtraction } from './extraction.js';
 import { fetchPageText } from './pageText.js';
 import { config } from '../config/index.js';
-import { computeQualityScore, type ScraperResult } from '../scrapers/qualityScore.js';
+import type { ScraperResult } from '../scrapers/qualityScore.js';
 import {
   claimNextForVerification,
   claimNextUnenriched,
@@ -19,7 +19,8 @@ import {
   reserveEnrichmentSlot,
 } from './enrichmentBudget.js';
 import { mapWithConcurrency } from '../scrapers/lib/html.js';
-import { buildGoneUpdate, buildVerificationErrorUpdate, buildVerificationUpdate } from './verification.js';
+import { buildEnrichmentUpdate, buildGoneUpdate, buildVerificationErrorUpdate, buildVerificationUpdate } from './verification.js';
+import { isSearchSource } from './searchSources.js';
 
 /**
  * In-process counters for the admin dashboard. These are informational only;
@@ -27,7 +28,6 @@ import { buildGoneUpdate, buildVerificationErrorUpdate, buildVerificationUpdate 
  * so they survive serverless cold starts.
  */
 interface BackgroundEnrichmentState {
-  isRunning: boolean;
   processed: number;
   enriched: number;
   skipped: number;
@@ -40,7 +40,6 @@ interface BackgroundEnrichmentState {
 }
 
 const state: BackgroundEnrichmentState = {
-  isRunning: false,
   processed: 0,
   enriched: 0,
   skipped: 0,
@@ -51,8 +50,6 @@ const state: BackgroundEnrichmentState = {
   lastRunTime: null,
   dailyEnrichmentCount: 0,
 };
-
-let enrichmentTimer: NodeJS.Timeout | null = null;
 
 type OpportunityRow = NonNullable<Awaited<ReturnType<typeof claimNextUnenriched>>>;
 type VerificationRow = NonNullable<Awaited<ReturnType<typeof claimNextForVerification>>>;
@@ -222,44 +219,16 @@ async function enrichClaimedRow(
     const enriched = await enrichOpportunity(scraperResult, { pageText: plan.pageText });
 
     if (enriched.enrichmentStatus === 'enriched') {
-      const isClosed = enriched.isClosed === true;
-      const isRelevant = enriched.isRelevant !== false;
-
       // enrichOpportunity already merged the extraction into the row (extraction.ts rules).
-      const mergedResult: ScraperResult = { ...enriched, isClosed, isRelevant };
-
+      // Extracting from the live page is a verification; from the description alone it is not.
       await prisma.opportunity.update({
         where: { id: opportunity.id },
-        data: {
-          title: mergedResult.title,
-          organization: mergedResult.organization,
-          cfpDeadline: mergedResult.cfpDeadline || null,
-          deadlineTimezone: mergedResult.cfpDeadline ? (mergedResult.deadlineTimezone ?? null) : null,
-          eventDate: mergedResult.eventDate || null,
-          industries: JSON.stringify(mergedResult.industries),
-          location: mergedResult.location || null,
-          compensationType: mergedResult.compensationType || null,
-          compensationAmount: mergedResult.compensationAmount || null,
-          compensationDetails: mergedResult.compensationDetails || null,
-          isRemote: mergedResult.isRemote,
-          isClosed,
-          isRelevant,
-          hasOpenCall: isRelevant ? (enriched.hasOpenCall ?? null) : false,
-          // Stored as columns so recalculateAllQualityScores keeps the score at 0.
-          qualityScore: computeQualityScore(mergedResult),
-          dateConfidence: serializeDateConfidence(enriched.dateConfidence),
-          enrichmentStatus: 'enriched',
-          enrichedAt: enriched.enrichedAt || new Date(),
-          enrichmentError: null,
-          enrichmentClaimedAt: null,
-          // Extracting from the live page is a verification; from the description alone it is not.
-          ...(plan.pageText !== null ? { verifiedAt: enriched.enrichedAt || new Date(), verificationError: null } : {}),
-        },
+        data: buildEnrichmentUpdate(enriched, { pageRead: plan.pageText !== null, now: enriched.enrichedAt }),
       });
 
       state.enriched++;
-      if (isClosed) console.log(`Background enrichment: Marked "${opportunity.title}" as closed CFP`);
-      if (!isRelevant) console.log(`Background enrichment: Marked "${opportunity.title}" as not a speaking opportunity`);
+      if (enriched.isClosed) console.log(`Background enrichment: Marked "${opportunity.title}" as closed CFP`);
+      if (!enriched.isRelevant) console.log(`Background enrichment: Marked "${opportunity.title}" as not a speaking opportunity`);
       console.log(`Background enrichment: Successfully enriched "${opportunity.title}"`);
       return 'processed';
     }
@@ -350,7 +319,12 @@ async function verifyNext(): Promise<WorkerOutcome> {
     }
 
     const merged = mergeExtraction(scraperResult, outcome.result, now);
-    await prisma.opportunity.update({ where: { id: row.id }, data: buildVerificationUpdate(row, merged, now) });
+    // A search hit enrichment could not read is enriched by the first check that can.
+    const firstRead = isSearchSource(row.source) && row.enrichmentStatus !== 'enriched';
+    await prisma.opportunity.update({
+      where: { id: row.id },
+      data: firstRead ? buildEnrichmentUpdate(merged, { pageRead: true, now }) : buildVerificationUpdate(row, merged, now),
+    });
     state.verified++;
     const deadlineChanged = (merged.cfpDeadline?.getTime() ?? null) !== (row.cfpDeadline?.getTime() ?? null);
     console.log(
@@ -369,33 +343,6 @@ async function verifyNext(): Promise<WorkerOutcome> {
       }
     }
     return 'processed';
-  }
-}
-
-/**
- * Start the background enrichment loop (long-running process mode only).
- */
-export function startBackgroundEnrichment(): void {
-  if (enrichmentTimer) {
-    console.log('Background enrichment: Already running');
-    return;
-  }
-
-  console.log('Background enrichment: Starting (1 opportunity every 1 minute)');
-  state.isRunning = true;
-
-  processNextUnenriched();
-  enrichmentTimer = setInterval(() => {
-    processNextUnenriched();
-  }, 60 * 1000);
-}
-
-export function stopBackgroundEnrichment(): void {
-  if (enrichmentTimer) {
-    clearInterval(enrichmentTimer);
-    enrichmentTimer = null;
-    state.isRunning = false;
-    console.log('Background enrichment: Stopped');
   }
 }
 

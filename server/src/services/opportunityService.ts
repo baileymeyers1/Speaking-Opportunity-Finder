@@ -231,12 +231,13 @@ export async function findByApplyUrl(applyUrl: string) {
   return transformOpportunity(opportunity);
 }
 
+// Filter options come from listed rows only: a hidden row's regex-parsed
+// location ("Closes Sep") or tag is nothing a visitor can filter down to.
+
 // Get unique locations for filter dropdown
 export async function getUniqueLocations(): Promise<string[]> {
   const opportunities = await prisma.opportunity.findMany({
-    where: {
-      location: { not: null },
-    },
+    where: { AND: [buildOpportunityWhere({}), { location: { not: null } }] },
     select: { location: true },
     distinct: ['location'],
   });
@@ -250,6 +251,7 @@ export async function getUniqueLocations(): Promise<string[]> {
 // Get unique industries for filter dropdown
 export async function getUniqueIndustries(): Promise<string[]> {
   const opportunities = await prisma.opportunity.findMany({
+    where: buildOpportunityWhere({}),
     select: { industries: true },
   });
 

@@ -1,7 +1,7 @@
 import { Prisma } from '../generated/prisma/client.js';
 import { prisma } from '../lib/prisma.js';
 import type { EventEdition, PreviousEdition } from 'shared';
-import { LIVE_SEARCH_SOURCE } from './opportunityQuery.js';
+import { SEARCH_SOURCES } from './searchSources.js';
 
 /**
  * What a list or detail response says about an opportunity's canonical event:
@@ -9,7 +9,7 @@ import { LIVE_SEARCH_SOURCE } from './opportunityQuery.js';
  * sources list the same edition, and what earlier years looked like.
  */
 
-/** The visibility rule of the default list, as SQL. Mirrors `buildOpportunityWhere`. */
+/** The visibility rule of the default list, as SQL. Mirrors `buildOpportunityWhere` and `listedConditions`. */
 const MIN_QUALITY_SCORE = 15;
 
 /**
@@ -32,7 +32,11 @@ export async function shadowedEditionIds(now: Date = new Date()): Promise<string
         AND "isRelevant" = true
         AND "qualityScore" >= ${MIN_QUALITY_SCORE}
         AND ("cfpDeadline" IS NULL OR "cfpDeadline" >= ${now})
-        AND NOT ("source" = ${LIVE_SEARCH_SOURCE} AND "enrichmentStatus" IS DISTINCT FROM 'enriched')
+        AND NOT (
+          "source" IN (${Prisma.join([...SEARCH_SOURCES])})
+          AND ("enrichmentStatus" IS DISTINCT FROM 'enriched' OR "verifiedAt" IS NULL OR "verificationError" IS NOT NULL)
+        )
+        AND ("cfpDeadline" IS NOT NULL OR "eventDate" IS NULL OR "eventDate" >= ${now})
     )
     SELECT id FROM ranked WHERE rank > 1
   `);

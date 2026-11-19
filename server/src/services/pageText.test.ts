@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { fetchPageText, visibleText } from './pageText.js';
+import { fetchPageText, MIN_READABLE_PAGE_CHARS, visibleText } from './pageText.js';
 
 function htmlResponse(body: string, init: { status?: number; contentType?: string } = {}): Response {
   return new Response(body, {
@@ -34,9 +34,28 @@ describe('fetchPageText', () => {
   });
 
   it('returns visible text for an HTML page', async () => {
-    vi.stubGlobal('fetch', vi.fn(async () => htmlResponse('<p>Submit by <b>Dec 1</b></p>')));
+    const body = 'Call for speakers: submit a session on platform engineering, observability or developer experience by';
+    vi.stubGlobal('fetch', vi.fn(async () => htmlResponse(`<p>${body} <b>Dec 1</b></p>`)));
     const result = await fetchPageText('https://example.test/cfp');
-    expect(result).toEqual({ ok: true, text: 'Submit by Dec 1', status: 200 });
+    expect(result).toEqual({ ok: true, text: `${body} Dec 1`, status: 200 });
+  });
+
+  it('reports the empty shell of a JavaScript app as not read, not as a page that says nothing', async () => {
+    const shell = '<html><head><title>Advocu</title><script src="/app.js"></script></head><body><div id="root"></div></body></html>';
+    vi.stubGlobal('fetch', vi.fn(async () => htmlResponse(shell)));
+    expect(await fetchPageText('https://app.advocu.example/cfp')).toEqual({
+      ok: false,
+      reason: 'empty',
+      status: 200,
+      message: 'No readable text (6 chars)',
+    });
+  });
+
+  it('reads a short but real page', async () => {
+    const text = 'DevOpsDays Atlanta 2027 :: pretalx Submissions close on 2027-01-19 23:59 (America/New_York). Submit a proposal or log in to edit one.';
+    expect(text.length).toBeGreaterThanOrEqual(MIN_READABLE_PAGE_CHARS);
+    vi.stubGlobal('fetch', vi.fn(async () => htmlResponse(`<main>${text}</main>`)));
+    expect(await fetchPageText('https://talks.example/cfp')).toMatchObject({ ok: true, text });
   });
 
   it('reports 404 and 410 as gone', async () => {

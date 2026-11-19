@@ -7,8 +7,16 @@ import { fetchWithTimeout, stripTags } from '../scrapers/lib/html.js';
 
 export const DEFAULT_PAGE_TIMEOUT_MS = 8000;
 export const DEFAULT_PAGE_MAX_CHARS = 5000;
+/**
+ * Below this much visible text the page was not really read: it is a
+ * JavaScript app whose HTML is an empty shell (app.advocu.com returns 6
+ * characters, "Advocu"). The shortest real pages seen are Pretalx calls at
+ * about 160 characters. Reading such a shell as "this page mentions no call"
+ * would deny a call the listing vouches for.
+ */
+export const MIN_READABLE_PAGE_CHARS = 100;
 
-export type PageFetchFailure = 'gone' | 'http_error' | 'not_text' | 'timeout' | 'network';
+export type PageFetchFailure = 'gone' | 'http_error' | 'not_text' | 'empty' | 'timeout' | 'network';
 
 export type PageFetchResult =
   | { ok: true; text: string; status: number }
@@ -56,7 +64,11 @@ export async function fetchPageText(
 
   try {
     const html = await response.text();
-    return { ok: true, text: visibleText(html, maxChars), status: response.status };
+    const text = visibleText(html, maxChars);
+    if (text.length < MIN_READABLE_PAGE_CHARS) {
+      return { ok: false, reason: 'empty', status: response.status, message: `No readable text (${text.length} chars)` };
+    }
+    return { ok: true, text, status: response.status };
   } catch (error) {
     return { ok: false, reason: 'network', status: response.status, message: error instanceof Error ? error.message : 'Read error' };
   }

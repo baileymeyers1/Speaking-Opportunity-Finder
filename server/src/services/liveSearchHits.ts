@@ -2,7 +2,7 @@ import type { PendingLiveHit } from 'shared';
 import { prisma } from '../lib/prisma.js';
 import { enrichRowsNow } from './backgroundEnrichment.js';
 import { DAILY_ENRICHMENT_LIMIT, getTodayEnrichmentCount } from './enrichmentBudget.js';
-import { LIVE_SEARCH_SOURCE } from './opportunityQuery.js';
+import { isSearchSource } from './searchSources.js';
 
 /**
  * What a live search knows about its hits in the database: which were stored
@@ -12,7 +12,7 @@ import { LIVE_SEARCH_SOURCE } from './opportunityQuery.js';
 
 export interface StoredHits {
   urls: Set<string>;
-  /** Ids of hits an earlier live search stored and nobody has read yet, best first as given. */
+  /** Ids of hits an earlier search (live or scheduled) stored and nobody has read yet, best first as given. */
   waitingIds: string[];
 }
 
@@ -26,7 +26,7 @@ export async function findStoredHits(urls: readonly string[]): Promise<StoredHit
     });
     const order = new Map(urls.map((url, index) => [url, index]));
     const waiting = rows
-      .filter((row) => row.source === LIVE_SEARCH_SOURCE && row.enrichmentStatus === null)
+      .filter((row) => isSearchSource(row.source) && row.enrichmentStatus === null)
       .sort((a, b) => (order.get(a.applyUrl) ?? 0) - (order.get(b.applyUrl) ?? 0));
     return { urls: new Set(rows.map((row) => row.applyUrl)), waitingIds: waiting.map((row) => row.id) };
   } catch (error) {
@@ -80,7 +80,7 @@ export async function summarizeHits(urls: readonly string[]): Promise<HitSummary
   });
   return {
     waiting: rows
-      .filter((row) => row.source === LIVE_SEARCH_SOURCE && row.enrichmentStatus === null)
+      .filter((row) => isSearchSource(row.source) && row.enrichmentStatus === null)
       .map((row) => ({ title: row.title, applyUrl: row.applyUrl })),
     notOpenCount: rows.filter((row) => row.isClosed || !row.isRelevant).length,
     noCallCount: rows.filter((row) => !row.isClosed && row.isRelevant && row.hasOpenCall === false).length,

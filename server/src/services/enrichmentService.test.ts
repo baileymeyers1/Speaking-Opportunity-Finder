@@ -35,6 +35,18 @@ describe('shouldSkipEnrichment', () => {
   it('does not skip a short description when the page was fetched', () => {
     expect(shouldSkipEnrichment(row({ description: 'Submit' }), 'a'.repeat(200))).toBeNull();
   });
+
+  it('never calls a search hit complete: its fields were guessed from a snippet', () => {
+    const complete = row({
+      source: 'Linkup Search',
+      cfpDeadline: new Date(),
+      eventDate: new Date(),
+      industries: ['ai'],
+      location: 'Dates, CF',
+      compensationType: 'travel',
+    });
+    expect(shouldSkipEnrichment(complete, 'a'.repeat(200))).toBeNull();
+  });
 });
 
 describe('planEnrichment', () => {
@@ -59,6 +71,24 @@ describe('planEnrichment', () => {
       reason: 'timeout',
       message: 'Timed out after 8000ms',
     })).toEqual({ action: 'extract', pageText: null, pageError: 'Timed out after 8000ms' });
+  });
+
+  it.each(['Linkup Search', 'Live Search'])('makes no Claude call for a %s hit whose page cannot be read', (source) => {
+    const hit = row({ source, description: 'Long enough description of the call for speakers taken from the search snippet' });
+    expect(planEnrichment(hit, { ok: false, reason: 'http_error', status: 403, message: 'HTTP 403' })).toEqual({
+      action: 'skip',
+      reason: 'page unreadable: HTTP 403',
+    });
+    expect(planEnrichment(hit, { ok: false, reason: 'empty', status: 200, message: 'No readable text (6 chars)' })).toEqual({
+      action: 'skip',
+      reason: 'page unreadable: No readable text (6 chars)',
+    });
+  });
+
+  it('still closes a search hit whose page is gone, and reads one whose page loads', () => {
+    const hit = row({ source: 'Linkup Search' });
+    expect(planEnrichment(hit, { ok: false, reason: 'gone', status: 410, message: 'HTTP 410' })).toEqual({ action: 'closed', reason: 'HTTP 410' });
+    expect(planEnrichment(hit, { ok: true, text: 'Deadline Dec 1 '.repeat(10), status: 200 })).toMatchObject({ action: 'extract' });
   });
 
   it('skips when the fetch failed and the description is too short', () => {

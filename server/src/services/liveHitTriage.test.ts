@@ -22,6 +22,21 @@ describe('looksLikeArticle', () => {
   });
 
   it.each([
+    'https://www.linkedin.com/in/brandon-dudas-372bb4269/',
+    'https://www.linkedin.com/showcase/digital-transformation-conference',
+    'https://uk.linkedin.com/posts/someone_call-for-speakers-activity-1',
+    'https://www.facebook.com/events/1234567890',
+    'https://x.com/someconf/status/1',
+    'https://www.youtube.com/watch?v=abc',
+  ])('drops a social page, which is never the event\'s own: %s', (applyUrl) => {
+    expect(looksLikeArticle(hit('Oil & Gas Digital Transformation Conference 2027', 'Call for sessions is open', applyUrl))).toBe(true);
+  });
+
+  it('keeps a page whose host only ends in the same letters', () => {
+    expect(looksLikeArticle(hit('Annex Conference 2027', '', 'https://annex.com/cfp'))).toBe(false);
+  });
+
+  it.each([
     '4th Annual AI Implementation for Communications Conference | Mar 23–25, 2027, New York City',
     'Practical AI for Communications Virtual Conference | Jan 20–21, 2027',
     'TU Dublin Announces Call for Papers for the Fourth Annual SymPRandA Symposium',

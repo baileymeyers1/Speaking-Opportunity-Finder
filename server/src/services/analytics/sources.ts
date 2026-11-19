@@ -11,6 +11,7 @@ import type {
   ScraperCadence,
 } from 'shared';
 import { daysAgo } from './shared.js';
+import { listedConditions } from '../opportunityQuery.js';
 
 /**
  * Per-source health: what each scraper's recent runs look like and what its
@@ -167,7 +168,12 @@ async function countRowsBySource(now: Date): Promise<Map<string, AdminSourceRowC
     prisma.opportunity.groupBy({
       by: ['source'],
       _count: { id: true },
-      where: { isClosed: false, isRelevant: true, OR: [{ cfpDeadline: { gte: today } }, { cfpDeadline: null }] },
+      where: {
+        isClosed: false,
+        isRelevant: true,
+        OR: [{ cfpDeadline: { gte: today } }, { cfpDeadline: null }],
+        AND: listedConditions(now),
+      },
     }),
     prisma.opportunity.groupBy({ by: ['source'], _count: { id: true }, where: { enrichmentStatus: 'enriched' } }),
     prisma.opportunity.groupBy({ by: ['source'], _count: { id: true }, where: { verifiedAt: { not: null } } }),

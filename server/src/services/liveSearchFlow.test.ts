@@ -74,6 +74,7 @@ vi.mock('./extraction.js', async (importOriginal) => {
 });
 
 import { buildSearchQueries, performLiveSearch, SYNC_ENRICH_LIMIT } from './liveSearchService.js';
+import { fetchPageText, type PageFetchResult } from './pageText.js';
 import { DAILY_ENRICHMENT_LIMIT } from './enrichmentBudget.js';
 
 interface LinkupItem {
@@ -221,6 +222,25 @@ describe('performLiveSearch', () => {
     expect(outcome.waiting).toHaveLength(2);
     expect(outcome.waiting.every((w) => w.title.startsWith('AI for PR Summit'))).toBe(true);
     expect(outcome.foundCount).toBe(SYNC_ENRICH_LIMIT + 2);
+  });
+
+  it('makes no Claude call for a hit whose page cannot be read, and leaves it unchecked', async () => {
+    linkupReturns([hit('readable'), hit('blocked')]);
+    const readable: PageFetchResult = { ok: true, text: 'Call for speakers on AI in PR. Submit by the deadline.', status: 200 };
+    vi.mocked(fetchPageText).mockImplementation(async (url) =>
+      url === urlOf('blocked') ? { ok: false, reason: 'http_error', status: 403, message: 'HTTP 403' } : readable
+    );
+    try {
+      const outcome = await performLiveSearch('AI for PR', []);
+
+      expect(extractedUrls()).toEqual([urlOf('readable')]);
+      expect(outcome.results.map((r) => r.applyUrl)).toEqual([urlOf('readable')]);
+      // Stored unread, so the worker tries the page again; a snippet is never shown as a result.
+      expect(mocks.table.get(urlOf('blocked'))?.enrichmentStatus).toBeNull();
+      expect(outcome.waiting).toEqual([{ title: 'AI for PR Summit blocked', applyUrl: urlOf('blocked') }]);
+    } finally {
+      vi.mocked(fetchPageText).mockImplementation(async () => readable);
+    }
   });
 
   it('counts hits read now or earlier that are not open calls', async () => {
