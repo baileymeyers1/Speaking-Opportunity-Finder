@@ -3,6 +3,8 @@ import type { Opportunity } from '../../types';
 import { payLabel } from '../../lib/callDisplay';
 import { checkedAgo } from '../../lib/callStanding';
 import { sourceLabel } from '../../lib/eventHints';
+import { fitSummary, namedFits } from '../../lib/forWhom';
+import { useForWhom } from '../../hooks/useForWhom';
 import { sectorLabel } from '../../lib/sectors';
 import { hasMatchScore, MatchList } from '../MatchHints';
 import { DateWithConfidence } from '../VerificationHints';
@@ -40,6 +42,9 @@ export function CallFacts({ opportunity }: { opportunity: Opportunity }) {
   const sectors = (opportunity.sectors ?? []).map(sectorLabel);
   const checked = checkedAgo(opportunity);
   const otherSources = (opportunity.alsoListedOn ?? []).map(sourceLabel);
+  // Every speaker's fit with their name on it; a roster of several gets the list, anyone else the one score.
+  const { speakers, canChoose } = useForWhom();
+  const fits = namedFits(opportunity.speakerFits, speakers);
   // The listing is only worth a link when it is a different page from the one "Apply" opens.
   const listingUrl = opportunity.sourceUrl && opportunity.sourceUrl !== opportunity.applyUrl ? opportunity.sourceUrl : null;
 
@@ -58,14 +63,29 @@ export function CallFacts({ opportunity }: { opportunity: Opportunity }) {
 
       {opportunity.industries.length > 0 && <Fact label="Topics">{capitalize(opportunity.industries.join(', '))}</Fact>}
 
-      {hasMatchScore(opportunity) && (
-        <Fact label="Your fit">
-          <p className="tabular-nums">{opportunity.matchScore}% match</p>
-          <div className="mt-2">
-            <MatchList opportunity={opportunity} />
-          </div>
-        </Fact>
-      )}
+      {hasMatchScore(opportunity) &&
+        (canChoose && fits.length > 1 ? (
+          <Fact label="Who fits">
+            <ul className="space-y-2">
+              {fits.map((fit) => (
+                <li key={fit.speakerId}>
+                  <p className="flex items-baseline justify-between gap-3">
+                    <span className="min-w-0 truncate">{fit.name}</span>
+                    <span className="flex-none tabular-nums">{fit.score}%</span>
+                  </p>
+                  {fitSummary(fit) && <p className="text-[13px] text-muted-foreground">{fitSummary(fit)}</p>}
+                </li>
+              ))}
+            </ul>
+          </Fact>
+        ) : (
+          <Fact label={fits[0] ? `Fit for ${fits[0].name}` : 'Fit'}>
+            <p className="tabular-nums">{opportunity.matchScore}% match</p>
+            <div className="mt-2">
+              <MatchList opportunity={opportunity} />
+            </div>
+          </Fact>
+        ))}
 
       <Fact label="Checked">
         {checked ? `${checked}, against the event page` : <span className="text-muted-foreground">Not checked yet</span>}

@@ -38,12 +38,3 @@ export function speakerReach(speaker: Placed): string {
 export function topicsPreview(topics: readonly string[], room = 4): { shown: string[]; more: number } {
   return { shown: topics.slice(0, room), more: Math.max(0, topics.length - room) };
 }
-
-/**
- * Whose fit Browse shows while there is no way to choose: the first speaker.
- * Worth saying only once there is more than one.
- */
-export function fitCaption(speakers: readonly Named[]): string {
-  if (speakers.length < 2) return '';
-  return `Browse shows fit for ${speakerName(speakers[0])}, the first on this list.`;
-}

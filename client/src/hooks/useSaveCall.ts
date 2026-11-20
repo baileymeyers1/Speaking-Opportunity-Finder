@@ -1,7 +1,7 @@
-import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import type { Opportunity, SavedCategory } from '../types';
+import type { Opportunity, SavedCategory, SavedOpportunity } from '../types';
 import { useAuth } from './useAuth';
+import { useSavedOpportunities } from './useSavedOpportunities';
 import { useSaveOpportunity, type SaveResult } from './useSaveOpportunity';
 
 interface SaveCallOptions {
@@ -9,33 +9,36 @@ interface SaveCallOptions {
   onSaved?: (result: SaveResult) => void;
 }
 
+const NOT_SAVED: SavedOpportunity[] = [];
+
 /**
- * Saving one call: the category it was saved under in this visit, and a save
- * that sends a signed-out visitor to log in first.
+ * Saving one call: the rows it is already saved under (one per speaker it is
+ * saved for, and one for nobody), read from the account's saved list, and a
+ * save that sends a signed-out visitor to log in first.
  */
 export function useSaveCall(opportunity: Opportunity | undefined, options: SaveCallOptions = {}) {
   const { isAuthenticated } = useAuth();
   const navigate = useNavigate();
   const mutation = useSaveOpportunity();
-  const [savedCategory, setSavedCategory] = useState<SavedCategory | ''>('');
+  // One query for the whole page: every row reads the same cached list.
+  const savedQuery = useSavedOpportunities({ enabled: isAuthenticated });
+  const savedRows =
+    opportunity && savedQuery.data ? savedQuery.data.filter((item) => item.opportunityId === opportunity.id) : NOT_SAVED;
 
-  const save = (category: SavedCategory) => {
+  const save = (category: SavedCategory, speakerId: string | null) => {
     if (!opportunity) return;
     if (!isAuthenticated) {
       navigate('/login');
       return;
     }
     mutation.mutate(
-      { opportunity, category },
+      { opportunity, category, speakerId },
       {
-        onSuccess: (result) => {
-          setSavedCategory(category);
-          options.onSaved?.(result);
-        },
+        onSuccess: (result) => options.onSaved?.(result),
         onError: (error) => console.error('Failed to save:', error),
       }
     );
   };
 
-  return { savedCategory, isSaving: mutation.isPending, save };
+  return { savedRows, isSaving: mutation.isPending, save };
 }

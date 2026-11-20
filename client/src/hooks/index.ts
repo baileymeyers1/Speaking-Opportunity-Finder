@@ -9,6 +9,6 @@ export { useSaveOpportunity, type SaveResult } from './useSaveOpportunity';
 export {
   useSavedOpportunities,
   useRemoveSavedOpportunity,
-  useUpdateSavedCategory,
+  useChangeSavedCall,
 } from './useSavedOpportunities';
 export { queryKeys } from './queryKeys';

@@ -7,6 +7,8 @@ import { queryKeys } from './queryKeys';
 interface SaveInput {
   opportunity: Opportunity;
   category: SavedCategory;
+  /** The speaker the call is saved for; null for nobody yet. */
+  speakerId: string | null;
 }
 
 export interface SaveResult {
@@ -39,7 +41,7 @@ function toSaveLivePayload(opportunity: Opportunity) {
 }
 
 /**
- * Save an opportunity under a category. A live result is first persisted via
+ * Save an opportunity under a category, for a speaker or for nobody yet. A live result is first persisted via
  * `save-live` (which returns the stored row) and then saved under that row's
  * id; every cached list that held the live item is updated to the stored row,
  * so cards and detail links switch to the permanent id.
@@ -48,7 +50,7 @@ export function useSaveOpportunity() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ opportunity, category }: SaveInput): Promise<SaveResult> => {
+    mutationFn: async ({ opportunity, category, speakerId }: SaveInput): Promise<SaveResult> => {
       let target = opportunity;
       if (opportunity.isLiveResult) {
         const response = await apiClient.post<Opportunity>(
@@ -61,10 +63,17 @@ export function useSaveOpportunity() {
       const saved = await apiClient.post<SavedOpportunity>('/saved', {
         opportunityId: target.id,
         category,
+        speakerId,
       });
       return { opportunity: target, category, saved: saved.data };
     },
-    onSuccess: ({ opportunity }, { opportunity: original }) => {
+    onSuccess: ({ opportunity, saved }, { opportunity: original }) => {
+      // The row is in the saved list at once, so the bookmark it came from shows it without waiting for the refetch.
+      if (saved) {
+        queryClient.setQueryData<SavedOpportunity[]>(queryKeys.saved.all, (items) =>
+          items ? [...items.filter((item) => item.id !== saved.id), saved] : items
+        );
+      }
       if (original.id !== opportunity.id) {
         queryClient.setQueriesData<OpportunityPage>({ queryKey: queryKeys.opportunities.all }, (page) =>
           page
