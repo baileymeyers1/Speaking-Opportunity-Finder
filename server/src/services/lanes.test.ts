@@ -96,16 +96,20 @@ describe('summarizeLanes', () => {
     expect(summary.closingWithin30).toBe(4);
   });
 
-  it('names the call that closes first, never an event with no call', () => {
-    expect(summarizeLanes(rows, NOW).nextToCloseId).toBe('today');
+  it('never counts an event with no call as closing soon, whatever deadline it stores', () => {
+    const onlyNoCall = [row('no-call', { hasOpenCall: false, cfpDeadline: inDays(1) })];
+    expect(summarizeLanes(onlyNoCall, NOW)).toEqual({
+      counts: { closing: 0, open: 0, watch: 1 },
+      closingWithin7: 0,
+      closingWithin30: 0,
+    });
   });
 
-  it('is all zeros with nothing to name when no row matches', () => {
+  it('is all zeros when no row matches', () => {
     expect(summarizeLanes([], NOW)).toEqual({
       counts: { closing: 0, open: 0, watch: 0 },
       closingWithin7: 0,
       closingWithin30: 0,
-      nextToCloseId: null,
     });
   });
 });

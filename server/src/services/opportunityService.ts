@@ -6,7 +6,7 @@ import { AppError } from '../middleware/errorHandler.js';
 import { parseDateConfidence } from './extraction.js';
 import { assignEvents } from './eventAssignment.js';
 import { attachEventContext, shadowedEditionIds } from './eventContext.js';
-import { LANE_ROW_SELECT, laneComparator, laneOf, laneWhere, summarizeLanes, type LaneRow } from './lanes.js';
+import { LANE_ROW_SELECT, laneComparator, laneOf, laneWhere, summarizeLanes } from './lanes.js';
 import { MATCH_SORT_CANDIDATE_CAP, scoreOpportunities, type MatchProfile } from './matchScore.js';
 import {
   buildOpportunityOrderBy,
@@ -16,7 +16,7 @@ import {
   sortsByClosing,
   type OpportunityFilters,
 } from './opportunityQuery.js';
-import type { CompensationType, LaneSummary, OpportunityFormat, OpportunityWithDates, PaginatedResponse, SectorOption } from 'shared';
+import type { CompensationType, OpportunityFormat, OpportunityWithDates, PaginatedResponse, SectorOption } from 'shared';
 
 export type { OpportunityFilters } from './opportunityQuery.js';
 
@@ -133,26 +133,6 @@ export async function getListedByApplyUrls(
 }
 
 /**
- * Lane counts and what closes soon for a set of listed rows, with the call
- * that closes first named (one small read: the rows here carry no title).
- */
-async function laneSummary(rows: readonly LaneRow[], now: Date): Promise<LaneSummary> {
-  const { nextToCloseId, ...totals } = summarizeLanes(rows, now);
-  const next = nextToCloseId
-    ? await prisma.opportunity.findUnique({
-        where: { id: nextToCloseId },
-        select: { id: true, title: true, cfpDeadline: true, deadlineTimezone: true },
-      })
-    : null;
-  return {
-    ...totals,
-    nextToClose: next?.cfpDeadline
-      ? { id: next.id, title: next.title, cfpDeadline: next.cfpDeadline.toISOString(), deadlineTimezone: next.deadlineTimezone }
-      : null,
-  };
-}
-
-/**
  * One page of the list. `filters.lane` picks which of Browse's three lists is
  * paged; the summary counts all three under the other filters, so the lane
  * switch can say what is behind each choice.
@@ -177,7 +157,7 @@ export async function getOpportunities(
     // ILIKE is a coarse pass ("ai" is inside "said"); the whole-word rule runs here,
     // so the lanes are counted from what it keeps.
     const allMatches = (await prisma.opportunity.findMany({ where: everyLane, orderBy })).filter((item) => matchesSearch(item, search));
-    const lanes = await laneSummary(allMatches, now);
+    const lanes = summarizeLanes(allMatches, now);
     const inLane = lane ? allMatches.filter((item) => laneOf(item) === lane) : allMatches;
     const ranked = inLane
       .map((item) => ({ item, relevance: computeSearchRelevance(item, search) }))
@@ -189,7 +169,7 @@ export async function getOpportunities(
 
   // Every lane's rows, as the few columns the summary and the default order need.
   const keys = await prisma.opportunity.findMany({ where: everyLane, select: LANE_ROW_SELECT });
-  const lanes = await laneSummary(keys, now);
+  const lanes = summarizeLanes(keys, now);
 
   // Best match has no column to order by: score a capped candidate set in memory.
   if (sortByMatch) {

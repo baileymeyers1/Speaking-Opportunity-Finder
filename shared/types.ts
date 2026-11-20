@@ -306,8 +306,6 @@ export interface LaneSummary {
   /** Of the closing lane: deadlines within 7 days, and within 30 (the 30 includes the 7). */
   closingWithin7: number;
   closingWithin30: number;
-  /** The call that closes first; null when no call with a deadline matches. */
-  nextToClose: { id: string; title: string; cfpDeadline: string; deadlineTimezone: string | null } | null;
 }
 
 export interface PaginatedResponse<T> {

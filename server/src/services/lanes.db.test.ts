@@ -86,15 +86,10 @@ describe('lanes', () => {
   });
 
   it('counts all three lanes and what closes soon on every response, whichever lane it pages', async () => {
-    const expected = {
-      counts: { closing: 2, open: 3, watch: 2 },
-      closingWithin7: 1,
-      closingWithin30: 1,
-      nextToClose: { title: 'Closing Soon', cfpDeadline: inDays(3).toISOString(), deadlineTimezone: null },
-    };
+    const expected = { counts: { closing: 2, open: 3, watch: 2 }, closingWithin7: 1, closingWithin30: 1 };
     for (const lane of ['closing', 'open', 'watch', undefined] as const) {
       const page = await list({ lane });
-      expect(page.lanes).toMatchObject(expected);
+      expect(page.lanes).toEqual(expected);
     }
   });
 
@@ -102,7 +97,7 @@ describe('lanes', () => {
     const closing = await list({ lane: 'closing', search: 'rolling' });
     expect(closing.items).toEqual([]);
     expect(closing.total).toBe(0);
-    expect(closing.lanes).toMatchObject({ counts: { closing: 0, open: 2, watch: 0 }, closingWithin7: 0, nextToClose: null });
+    expect(closing.lanes).toEqual({ counts: { closing: 0, open: 2, watch: 0 }, closingWithin7: 0, closingWithin30: 0 });
 
     const open = await list({ lane: 'open', search: 'rolling' });
     expect(titles(open.items).sort()).toEqual(['Rolling Low', 'Rolling Podcast']);

@@ -1,4 +1,4 @@
-import type { Lane } from 'shared';
+import type { Lane, LaneSummary } from 'shared';
 import type { Prisma } from '../generated/prisma/client.js';
 import { compareByClosing } from './opportunityQuery.js';
 
@@ -75,26 +75,16 @@ export function laneComparator(lane: Lane | undefined, now: Date): (a: LaneRow, 
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-export interface LaneTotals {
-  counts: Record<Lane, number>;
-  closingWithin7: number;
-  closingWithin30: number;
-  nextToCloseId: string | null;
-}
-
 /** Lane counts and what closes soon, for rows that are already listed (future deadline or none). */
-export function summarizeLanes(rows: readonly LaneRow[], now: Date): LaneTotals {
-  const totals: LaneTotals = { counts: { closing: 0, open: 0, watch: 0 }, closingWithin7: 0, closingWithin30: 0, nextToCloseId: null };
-  let next: LaneRow | null = null;
+export function summarizeLanes(rows: readonly Pick<LaneRow, 'cfpDeadline' | 'hasOpenCall'>[], now: Date): LaneSummary {
+  const summary: LaneSummary = { counts: { closing: 0, open: 0, watch: 0 }, closingWithin7: 0, closingWithin30: 0 };
   for (const row of rows) {
     const lane = laneOf(row);
-    totals.counts[lane] += 1;
+    summary.counts[lane] += 1;
     if (lane !== 'closing' || !row.cfpDeadline) continue;
     const msLeft = row.cfpDeadline.getTime() - now.getTime();
-    if (msLeft <= 7 * DAY_MS) totals.closingWithin7 += 1;
-    if (msLeft <= 30 * DAY_MS) totals.closingWithin30 += 1;
-    if (!next || compareByClosing(row, next, now) < 0) next = row;
+    if (msLeft <= 7 * DAY_MS) summary.closingWithin7 += 1;
+    if (msLeft <= 30 * DAY_MS) summary.closingWithin30 += 1;
   }
-  totals.nextToCloseId = next?.id ?? null;
-  return totals;
+  return summary;
 }
