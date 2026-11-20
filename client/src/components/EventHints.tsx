@@ -1,65 +1,9 @@
 import { Link } from 'react-router-dom';
-import type { EventEdition, Opportunity } from '../types';
+import type { EventEdition } from '../types';
 import { formatDate, formatDeadline } from '../lib/dates';
-import { alsoListedOnText, previousEditionHint, sourceLabel } from '../lib/eventHints';
-import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
-import { CalendarClock, Layers } from 'lucide-react';
+import { sourceLabel } from '../lib/eventHints';
 
-/**
- * Hints that come from the canonical event behind a row: the other sources
- * that list the same call, when last year's call appeared, and the list of
- * editions on the detail page. Same shape as `VerificationHints.tsx`.
- */
-
-type HintOpportunity = Pick<Opportunity, 'id' | 'editionYear' | 'alsoListedOn' | 'previousEditions'>;
-
-/** "Also on WikiCFP, Pretalx" as a metadata line; nothing when no other source lists the call. */
-export function AlsoListedOn({ opportunity }: { opportunity: Pick<Opportunity, 'alsoListedOn'> }) {
-  const text = alsoListedOnText(opportunity.alsoListedOn);
-  if (!text) return null;
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <div className="flex items-center gap-1.5 text-muted-foreground cursor-default">
-          <Layers className="h-3.5 w-3.5 flex-shrink-0" aria-hidden="true" />
-          <span className="truncate">{text}</span>
-        </div>
-      </TooltipTrigger>
-      <TooltipContent>
-        <p>This call appears on several sources. They are shown as one listing; the detail page lists each one.</p>
-      </TooltipContent>
-    </Tooltip>
-  );
-}
-
-/** "Last year's CFP opened around 12 Mar" as a metadata line; nothing without an earlier edition. */
-export function PreviousEditionHint({ opportunity }: { opportunity: Pick<Opportunity, 'editionYear' | 'previousEditions'> }) {
-  const hint = previousEditionHint(opportunity);
-  if (!hint) return null;
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <div className="flex items-center gap-1.5 text-muted-foreground cursor-default">
-          <CalendarClock className="h-3.5 w-3.5 flex-shrink-0" aria-hidden="true" />
-          <span className="truncate">{hint.text}</span>
-        </div>
-      </TooltipTrigger>
-      <TooltipContent>
-        <p>{hint.detail}</p>
-      </TooltipContent>
-    </Tooltip>
-  );
-}
-
-/** Both hints, for the card's metadata grid. */
-export function EventHintLines({ opportunity }: { opportunity: HintOpportunity }) {
-  return (
-    <>
-      <AlsoListedOn opportunity={opportunity} />
-      <PreviousEditionHint opportunity={opportunity} />
-    </>
-  );
-}
+/** What the canonical event behind a call adds to its page: the other listings and earlier years of the same event. */
 
 function editionStatus(edition: EventEdition<string>, now: Date): 'open' | 'closed' | 'no deadline' {
   if (edition.isClosed) return 'closed';

@@ -1,10 +1,8 @@
 import type { ReactNode } from 'react';
 import type { Opportunity } from '../types';
 import { formatDate, formatDeadline } from '../lib/dates';
-import { approximate, formatVerifiedAgo, isLowConfidence, LOW_CONFIDENCE_HINT } from '../utils/verification';
-import { Badge } from '@/components/ui/badge';
+import { approximate, isLowConfidence, LOW_CONFIDENCE_HINT } from '../utils/verification';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
-import { ShieldCheck } from 'lucide-react';
 
 /** Wraps an approximate date so hovering explains why it carries a "~". */
 export function ApproximateHint({ children }: { children: ReactNode }) {
@@ -57,40 +55,5 @@ export function DateWithConfidence({ opportunity, field, style = 'short', fallba
       </ApproximateHint>
       {zoneNote}
     </span>
-  );
-}
-
-interface VerifiedBadgeProps {
-  opportunity: Pick<Opportunity, 'verifiedAt' | 'verificationError'>;
-  /** `line` is the compact metadata row on cards; `badge` is the outline pill on the detail page. */
-  variant: 'line' | 'badge';
-}
-
-/** "Verified Xd ago" with the check date in a tooltip. Renders nothing for a never-verified listing. */
-export function VerifiedBadge({ opportunity, variant }: VerifiedBadgeProps) {
-  const label = formatVerifiedAgo(opportunity);
-  if (!label) return null;
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        {variant === 'line' ? (
-          <div className="flex items-center gap-1.5 text-muted-foreground cursor-default">
-            <ShieldCheck className="h-3.5 w-3.5 flex-shrink-0 text-good" aria-hidden="true" />
-            <span className="truncate">{label}</span>
-          </div>
-        ) : (
-          <Badge
-            variant="good"
-            className="cursor-default"
-          >
-            <ShieldCheck aria-hidden="true" />
-            {label}
-          </Badge>
-        )}
-      </TooltipTrigger>
-      <TooltipContent>
-        <p>Dates and status were checked against the event page on {formatDate(opportunity.verifiedAt)}.</p>
-      </TooltipContent>
-    </Tooltip>
   );
 }
