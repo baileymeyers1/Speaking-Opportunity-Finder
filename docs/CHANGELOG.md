@@ -2,6 +2,13 @@
 
 Reverse chronological. Current state lives in `docs/STATUS.md`.
 
+## 2026-11-20 — Saving a profile no longer needs one profile per account
+
+Groundwork for the roster of speakers; nothing visible changes.
+- **Why first.** The roster makes `SpeakerProfile` many per account, which drops the unique index on `userId`. Every preview build pushes its schema to the production database, so that index goes before the roster's code is merged. Rehearsed on a copy of the local database with the roster's schema: reading a profile and saving a call still worked, saving a profile failed. Prisma sends `upsert({ where: { userId } })` as `INSERT ... ON CONFLICT ("userId")`, and Postgres rejects that (42P10) once no unique index covers the column.
+- **Fix.** `profileService` reads the account's oldest profile row and then creates or updates by id. Same behaviour while the index exists; it keeps working once it is gone.
+- **Also learned in the rehearsal.** `prisma db push` refuses to add a unique constraint to a table without `--accept-data-loss` (which the CLI will not take from an agent), so the roster's "one saved row per call per person" is kept by the code and a plain index, not a new constraint.
+
 ## 2026-11-20 — Saved: one stage at a time, as the rows Browse uses
 
 Fourth piece of the UI rework, sketched as a wireframe and agreed before it was built.
