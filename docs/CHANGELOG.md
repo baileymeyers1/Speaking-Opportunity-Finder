@@ -2,6 +2,20 @@
 
 Reverse chronological. Current state lives in `docs/STATUS.md`.
 
+## 2026-11-20 — Browse answers "what closes soon": a sentence, three lanes, rows
+
+Second piece of the UI rework. On the 778 calls production listed that morning: 560 have a deadline (about 67 within a week and 246 within a month), 127 are open with none, 91 are events with no call found.
+- **Lanes on the server.** `lane=closing|open|watch` on `GET /api/opportunities` (`services/lanes.ts`: `laneOf` for one row, `laneWhere` for Prisma, kept in step by a test). Every response carries `lanes`: each lane's count under the other filters (a search's counts come from the rows its whole-word rule keeps), deadlines within 7 and 30 days, and the call that closes first. No `lane` lists everything together, as before. No schema change.
+- **Order.** Closing by deadline; open and watch by event date, undated last, then quality (a deadline stored on an event with no call means nothing). The 30-day horizon for a rolling call now only matters to a request with no lane.
+- **Root cause found on the way.** `opportunitiesController` re-sorted each page by the raw deadline column after the service had ordered it. That pushed rows without a deadline to the foot of every page (undoing part of 2026-11-19's order within a page) and put a search's hits in deadline order instead of relevance. Now only what a live search surfaced is sorted there, ahead of the stored rows, which keep the service's order.
+- **The headline** is computed (`client/src/lib/situation.ts`): "67 calls close within a week.", widening to a month, then saying plainly when nothing has a deadline or nothing matches; the note under it links the call that closes first. It follows the filters and the search.
+- **Rows** (`components/browse/CallRow.tsx`) replace the card grid: days left, the call, its dates, the match pill, save, apply. Twenty fit where nine cards did. Descriptions and free-text tags are on the call page only; an organization equal to the title is not repeated. "Apply" is an outline button: red is the countdown's.
+- **Countdown** (`lib/callState.ts`): calendar days on the deadline's own calendar (`calendarDaysUntilDeadline`, new in `server/src/lib/deadlines.ts`), so the last day reads "Today" rather than "1 day left". Red within 7 days, unless the date is approximate: that is marked "~" and stays ink (What's Next 4).
+- **Lane switch** is the kit's glass segmented control (`glass.segmented`, ported CSS `.lseg`). The lane is in the URL (`lane=`, omitted for closing), part of the cache key, kept across filter changes, and not stored in a saved search. Outside the closing lane the sort offers event date as its default.
+- **Sector strip:** the seven busiest sectors as toggles with counts, any chosen one always shown, all 34 in a popover.
+- **Tailwind and the kit's script.** Two fixes to dead and missing CSS: the tokens moved out of `@layer base` (inside it, `!dark` in the theme switch's code generated an `!important` copy of every dark token), and `client/src/vendor/**` is out of Tailwind's scan (it turned `!btn` and `!filter` into rules). The second would have dropped the glass rules, whose classes only that script names, so `.lg-surface`, `.lg-lens` and `.lseg__lens` now sit outside any layer. Durations have names (`duration-hover`, `duration-state`).
+- Prompts to sign up or set up a profile moved below the list; the "showing cached results" box became a quiet "Updating" beside the lane switch, so the list no longer jumps on every page change.
+
 ## 2026-11-19 — The client wears the JCI Intelligence kit (foundation; no layout changed)
 
 First of the UI rework's pieces (decided 2026-11-19: foundation and Browse first). Every screen inherits the look through the shadcn variables; nothing moved.
