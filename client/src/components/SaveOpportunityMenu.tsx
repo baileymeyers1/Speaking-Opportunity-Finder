@@ -9,7 +9,7 @@ import {
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
-import { SAVE_CATEGORIES } from '../lib/opportunityDisplay';
+import { SAVED_STAGES, STAGE_LABELS } from '../lib/savedStage';
 import type { SavedCategory } from '../types';
 
 interface SaveOpportunityMenuProps {
@@ -42,16 +42,14 @@ export function SaveOpportunityMenu({ savedCategory, isSaving, onSave, withLabel
       <DropdownMenuContent align="end">
         <DropdownMenuLabel>Save to...</DropdownMenuLabel>
         <DropdownMenuSeparator />
-        {SAVE_CATEGORIES.map((category) => (
+        {SAVED_STAGES.map((stage) => (
           <DropdownMenuItem
-            key={category.value}
-            onClick={() => onSave(category.value)}
-            className={cn('cursor-pointer', savedCategory === category.value && 'font-medium text-primary')}
+            key={stage}
+            onClick={() => onSave(stage)}
+            className={cn('cursor-pointer', savedCategory === stage && 'font-medium text-primary')}
           >
-            {category.label}
-            {savedCategory === category.value && (
-              <span className="ml-auto text-xs text-primary">Saved</span>
-            )}
+            {STAGE_LABELS[stage]}
+            {savedCategory === stage && <span className="ml-auto text-xs text-primary">Saved</span>}
           </DropdownMenuItem>
         ))}
       </DropdownMenuContent>

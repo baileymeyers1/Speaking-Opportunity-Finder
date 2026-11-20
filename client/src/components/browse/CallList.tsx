@@ -42,7 +42,8 @@ const GO_TO_LANE: Record<Lane, (count: number) => string> = {
   watch: (count) => `See ${count.toLocaleString('en-US')} to watch`,
 };
 
-function SkeletonRow() {
+/** A placeholder in the shape of a call's row, for any list of them while it loads. */
+export function CallRowSkeleton() {
   return (
     <li className={CALL_ROW_GRID} aria-hidden="true">
       <div className="space-y-2">
@@ -93,7 +94,7 @@ export function CallList({
         {heading}
         <ul className={rowList}>
           {Array.from({ length: 6 }).map((_, index) => (
-            <SkeletonRow key={index} />
+            <CallRowSkeleton key={index} />
           ))}
         </ul>
       </section>

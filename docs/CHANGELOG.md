@@ -2,6 +2,21 @@
 
 Reverse chronological. Current state lives in `docs/STATUS.md`.
 
+## 2026-11-20 — Saved: one stage at a time, as the rows Browse uses
+
+Fourth piece of the UI rework, sketched as a wireframe and agreed before it was built.
+- **Layout.** The title, the five tabs and the card grid are gone. One row of control: a stage switch (Interested, Applied, Accepted, Rejected) with what is in each, on the glass segmented control Browse uses for lanes, and a quiet caption ("3 close within a week") while you are still deciding. Then that stage's calls as rows. The stage is in the URL (`stage=`, omitted for Interested). There is no "All": a call is in one stage.
+- **Rows.** `CallRow` split into `CallRowFrame` (lead figure, the call, its dates, actions), `ApplyLink` and Browse's own row; Saved passes the frame its own lead and actions (`components/saved/SavedCallRow.tsx`). Interested leads with the days left to apply, as Browse does; from Applied on, with the days until the event (`eventCountdownText`). The figure-over-unit block is `LeadFigure`.
+- **Order** (`lib/savedStage.ts`, tested). Interested: calls with a deadline soonest first, then open calls, then events with no call, then calls that closed before you applied (dimmed). Other stages: next event first, undated after, past last.
+- **Stage menu.** Every row carries a button naming its stage that opens the four stages and "Remove from saved". It is always there: the old card's actions appeared on hover only, so touch and keyboard could not reach them. Once a call is past Interested its link out reads "View call" instead of "Apply".
+- **A row that leaves the list.** Moving or removing a call takes its row, and the button that had focus, off the page; the browser then drops focus to the top of the document. `useRowLeaving` puts focus on the list and keeps a sentence for screen readers ("… moved to Applied."). A change the server refused is shown beside the switch, where it used to go to the console only.
+- **Phone.** Four equal columns cannot hold "Interested 12" on one line at 320 to 375px (the last characters slid under the next option), so there the count sits under its label (`.lseg--stacked`, not in the kit).
+- **Empty stages** say what the stage is for ("No applications out. When you apply to a call, move it here to keep track of it."); a list with nothing saved at all points to Browse.
+- **Shared.** `SegmentedSwitch` is the one glass segmented control (`LaneSwitch` is a thin wrapper). `SaveOpportunityMenu` reads the stages from `lib/savedStage.ts`.
+- **Removed:** `OpportunityCard`, `DeadlineBadge`, `VerifiedBadge`, `lib/opportunityDisplay.ts`, and the helpers only they used in `lib/eventHints.ts` and `utils/verification.ts`.
+- **Left out on purpose** (in the mockup, not asked for): a year goal, a board of columns, a run-up to each event, notes per application. No undo for a move: the counts show where the call went.
+- e2e: the saved spec follows the new page and gains a flow test (save on Browse, move to Applied, remove).
+
 ## 2026-11-20 — The call page: one row of action, then description beside facts
 
 Third piece of the UI rework, sketched as a wireframe and agreed before it was built.

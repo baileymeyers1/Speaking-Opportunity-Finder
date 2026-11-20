@@ -1,10 +1,10 @@
 import type { Opportunity } from '../../types';
 import { describeDeadline } from '../../lib/dates';
 import { countdownText, type CallState } from '../../lib/callState';
+import { NO_CALL_DETAIL } from '../../lib/callStanding';
 import { LOW_CONFIDENCE_HINT } from '../../utils/verification';
-import { NO_OPEN_CALL_HINT } from '../DeadlineBadge';
+import { LeadFigure } from './LeadFigure';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { cn } from '@/lib/utils';
 
 interface CountdownProps {
   opportunity: Pick<Opportunity, 'cfpDeadline' | 'deadlineTimezone'>;
@@ -29,42 +29,34 @@ function explanation(opportunity: CountdownProps['opportunity'], state: CallStat
           : 'The page states no deadline and no event date: this call is open all year.',
       ];
     case 'watch':
-      return [NO_OPEN_CALL_HINT];
+      return [NO_CALL_DETAIL];
     case 'closed':
       return [];
   }
 }
 
 /**
- * What a row leads with: days left as a figure over its unit, or the word
- * that stands in for it ("Open", "No call"). Red is for a deadline within a
- * week that was read off the page; an inferred one is marked "~" and stays ink.
+ * Days left to apply, as a row's leading figure, or the word that stands in
+ * for it ("Open", "No call"). Red is for a deadline within a week that was
+ * read off the page; an inferred one is marked "~" and stays ink.
  */
 export function Countdown({ opportunity, state }: CountdownProps) {
   const { figure, unit } = countdownText(state);
   const lines = explanation(opportunity, state);
-  const isCount = state.kind === 'closing' && state.daysLeft > 0;
+  const tone =
+    state.kind === 'closing' && state.urgent
+      ? 'urgent'
+      : state.kind === 'watch' || state.kind === 'closed'
+        ? 'quiet'
+        : undefined;
 
-  const cell = (
-    <div className={cn('relative z-[1] flex flex-col items-start leading-none', lines.length > 0 && 'cursor-help')}>
-      <span
-        className={cn(
-          'tabular-nums',
-          isCount ? 'text-[28px] font-light tracking-[-0.04em]' : 'text-[17px] font-normal tracking-[-0.02em]',
-          state.kind === 'closing' && state.urgent && 'text-primary',
-          (state.kind === 'watch' || state.kind === 'closed') && 'text-muted-foreground'
-        )}
-      >
-        {figure}
-      </span>
-      {unit && <span className="mt-1.5 text-xs text-muted-foreground">{unit}</span>}
-    </div>
-  );
-  if (lines.length === 0) return cell;
+  if (lines.length === 0) return <LeadFigure figure={figure} unit={unit} tone={tone} />;
 
   return (
     <Tooltip>
-      <TooltipTrigger asChild>{cell}</TooltipTrigger>
+      <TooltipTrigger asChild>
+        <LeadFigure figure={figure} unit={unit} tone={tone} className="cursor-help" />
+      </TooltipTrigger>
       <TooltipContent className="max-w-xs">
         {lines.map((line, index) => (
           <p key={line} className={index > 0 ? 'mt-1' : undefined}>
