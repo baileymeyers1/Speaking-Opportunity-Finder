@@ -3,7 +3,13 @@ import { type Opportunity } from '../generated/prisma/client.js';
 import { prisma } from '../lib/prisma.js';
 import { normalizeSectors } from '../lib/sectors.js';
 import { AppError } from '../middleware/errorHandler.js';
-import { isSavedCategory, saveCall } from '../services/savedCalls.js';
+import {
+  AlreadySavedError,
+  UnknownSpeakerError,
+  changeSavedCall,
+  isSavedCategory,
+  saveCall,
+} from '../services/savedCalls.js';
 
 function parseJsonArray(value: string): string[] {
   try {
@@ -11,6 +17,20 @@ function parseJsonArray(value: string): string[] {
   } catch {
     return [];
   }
+}
+
+/** `speakerId` in a body: a speaker's id, or null for nobody. Anything else is refused. */
+function speakerIdFrom(value: unknown): string | null {
+  if (value === null || value === undefined) return null;
+  if (typeof value === 'string' && value.length > 0) return value;
+  throw new AppError(400, 'speakerId must be a speaker id or null');
+}
+
+/** What the service refuses, as the status the client can act on. */
+function asHttpError(error: unknown): unknown {
+  if (error instanceof UnknownSpeakerError) return new AppError(404, 'Speaker not found');
+  if (error instanceof AlreadySavedError) return new AppError(409, `${error.message}.`);
+  return error;
 }
 
 function transformOpportunity(opp: Opportunity) {
@@ -76,6 +96,7 @@ export async function saveOpportunity(
     }
 
     const { opportunityId, category = 'interested' } = req.body;
+    const speakerId = speakerIdFrom(req.body.speakerId);
 
     if (!opportunityId) {
       throw new AppError(400, 'Opportunity ID is required');
@@ -93,7 +114,7 @@ export async function saveOpportunity(
       throw new AppError(404, 'Opportunity not found');
     }
 
-    const saved = await saveCall({ userId: req.user.userId, opportunityId, category });
+    const saved = await saveCall({ userId: req.user.userId, opportunityId, category, speakerId });
 
     res.status(201).json({
       success: true,
@@ -105,7 +126,7 @@ export async function saveOpportunity(
       },
     });
   } catch (error) {
-    next(error);
+    next(asHttpError(error));
   }
 }
 
@@ -121,24 +142,24 @@ export async function updateSavedOpportunity(
 
     const { id } = req.params;
     const { category } = req.body;
+    // A stage, a speaker, or both: `speakerId: null` takes the call back to nobody.
+    const movesSpeaker = 'speakerId' in req.body;
 
-    if (!isSavedCategory(category)) {
+    if (category === undefined && !movesSpeaker) {
+      throw new AppError(400, 'Send a category, a speakerId, or both');
+    }
+    if (category !== undefined && !isSavedCategory(category)) {
       throw new AppError(400, 'Category must be interested, applied, accepted or rejected');
     }
 
-    const existing = await prisma.savedOpportunity.findFirst({
-      where: { id, userId: req.user.userId },
+    const updated = await changeSavedCall(req.user.userId, id, {
+      category,
+      ...(movesSpeaker ? { speakerId: speakerIdFrom(req.body.speakerId) } : {}),
     });
 
-    if (!existing) {
+    if (!updated) {
       throw new AppError(404, 'Saved opportunity not found');
     }
-
-    const updated = await prisma.savedOpportunity.update({
-      where: { id },
-      data: { category },
-      include: { opportunity: true },
-    });
 
     res.json({
       success: true,
@@ -150,7 +171,7 @@ export async function updateSavedOpportunity(
       },
     });
   } catch (error) {
-    next(error);
+    next(asHttpError(error));
   }
 }
 

@@ -71,6 +71,14 @@ export interface SpeakerProfile extends SpeakerProfileInput {
   updatedAt: string;
 }
 
+/** One speaker's fit with a call. The name is looked up on the roster, so a list does not repeat it per row. */
+export interface SpeakerFit {
+  speakerId: string;
+  score: number;
+  reasons?: string[];
+  misses?: string[];
+}
+
 /** The explainable score attached to an opportunity for one profile. */
 export interface MatchExplanation {
   /** 0..100, deterministic for the same profile, row and date. */
@@ -179,10 +187,17 @@ export interface OpportunityBase<DateType> {
   verificationError?: string | null;
   /** Confidence per extracted date field; low-confidence dates render as approximate. */
   dateConfidence?: DateConfidence | null;
-  /** Match against the signed-in user's speaker profile, 0..100. Absent without a profile. */
+  /**
+   * Fit with one speaker on the account's roster, 0..100: the speaker the list was asked for, or with
+   * nobody asked for the best-fitting one. Absent while the roster is empty.
+   */
   matchScore?: number;
   matchReasons?: string[];
   matchMisses?: string[];
+  /** Whose fit `matchScore` is. */
+  matchSpeakerId?: string;
+  /** Every speaker's fit, best first. Reasons and misses come with a single call, not with a list. */
+  speakerFits?: SpeakerFit[];
   /** The canonical event this row is an edition of; null when no event could be named. */
   eventId?: string | null;
   /** The year this row is the edition for, from the event date or the title. */
@@ -270,6 +285,8 @@ export interface SavedOpportunityBase<DateType> {
   userId: string;
   opportunityId: string;
   category: SavedCategory;
+  /** The speaker the call is saved for; null while nobody was chosen. */
+  speakerId: string | null;
   createdAt: DateType;
   opportunity?: OpportunityBase<DateType> | null;
 }

@@ -37,6 +37,7 @@ function saved(id: string, category: SavedCategory, overrides: Partial<Opportuni
     userId: 'user',
     opportunityId: `call-${id}`,
     category,
+    speakerId: null,
     createdAt: '2026-11-10T00:00:00Z',
     opportunity: overrides === null ? null : call({ id: `call-${id}`, title: id, ...overrides }),
   };

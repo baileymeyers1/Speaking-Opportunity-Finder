@@ -5,7 +5,7 @@ import {
   SpeakerLimitError,
   createSpeaker,
   deleteSpeaker,
-  getMatchProfile,
+  getRoster,
   getSpeaker,
   listSpeakers,
   speakerProfileInputSchema,
@@ -40,7 +40,7 @@ afterAll(async () => {
 describe('a roster of speakers in the database', () => {
   it('starts empty, with nobody to score fit for', async () => {
     expect(await listSpeakers(ownerId)).toEqual([]);
-    expect(await getMatchProfile(ownerId)).toBeNull();
+    expect(await getRoster(ownerId)).toEqual([]);
   });
 
   it('keeps several speakers for one account, oldest first', async () => {
@@ -53,9 +53,13 @@ describe('a roster of speakers in the database', () => {
     expect((await listSpeakers(ownerId)).map((row) => row.id)).toEqual([dana.id, marcus.id]);
   });
 
-  it('scores fit for the first speaker until someone else is chosen', async () => {
-    const [first] = await listSpeakers(ownerId);
-    expect((await getMatchProfile(ownerId))?.topics).toEqual(first.topics);
+  it('hands the match score every speaker, in roster order', async () => {
+    const speakers = await listSpeakers(ownerId);
+    const roster = await getRoster(ownerId);
+
+    expect(roster.map((member) => member.id)).toEqual(speakers.map((row) => row.id));
+    expect(roster[0].profile.topics).toEqual(['digital health']);
+    expect(roster[1].profile.remotePreference).toBe('remote_only');
   });
 
   it('changes one speaker in place', async () => {

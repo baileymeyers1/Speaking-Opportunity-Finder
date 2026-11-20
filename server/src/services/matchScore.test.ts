@@ -2,10 +2,11 @@ import { describe, expect, it } from 'vitest';
 import {
   computeMatchScore,
   MATCH_SORT_CANDIDATE_CAP,
-  scoreOpportunities,
+  scoreForRoster,
   topicMatches,
   type MatchCandidate,
   type MatchProfile,
+  type RosterScoredOpportunity,
 } from './matchScore.js';
 
 const NOW = new Date('2026-11-03T12:00:00Z');
@@ -93,7 +94,7 @@ describe('computeMatchScore', () => {
     const remoteOnly = profile({ topics: ['devops'], remotePreference: 'remote_only' });
     const inPerson = computeMatchScore(remoteOnly, candidate({ location: 'Berlin, Germany' }), NOW);
     const remote = computeMatchScore(remoteOnly, candidate({ location: 'Berlin, Germany', isRemote: true }), NOW);
-    expect(inPerson.misses).toContain('in-person in Berlin, Germany, you prefer remote');
+    expect(inPerson.misses).toContain('in-person in Berlin, Germany, prefers remote');
     expect(remote.reasons).toContain('remote');
     expect(remote.score - inPerson.score).toBeGreaterThanOrEqual(25);
   });
@@ -112,7 +113,7 @@ describe('computeMatchScore', () => {
     const home = computeMatchScore(local, candidate({ location: 'Denver, CO' }), NOW);
     const away = computeMatchScore(local, candidate({ location: 'Chicago, IL' }), NOW);
     expect(home.reasons).toContain('in Denver');
-    expect(away.misses).toContain('in-person in Chicago, IL, you only travel locally');
+    expect(away.misses).toContain('in-person in Chicago, IL, only travels locally');
     expect(home.score).toBeGreaterThan(away.score);
   });
 
@@ -128,10 +129,10 @@ describe('computeMatchScore', () => {
   it('explains compensation misses in the speaker’s terms and treats unknown pay as neutral', () => {
     const paidOnly = profile({ compensationRequirement: 'paid' });
     expect(computeMatchScore(paidOnly, candidate({ compensationType: 'exposure' }), NOW).misses).toContain(
-      'unpaid, you need a paid slot'
+      'unpaid, needs a paid slot'
     );
     expect(computeMatchScore(paidOnly, candidate({ compensationType: 'travel' }), NOW).misses).toContain(
-      'travel only, you need a paid slot'
+      'travel only, needs a paid slot'
     );
     expect(computeMatchScore(paidOnly, candidate({ compensationType: 'paid' }), NOW).reasons).toContain('paid');
     const unknown = computeMatchScore(paidOnly, candidate({ compensationType: null }), NOW);
@@ -142,7 +143,7 @@ describe('computeMatchScore', () => {
   it('flags a format outside the preferred ones', () => {
     const podcaster = profile({ preferredFormats: ['podcast', 'webinar'] });
     const result = computeMatchScore(podcaster, candidate({ format: 'conference' }), NOW);
-    expect(result.misses).toContain('conference, you prefer podcast or webinar');
+    expect(result.misses).toContain('conference, prefers podcast or webinar');
   });
 
   it('takes small penalties for a near deadline, an approximate deadline and an unverified row', () => {
@@ -193,24 +194,90 @@ describe('computeMatchScore', () => {
   });
 });
 
-describe('scoreOpportunities', () => {
-  it('attaches score, reasons and misses to every item and sorts best first when asked', () => {
-    const items = [
-      candidate({ title: 'Weak', industries: ['finance'], location: 'Lisbon, Portugal', compensationType: 'exposure' }),
-      candidate({ title: 'Strong' }),
-    ];
-    const scored = scoreOpportunities(denverSpeaker, items, NOW, { sort: true });
+describe('scoreForRoster', () => {
+  // Two people who want different things: one a conference in Denver, one a remote podcast.
+  const denver = { id: 'speaker-denver', profile: denverSpeaker };
+  const remote = {
+    id: 'speaker-remote',
+    profile: profile({ topics: ['finance'], remotePreference: 'remote_only', preferredFormats: ['podcast'] }),
+  };
+  const inDenver = candidate({ title: 'In Denver' });
+  const onAir = candidate({
+    title: 'On air',
+    industries: ['finance'],
+    location: null,
+    isRemote: true,
+    format: 'podcast',
+    compensationType: 'exposure',
+  });
+  const score = (
+    roster: Parameters<typeof scoreForRoster>[0],
+    items: MatchCandidate[],
+    options: Parameters<typeof scoreForRoster>[3] = {}
+  ) => scoreForRoster(roster, items, NOW, options) as RosterScoredOpportunity<MatchCandidate>[];
+
+  it('leaves the rows alone when nobody is on the roster', () => {
+    expect(scoreForRoster([], [inDenver], NOW, { sort: true })).toEqual([inDenver]);
+  });
+
+  it('scores a roster of one as that speaker, best first when asked', () => {
+    const weak = candidate({ title: 'Weak', industries: ['finance'], location: 'Lisbon, Portugal', compensationType: 'exposure' });
+    const scored = score([denver], [weak, candidate({ title: 'Strong' })], { sort: true });
+
     expect(scored.map((item) => item.title)).toEqual(['Strong', 'Weak']);
-    expect(scored[0].matchScore).toBeGreaterThan(scored[1].matchScore);
+    expect(scored[0].matchScore).toBe(computeMatchScore(denverSpeaker, candidate(), NOW).score);
+    expect(scored[0].matchSpeakerId).toBe('speaker-denver');
     expect(scored[0].matchReasons.length).toBeGreaterThan(0);
     expect(scored[1].matchMisses.length).toBeGreaterThan(0);
+    expect(scored[0].speakerFits).toEqual([{ speakerId: 'speaker-denver', score: scored[0].matchScore }]);
   });
 
   it('breaks ties by the sooner deadline', () => {
     const later = candidate({ title: 'Later', cfpDeadline: new Date('2027-03-01T00:00:00Z') });
     const sooner = candidate({ title: 'Sooner', cfpDeadline: new Date('2027-02-01T00:00:00Z') });
-    const scored = scoreOpportunities(denverSpeaker, [later, sooner], NOW, { sort: true });
-    expect(scored.map((item) => item.title)).toEqual(['Sooner', 'Later']);
+    expect(score([denver], [later, sooner], { sort: true }).map((item) => item.title)).toEqual(['Sooner', 'Later']);
+  });
+
+  it('gives each row the best-fitting speaker, and lists everyone best first', () => {
+    const [first, second] = score([denver, remote], [inDenver, onAir]);
+
+    expect(first.matchSpeakerId).toBe('speaker-denver');
+    expect(first.speakerFits.map((fit) => fit.speakerId)).toEqual(['speaker-denver', 'speaker-remote']);
+    expect(first.matchScore).toBe(first.speakerFits[0].score);
+    expect(first.speakerFits[0].score).toBeGreaterThan(first.speakerFits[1].score);
+
+    expect(second.matchSpeakerId).toBe('speaker-remote');
+    expect(second.speakerFits.map((fit) => fit.speakerId)).toEqual(['speaker-remote', 'speaker-denver']);
+    expect(second.matchReasons).toEqual(computeMatchScore(remote.profile, onAir, NOW).reasons);
+  });
+
+  it('lets the earlier speaker win a tie', () => {
+    const twin = { id: 'speaker-twin', profile: denverSpeaker };
+    expect(score([twin, denver], [inDenver])[0].matchSpeakerId).toBe('speaker-twin');
+    expect(score([denver, twin], [inDenver])[0].matchSpeakerId).toBe('speaker-denver');
+  });
+
+  it('leads with the speaker asked for, and sorts by their fit', () => {
+    const scored = score([denver, remote], [inDenver, onAir], { speakerId: 'speaker-remote', sort: true });
+
+    expect(scored.map((item) => item.title)).toEqual(['On air', 'In Denver']);
+    expect(scored.every((item) => item.matchSpeakerId === 'speaker-remote')).toBe(true);
+    expect(scored[1].matchScore).toBe(computeMatchScore(remote.profile, inDenver, NOW).score);
+    // Everyone is still listed, best first, whoever was asked for.
+    expect(scored[1].speakerFits[0].speakerId).toBe('speaker-denver');
+  });
+
+  it('falls back to the best fit when the speaker asked for is not on the roster', () => {
+    expect(score([denver, remote], [inDenver], { speakerId: 'someone-else' })[0].matchSpeakerId).toBe('speaker-denver');
+  });
+
+  it('sends each speaker\'s reasons only when asked to explain', () => {
+    const [plain] = score([denver, remote], [inDenver]);
+    const [explained] = score([denver, remote], [inDenver], { explain: true });
+
+    expect(plain.speakerFits.every((fit) => fit.reasons === undefined && fit.misses === undefined)).toBe(true);
+    expect(explained.speakerFits[0].reasons).toEqual(computeMatchScore(denverSpeaker, inDenver, NOW).reasons);
+    expect(explained.speakerFits[1].misses).toEqual(computeMatchScore(remote.profile, inDenver, NOW).misses);
   });
 
   it('caps the in-memory candidate set at 500 rows', () => {
