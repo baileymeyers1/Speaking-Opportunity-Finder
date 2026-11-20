@@ -18,7 +18,8 @@ export interface CallStanding {
 
 export const ZONE_ASSUMED_NOTE = 'Time zone not stated; read as Anywhere on Earth (UTC-12).';
 
-const NO_CALL_DETAIL =
+/** Said wherever an event with no call is explained: the call page, and the tooltip on a row's "No call". */
+export const NO_CALL_DETAIL =
   'We read this event\'s page and found no call for speakers. Contact the organizer to pitch a talk, or check back: listed events are re-checked weekly.';
 
 export function callStanding(call: CallFields, now: Date = new Date(), viewerZone?: string | null): CallStanding {

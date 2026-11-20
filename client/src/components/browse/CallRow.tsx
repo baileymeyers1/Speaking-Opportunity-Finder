@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Calendar, ExternalLink, MapPin, Wallet, Zap } from 'lucide-react';
 import type { Opportunity } from '../../types';
@@ -20,17 +21,25 @@ import { cn } from '@/lib/utils';
 export const CALL_ROW_GRID =
   '-mx-3 grid grid-cols-[4.75rem_minmax(0,1fr)] items-start gap-x-4 gap-y-3 border-b px-3 py-4 md:grid-cols-[5.25rem_minmax(0,1fr)_auto] md:items-center lg:grid-cols-[5.5rem_minmax(0,1fr)_10.5rem_auto] lg:gap-x-6';
 
+interface CallRowFrameProps {
+  opportunity: Opportunity;
+  /** What the row leads with: days left on Browse, days to the event once applied. */
+  lead: ReactNode;
+  /** What can be done with the call from this list. Sits above the row's link. */
+  actions: ReactNode;
+  /** A row whose moment has passed (a call that closed before you applied) steps back. */
+  dimmed?: boolean;
+}
+
 /**
- * One call on Browse. It leads with where the call stands (days left), then
- * what it is, its dates, how it fits the profile, and the two things to do
- * with it. The title is the row's link and covers the row; everything else you
- * can act on sits above it.
+ * One call as a row: a leading figure, what the call is, its dates, and the
+ * list's own actions. Browse and Saved both use it, so a call reads the same
+ * way in either. The title is the row's link and covers the row; everything
+ * else you can act on sits above it.
  */
-export function CallRow({ opportunity }: { opportunity: Opportunity }) {
+export function CallRowFrame({ opportunity, lead, actions, dimmed = false }: CallRowFrameProps) {
   const location = useLocation();
-  const { savedCategory, isSaving, save } = useSaveCall(opportunity);
   const state = callState(opportunity);
-  const hasCall = state.kind !== 'watch';
   const FormatIcon = FORMAT_ICONS[opportunity.format] ?? FORMAT_ICONS.other;
   const organization = organizationLabel(opportunity);
   const where = whereLabel(opportunity);
@@ -42,10 +51,10 @@ export function CallRow({ opportunity }: { opportunity: Opportunity }) {
       className={cn(
         CALL_ROW_GRID,
         'relative transition-colors duration-hover ease-out hover:bg-[var(--row-hover)]',
-        state.kind === 'closed' && 'opacity-60'
+        dimmed && 'opacity-60'
       )}
     >
-      <Countdown opportunity={opportunity} state={state} />
+      {lead}
 
       <div className="min-w-0">
         <h3 className="text-[15px] font-medium leading-snug">
@@ -113,21 +122,50 @@ export function CallRow({ opportunity }: { opportunity: Opportunity }) {
         </div>
       </dl>
 
-      <div className="relative z-[1] col-start-2 flex items-center gap-2 md:col-start-auto md:justify-end">
-        <MatchPill opportunity={opportunity} />
-        <SaveOpportunityMenu savedCategory={savedCategory} isSaving={isSaving} onSave={save} />
-        <Button variant="outline" size="sm" asChild>
-          <a
-            href={opportunity.applyUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            aria-label={hasCall ? `Apply to ${opportunity.title}` : `View the event page of ${opportunity.title}`}
-          >
-            {hasCall ? 'Apply' : 'View event'}
-            <ExternalLink aria-hidden="true" />
-          </a>
-        </Button>
-      </div>
+      <div className="relative z-[1] col-start-2 flex items-center gap-2 md:col-start-auto md:justify-end">{actions}</div>
     </li>
+  );
+}
+
+/**
+ * The link out that every list's row ends with: "Apply", "View event" for an
+ * event with no call, or "View call" once you have applied (the page is the
+ * same one; the word should not ask you to apply again).
+ */
+export function ApplyLink({ opportunity, applied = false }: { opportunity: Opportunity; applied?: boolean }) {
+  const hasCall = opportunity.hasOpenCall !== false;
+  const words = !hasCall
+    ? { label: 'View event', name: `View the event page of ${opportunity.title}` }
+    : applied
+      ? { label: 'View call', name: `View the call page of ${opportunity.title}` }
+      : { label: 'Apply', name: `Apply to ${opportunity.title}` };
+  return (
+    <Button variant="outline" size="sm" asChild>
+      <a href={opportunity.applyUrl} target="_blank" rel="noopener noreferrer" aria-label={words.name}>
+        {words.label}
+        <ExternalLink aria-hidden="true" />
+      </a>
+    </Button>
+  );
+}
+
+/** One call on Browse: it leads with where the call stands, and can be saved or applied to. */
+export function CallRow({ opportunity }: { opportunity: Opportunity }) {
+  const { savedCategory, isSaving, save } = useSaveCall(opportunity);
+  const state = callState(opportunity);
+
+  return (
+    <CallRowFrame
+      opportunity={opportunity}
+      dimmed={state.kind === 'closed'}
+      lead={<Countdown opportunity={opportunity} state={state} />}
+      actions={
+        <>
+          <MatchPill opportunity={opportunity} />
+          <SaveOpportunityMenu savedCategory={savedCategory} isSaving={isSaving} onSave={save} />
+          <ApplyLink opportunity={opportunity} />
+        </>
+      }
+    />
   );
 }

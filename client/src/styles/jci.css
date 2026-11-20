@@ -139,6 +139,12 @@
   }
   .lseg button[aria-pressed='true'] { color: rgb(var(--ink)); }
   .lseg button:focus-visible { z-index: 2; }
+  /* Not in the kit: four options with their counts do not fit a phone on one line (the columns are equal, so
+     the longest label sets them all), so there the count goes under its label. */
+  @media (max-width: 639px) {
+    .lseg--stacked button { height: 44px; padding: 0 4px; line-height: 1.25; }
+    .lseg--stacked button > span { display: block; margin-left: 0; font-size: 12px; }
+  }
 
   /* Glass switch: the knob is a clear bead. It magnifies the track icon it rests on and bends the other as
      it crosses; the icons brighten with --p (the knob's position, 0 to 1, set on the button). */
