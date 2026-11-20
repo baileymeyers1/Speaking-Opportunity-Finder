@@ -16,23 +16,28 @@ interface SaveOpportunityMenuProps {
   savedCategory: SavedCategory | '';
   isSaving: boolean;
   onSave: (category: SavedCategory) => void;
+  /** Shows the word beside the bookmark ("Save", then "Saved as applied"): the call page has room for it, a row does not. */
+  withLabel?: boolean;
 }
 
-export function SaveOpportunityMenu({ savedCategory, isSaving, onSave }: SaveOpportunityMenuProps) {
+export function SaveOpportunityMenu({ savedCategory, isSaving, onSave, withLabel = false }: SaveOpportunityMenuProps) {
+  const Icon = savedCategory ? BookmarkCheck : Bookmark;
+  const label = savedCategory ? `Saved as ${savedCategory}` : 'Save';
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button
-          variant="ghost"
-          size="sm"
-          disabled={isSaving}
-          className={cn('h-8 px-2', savedCategory && 'text-primary')}
-        >
-          {savedCategory ? <BookmarkCheck className="h-4 w-4" /> : <Bookmark className="h-4 w-4" />}
-          <span className="sr-only">
-            {savedCategory ? `Saved as ${savedCategory}` : 'Save opportunity'}
-          </span>
-        </Button>
+        {withLabel ? (
+          <Button variant="outline" disabled={isSaving}>
+            <Icon className={cn(savedCategory && 'text-good')} aria-hidden="true" />
+            {label}
+          </Button>
+        ) : (
+          <Button variant="ghost" size="sm" disabled={isSaving} className={cn('h-8 px-2', savedCategory && 'text-primary')}>
+            <Icon className="h-4 w-4" aria-hidden="true" />
+            <span className="sr-only">{savedCategory ? label : 'Save opportunity'}</span>
+          </Button>
+        )}
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
         <DropdownMenuLabel>Save to...</DropdownMenuLabel>

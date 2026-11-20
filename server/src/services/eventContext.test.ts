@@ -14,6 +14,7 @@ function edition(overrides: Partial<Parameters<typeof buildEventContext>[1][numb
     source: 'developers.events',
     applyUrl: `https://fosdem.org/${overrides.id}`,
     cfpDeadline: d('2026-12-01T11:59:59Z'),
+    deadlineTimezone: 'AoE',
     eventDate: d('2027-01-30T00:00:00Z'),
     createdAt: d('2026-10-01T00:00:00Z'),
     isClosed: false,
@@ -79,6 +80,19 @@ describe('buildEventContext', () => {
       [2026, 'wikicfp.com'],
     ]);
     expect(buildEventContext(me, [edition({ id: 'a' })]).eventEditions).toBeUndefined();
+  });
+
+  it('sends each edition\'s deadline with the zone its day is read in', () => {
+    const context = buildEventContext(me, [
+      edition({ id: 'a' }),
+      edition({ id: 'b', source: 'wikicfp.com', deadlineTimezone: 'Europe/Berlin' }),
+      edition({ id: 'c', source: 'confs.tech', deadlineTimezone: null }),
+    ]);
+    expect(context.eventEditions?.map((e) => [e.source, e.deadlineTimezone])).toEqual([
+      ['confs.tech', null],
+      ['developers.events', 'AoE'],
+      ['wikicfp.com', 'Europe/Berlin'],
+    ]);
   });
 
   it('is empty for a row with no event', () => {

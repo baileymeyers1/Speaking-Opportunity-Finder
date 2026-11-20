@@ -94,6 +94,8 @@ export interface EventEdition<DateType> {
   source: string;
   applyUrl: string;
   cfpDeadline: DateType | null;
+  /** The zone the deadline's day is read in, as on the row itself. Absent on a list cached before it was sent. */
+  deadlineTimezone?: string | null;
   eventDate: DateType | null;
   isClosed: boolean;
 }

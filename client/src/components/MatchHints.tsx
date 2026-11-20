@@ -15,7 +15,8 @@ function matchTone(score: number): string {
   return 'border-border text-muted-foreground';
 }
 
-function MatchList({ opportunity }: { opportunity: MatchFields }) {
+/** The reasons a call fits the profile and the ways it does not, as two short lists. */
+export function MatchList({ opportunity }: { opportunity: MatchFields }) {
   const reasons = opportunity.matchReasons ?? [];
   const misses = opportunity.matchMisses ?? [];
   if (reasons.length === 0 && misses.length === 0) {
@@ -71,23 +72,5 @@ export function MatchPill({ opportunity }: { opportunity: MatchFields }) {
         <MatchList opportunity={opportunity} />
       </PopoverContent>
     </Popover>
-  );
-}
-
-/** The "Why this matches" block on the detail page. Renders nothing without a score. */
-export function MatchExplanationBlock({ opportunity }: { opportunity: MatchFields }) {
-  if (!hasMatchScore(opportunity)) return null;
-  const score = opportunity.matchScore;
-  return (
-    <section aria-labelledby="why-this-matches" className="space-y-3">
-      <div className="flex items-center justify-between gap-3">
-        <h2 id="why-this-matches" className="text-base font-medium text-foreground">Why this matches</h2>
-        <span className={cn('inline-flex h-6 items-center gap-1.5 rounded-sm border px-2 text-xs font-medium tabular-nums', matchTone(score))}>
-          <Sparkles className="h-3 w-3" aria-hidden="true" />
-          {score}% match
-        </span>
-      </div>
-      <MatchList opportunity={opportunity} />
-    </section>
   );
 }

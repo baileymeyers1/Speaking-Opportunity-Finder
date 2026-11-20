@@ -1,8 +1,7 @@
 import { Link } from 'react-router-dom';
 import type { EventEdition, Opportunity } from '../types';
-import { formatDate } from '../lib/dates';
+import { formatDate, formatDeadline } from '../lib/dates';
 import { alsoListedOnText, previousEditionHint, sourceLabel } from '../lib/eventHints';
-import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { CalendarClock, Layers } from 'lucide-react';
 
@@ -83,21 +82,27 @@ export function EventEditionsList({
 }) {
   if (!editions || editions.length < 2) return null;
   return (
-    <section className="space-y-3" aria-labelledby="event-editions-heading">
-      <h2 id="event-editions-heading" className="text-base font-medium text-foreground">
-        Editions and sources
+    <section aria-labelledby="event-editions-heading">
+      <h2 id="event-editions-heading" className="heading text-foreground">
+        Other listings and earlier years
       </h2>
-      <p className="text-sm text-muted-foreground">
-        The same event, as each source and year listed it. Earlier years show when the call usually opens and closes.
+      <p className="mt-1 max-w-[68ch] text-sm text-muted-foreground">
+        The same event, as each source and year listed it. Earlier years show when the call usually closes.
       </p>
-      <ul className="divide-y rounded-md border">
+      <ul className="mt-3 divide-y border-y">
         {editions.map((edition) => {
           const isCurrent = edition.id === currentId;
           const status = editionStatus(edition, now);
+          // The day in the deadline's own zone, as the row itself shows it; a UTC date reads a day late for "end of day, anywhere on Earth".
+          const closingDay = formatDeadline(edition)?.date ?? formatDate(edition.cfpDeadline);
+          const closes = closingDay ? `${status === 'closed' ? 'Closed' : 'Closes'} ${closingDay}` : 'No deadline listed';
           return (
-            <li key={edition.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2 text-sm">
-              <span className="w-12 shrink-0 font-medium tabular-nums text-foreground">{edition.year ?? '—'}</span>
-              <span className="min-w-0 flex-1 truncate">
+            <li
+              key={edition.id}
+              className="grid grid-cols-[3rem_minmax(0,1fr)] items-baseline gap-x-3 gap-y-0.5 py-2.5 text-sm sm:grid-cols-[3rem_minmax(0,1fr)_auto]"
+            >
+              <span className="tabular-nums text-muted-foreground">{edition.year ?? ''}</span>
+              <span className="min-w-0">
                 {isCurrent ? (
                   <span className="text-foreground">{edition.title}</span>
                 ) : (
@@ -105,14 +110,11 @@ export function EventEditionsList({
                     {edition.title}
                   </Link>
                 )}
-                <span className="text-muted-foreground"> · {sourceLabel(edition.source)}</span>
+                <span className="ml-2 text-[13px] text-muted-foreground">
+                  {isCurrent ? 'This listing' : sourceLabel(edition.source)}
+                </span>
               </span>
-              <span className="text-muted-foreground">
-                {edition.cfpDeadline ? `CFP closes ${formatDate(edition.cfpDeadline)}` : 'No deadline listed'}
-              </span>
-              <Badge variant={status === 'open' ? 'default' : 'outline'} className="capitalize">
-                {isCurrent ? 'this listing' : status}
-              </Badge>
+              <span className="col-start-2 text-[13px] tabular-nums text-muted-foreground sm:col-start-auto">{closes}</span>
             </li>
           );
         })}
