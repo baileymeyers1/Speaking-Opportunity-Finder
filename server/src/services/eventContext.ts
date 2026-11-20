@@ -66,6 +66,7 @@ const editionSelect = {
   source: true,
   applyUrl: true,
   cfpDeadline: true,
+  deadlineTimezone: true,
   eventDate: true,
   createdAt: true,
   isClosed: true,
@@ -86,6 +87,7 @@ function toEdition(row: EditionRow): EventEdition<Date> {
     source: row.source,
     applyUrl: row.applyUrl,
     cfpDeadline: row.cfpDeadline,
+    deadlineTimezone: row.deadlineTimezone,
     eventDate: row.eventDate,
     isClosed: row.isClosed,
   };
