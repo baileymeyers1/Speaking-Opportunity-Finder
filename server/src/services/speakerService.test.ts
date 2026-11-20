@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { profileFromRow, profileToData, speakerProfileInputSchema, type SpeakerProfileRow } from './profileService.js';
+import { profileFromRow, profileToData, speakerProfileInputSchema, type SpeakerProfileRow } from './speakerService.js';
 
 const NOW = new Date('2026-11-03T12:00:00Z');
 
@@ -7,6 +7,8 @@ function row(overrides: Partial<SpeakerProfileRow> = {}): SpeakerProfileRow {
   return {
     id: 'profile-1',
     userId: 'user-1',
+    name: 'Dana Okafor',
+    title: 'Chief medical officer',
     topics: '["healthcare","devops"]',
     bio: 'I talk about hospitals and pipelines.',
     seniority: 'keynote',
@@ -25,6 +27,8 @@ function row(overrides: Partial<SpeakerProfileRow> = {}): SpeakerProfileRow {
 describe('speakerProfileInputSchema', () => {
   it('accepts a full profile and trims, lowercases and dedupes the topics', () => {
     const parsed = speakerProfileInputSchema.parse({
+      name: '  Dana Okafor ',
+      title: ' CMO ',
       topics: [' Healthcare ', 'devops', 'healthcare', ''],
       bio: '  Hi  ',
       seniority: 'new',
@@ -36,6 +40,8 @@ describe('speakerProfileInputSchema', () => {
       preferredFormats: ['podcast', 'podcast', 'conference'],
     });
     expect(parsed).toEqual({
+      name: 'Dana Okafor',
+      title: 'CMO',
       topics: ['healthcare', 'devops'],
       bio: 'Hi',
       seniority: 'new',
@@ -48,8 +54,10 @@ describe('speakerProfileInputSchema', () => {
     });
   });
 
-  it('fills defaults for an almost empty body', () => {
-    expect(speakerProfileInputSchema.parse({})).toEqual({
+  it('fills defaults for a body with only a name', () => {
+    expect(speakerProfileInputSchema.parse({ name: 'Dana' })).toEqual({
+      name: 'Dana',
+      title: '',
       topics: [],
       bio: '',
       seniority: 'experienced',
@@ -62,13 +70,21 @@ describe('speakerProfileInputSchema', () => {
     });
   });
 
+  it('needs a name, and keeps the name and title to one line each', () => {
+    expect(speakerProfileInputSchema.safeParse({}).success).toBe(false);
+    expect(speakerProfileInputSchema.safeParse({ name: '   ' }).success).toBe(false);
+    expect(speakerProfileInputSchema.safeParse({ name: 'x'.repeat(81) }).success).toBe(false);
+    expect(speakerProfileInputSchema.safeParse({ name: 'Dana', title: 'x'.repeat(121) }).success).toBe(false);
+    expect(speakerProfileInputSchema.safeParse({}).error?.issues[0].message).toBe('Enter a name');
+  });
+
   it('rejects unknown enum values, oversized fields and non-string topics', () => {
-    expect(speakerProfileInputSchema.safeParse({ seniority: 'legend' }).success).toBe(false);
-    expect(speakerProfileInputSchema.safeParse({ preferredFormats: ['banquet'] }).success).toBe(false);
-    expect(speakerProfileInputSchema.safeParse({ topics: [42] }).success).toBe(false);
-    expect(speakerProfileInputSchema.safeParse({ topics: ['x'.repeat(41)] }).success).toBe(false);
-    expect(speakerProfileInputSchema.safeParse({ topics: Array.from({ length: 31 }, (_, i) => `t${i}`) }).success).toBe(false);
-    expect(speakerProfileInputSchema.safeParse({ bio: 'x'.repeat(501) }).success).toBe(false);
+    expect(speakerProfileInputSchema.safeParse({ name: 'Dana', seniority: 'legend' }).success).toBe(false);
+    expect(speakerProfileInputSchema.safeParse({ name: 'Dana', preferredFormats: ['banquet'] }).success).toBe(false);
+    expect(speakerProfileInputSchema.safeParse({ name: 'Dana', topics: [42] }).success).toBe(false);
+    expect(speakerProfileInputSchema.safeParse({ name: 'Dana', topics: ['x'.repeat(41)] }).success).toBe(false);
+    expect(speakerProfileInputSchema.safeParse({ name: 'Dana', topics: Array.from({ length: 31 }, (_, i) => `t${i}`) }).success).toBe(false);
+    expect(speakerProfileInputSchema.safeParse({ name: 'Dana', bio: 'x'.repeat(501) }).success).toBe(false);
   });
 });
 
@@ -77,6 +93,8 @@ describe('profileFromRow', () => {
     expect(profileFromRow(row())).toEqual({
       id: 'profile-1',
       userId: 'user-1',
+      name: 'Dana Okafor',
+      title: 'Chief medical officer',
       topics: ['healthcare', 'devops'],
       bio: 'I talk about hospitals and pipelines.',
       seniority: 'keynote',
@@ -113,7 +131,9 @@ describe('profileFromRow', () => {
 
 describe('profileToData', () => {
   it('serializes the arrays as JSON strings for the row', () => {
-    const data = profileToData(speakerProfileInputSchema.parse({ topics: ['ai'], preferredFormats: ['meetup'] }));
+    const data = profileToData(speakerProfileInputSchema.parse({ name: 'Dana', topics: ['ai'], preferredFormats: ['meetup'] }));
+    expect(data.name).toBe('Dana');
+    expect(data.title).toBe('');
     expect(data.topics).toBe('["ai"]');
     expect(data.preferredFormats).toBe('["meetup"]');
     expect(data.homeCity).toBeNull();

@@ -35,7 +35,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   // Opportunity responses carry per-user match scores, so a change of user
   // means every cached list and detail is for someone else.
   const resetUserScopedQueries = () => {
-    queryClient.removeQueries({ queryKey: queryKeys.profile });
+    queryClient.removeQueries({ queryKey: queryKeys.speakers });
     queryClient.removeQueries({ queryKey: queryKeys.saved.all });
     queryClient.invalidateQueries({ queryKey: queryKeys.opportunities.all });
     queryClient.invalidateQueries({ queryKey: ['opportunity'] });

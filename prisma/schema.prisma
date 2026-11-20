@@ -18,7 +18,7 @@ model User {
   createdAt           DateTime           @default(now())
   savedOpportunities  SavedOpportunity[]
   savedSearches       SavedSearch[]
-  speakerProfile      SpeakerProfile?
+  speakerProfiles     SpeakerProfile[]
 }
 
 model Opportunity {
@@ -30,22 +30,22 @@ model Opportunity {
   isRemote            Boolean            @default(false)
   eventDate           DateTime?
   cfpDeadline         DateTime?
-  format              String             // conference, meetup, podcast, etc.
+  format              String // conference, meetup, podcast, etc.
   industries          String             @default("[]") // JSON array stored as string
   // One or two ids from server/src/lib/sectors.ts; what the filter and counts use.
   // No @default on purpose: a default fills every existing row, and from then on
   // `prisma db push` from any branch without this column fails (docs/STATUS.md, Deploy Gotchas).
   sectors             String[]
-  compensationType    String?            // paid, travel, exposure
-  compensationAmount  Int?               // Amount in USD (for range filtering)
+  compensationType    String? // paid, travel, exposure
+  compensationAmount  Int? // Amount in USD (for range filtering)
   compensationDetails String?
   applyUrl            String             @unique
-  qualityScore        Int?               // 0-100 heuristic score
+  qualityScore        Int? // 0-100 heuristic score
   source              String
   sourceUrl           String?
   createdAt           DateTime           @default(now())
   updatedAt           DateTime           @updatedAt
-  enrichmentStatus    String?            // 'enriched' | 'failed' | 'skipped' | null
+  enrichmentStatus    String? // 'enriched' | 'failed' | 'skipped' | null
   enrichedAt          DateTime?
   enrichmentError     String?
   enrichmentAttempts  Int                @default(0)
@@ -58,11 +58,11 @@ model Opportunity {
   verifiedAt          DateTime?
   verificationError   String?
   dateConfidence      String?
-  deadlineTimezone    String?            // IANA zone or "AoE"; null = not stated, read as AoE
+  deadlineTimezone    String? // IANA zone or "AoE"; null = not stated, read as AoE
   // Canonical event this row is an edition of (services/eventMatching.ts).
   eventId             String?
   event               Event?             @relation(fields: [eventId], references: [id], onDelete: SetNull)
-  editionYear         Int?               // From eventDate, else the year in the title
+  editionYear         Int? // From eventDate, else the year in the title
   // The closest event this row was NOT linked to when the match score fell in
   // the review band; the admin "possible duplicates" list reads these.
   possibleEventId     String?
@@ -99,7 +99,7 @@ model Event {
   canonicalName String
   slug          String        @unique
   organizer     String?
-  domain        String?       // Registrable domain of the event's own site; null when hosted on a shared platform
+  domain        String? // Registrable domain of the event's own site; null when hosted on a shared platform
   aliases       String[]      @default([]) // Distinct titles seen for this event, year stripped
   nameTokens    String[]      @default([]) // Normalized name tokens; candidate lookup matches on overlap
   firstSeenAt   DateTime      @default(now())
@@ -111,15 +111,22 @@ model Event {
 }
 
 model SavedOpportunity {
-  id            String      @id @default(uuid())
+  id            String          @id @default(uuid())
   userId        String
   opportunityId String
-  category      String      @default("interested")
-  createdAt     DateTime    @default(now())
-  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
-  opportunity   Opportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  category      String          @default("interested")
+  createdAt     DateTime        @default(now())
+  // Who the call is saved for; null = nobody chosen yet. Removing a speaker removes their saved calls.
+  speakerId     String?
+  user          User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  opportunity   Opportunity     @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  speaker       SpeakerProfile? @relation(fields: [speakerId], references: [id], onDelete: Cascade)
 
-  @@unique([userId, opportunityId])
+  // One row per account, call and speaker (null counts as a speaker). Kept by the code that saves
+  // (services/savedCalls), not by a unique constraint: `db push` refuses to add one to a table that
+  // holds rows without --accept-data-loss, and Postgres would not count the null rows anyway.
+  @@index([userId, opportunityId])
+  @@index([speakerId])
 }
 
 model SavedSearch {
@@ -128,7 +135,7 @@ model SavedSearch {
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   name      String
   query     String?
-  filters   String   // JSON: { industries: [], locations: [], types: [], sort: '', isRemote: bool, ... }
+  filters   String // JSON: { industries: [], locations: [], types: [], sort: '', isRemote: bool, ... }
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -179,18 +186,25 @@ model SearchLog {
 // they need to be paid. Read by the deterministic match score
 // (server/src/services/matchScore.ts); never by any scraper.
 model SpeakerProfile {
-  id                      String   @id @default(uuid())
-  userId                  String   @unique
-  user                    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  topics                  String   @default("[]") // JSON array of free-text tags stored as string
-  bio                     String   @default("")
-  seniority               String   @default("experienced") // new | experienced | keynote
+  id                      String             @id @default(uuid())
+  // An account keeps a roster: several of these, one per person it places.
+  userId                  String
+  user                    User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // Empty on a profile saved before the roster; the client asks for a name then.
+  name                    String             @default("")
+  title                   String             @default("") // one line, such as "Chief medical officer, Northwind Health"
+  savedOpportunities      SavedOpportunity[]
+  topics                  String             @default("[]") // JSON array of free-text tags stored as string
+  bio                     String             @default("")
+  seniority               String             @default("experienced") // new | experienced | keynote
   homeCity                String?
   homeCountry             String?
-  travelRadius            String   @default("international") // local | country | international
-  remotePreference        String   @default("either") // remote_only | prefer_remote | either | prefer_in_person
-  compensationRequirement String   @default("any") // any | travel_covered | paid
-  preferredFormats        String   @default("[]") // JSON array of OpportunityFormat stored as string
-  createdAt               DateTime @default(now())
-  updatedAt               DateTime @updatedAt
+  travelRadius            String             @default("international") // local | country | international
+  remotePreference        String             @default("either") // remote_only | prefer_remote | either | prefer_in_person
+  compensationRequirement String             @default("any") // any | travel_covered | paid
+  preferredFormats        String             @default("[]") // JSON array of OpportunityFormat stored as string
+  createdAt               DateTime           @default(now())
+  updatedAt               DateTime           @updatedAt
+
+  @@index([userId])
 }

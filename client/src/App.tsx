@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect } from 'react';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Navigate, Routes, Route } from 'react-router-dom';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
 import { ThemeProvider } from './context/ThemeContext';
@@ -17,7 +17,8 @@ const Register = lazy(() => import('./pages/Register'));
 const AdminDashboard = lazy(() => import('./pages/AdminDashboard'));
 const ForgotPassword = lazy(() => import('./pages/ForgotPassword'));
 const ResetPassword = lazy(() => import('./pages/ResetPassword'));
-const Profile = lazy(() => import('./pages/Profile'));
+const Speakers = lazy(() => import('./pages/Speakers'));
+const SpeakerDetail = lazy(() => import('./pages/SpeakerDetail'));
 
 function AppContent() {
   // Fire-and-forget health ping to warm the serverless function on app load
@@ -39,7 +40,11 @@ function AppContent() {
           <Route path="/" element={<Home />} />
           <Route path="/opportunities/:id" element={<OpportunityDetail />} />
           <Route path="/saved" element={<SavedOpportunities />} />
-          <Route path="/profile" element={<Profile />} />
+          <Route path="/speakers" element={<Speakers />} />
+          <Route path="/speakers/new" element={<SpeakerDetail />} />
+          <Route path="/speakers/:id" element={<SpeakerDetail />} />
+          {/* The one profile an account had is now the first speaker on its roster. */}
+          <Route path="/profile" element={<Navigate to="/speakers" replace />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />

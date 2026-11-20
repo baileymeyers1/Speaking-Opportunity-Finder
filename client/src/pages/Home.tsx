@@ -22,7 +22,7 @@ import {
 import { useAuth } from '../hooks/useAuth';
 import { useOpportunities } from '../hooks/useOpportunities';
 import { useLiveSearch } from '../hooks/useLiveSearch';
-import { useProfile } from '../hooks/useProfile';
+import { useSpeakers } from '../hooks/useSpeakers';
 import { Button } from '@/components/ui/button';
 import { AlertCircle, Sparkles, X } from 'lucide-react';
 
@@ -53,9 +53,10 @@ export function Home() {
   const { filters, lane, page, updateFilters, setPage } = useBrowseFilters();
   const query = useOpportunities(filters);
   const liveSearch = useLiveSearch(filters);
-  const profileQuery = useProfile({ enabled: isAuthenticated });
-  const hasProfile = Boolean(profileQuery.data);
-  const needsProfile = isAuthenticated && profileQuery.isSuccess && profileQuery.data === null;
+  // Fit is scored for the roster's first speaker; with nobody on it there is no fit to sort by.
+  const speakersQuery = useSpeakers({ enabled: isAuthenticated });
+  const hasSpeaker = (speakersQuery.data?.length ?? 0) > 0;
+  const needsSpeaker = isAuthenticated && speakersQuery.isSuccess && !hasSpeaker;
   // The dismissal is remembered per filter set, so a new search shows the notice again.
   const [rateLimitDismissedFor, setRateLimitDismissedFor] = useState<string | null>(null);
   const rateLimitDismissed = rateLimitDismissedFor === serializeFilters(filters);
@@ -151,7 +152,7 @@ export function Home() {
             <LaneSwitch lane={lane} counts={data?.lanes?.counts} onChange={handleLaneChange} />
             <LaneCaption lane={lane} lanes={data?.lanes} isRefreshing={isRefreshing} />
             <div className="ml-auto">
-              <SortSelect value={filters.sortBy} lane={lane} matchSortAvailable={hasProfile} onChange={handleSortChange} />
+              <SortSelect value={filters.sortBy} lane={lane} matchSortAvailable={hasSpeaker} onChange={handleSortChange} />
             </div>
           </div>
           {!isLoading && (
@@ -194,11 +195,11 @@ export function Home() {
       )}
 
       {/* What an account adds, after the list: the list is what the page is for. */}
-      {needsProfile && (
+      {needsSpeaker && (
         <p className="flex items-center gap-2 border-t pt-5 text-sm text-muted-foreground">
           <Sparkles className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
           <span>
-            <Link to="/profile" className="link font-medium">Set up your speaker profile</Link>
+            <Link to="/speakers/new" className="link font-medium">Add a speaker</Link>
             {' '}to see a match score on every call and sort by best match.
           </span>
         </p>

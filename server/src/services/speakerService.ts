@@ -12,9 +12,11 @@ import type {
 import type { MatchProfile } from './matchScore.js';
 
 /**
- * The speaker profile: one row per user, read by the match score. Arrays are
- * JSON strings in the row (same convention as `Opportunity.industries`), so
- * the service owns both directions of that conversion.
+ * The roster: the people an account places, one `SpeakerProfile` row each,
+ * read by the match score. Every function takes the account's user id and
+ * never reaches another account's row. Arrays are JSON strings in the row
+ * (same convention as `Opportunity.industries`), so the service owns both
+ * directions of that conversion.
  */
 
 export const SENIORITIES = ['new', 'experienced', 'keynote'] as const satisfies readonly SpeakerSeniority[];
@@ -31,6 +33,18 @@ const FORMATS = ['conference', 'meetup', 'podcast', 'webinar', 'workshop', 'pane
 export const MAX_TOPICS = 30;
 export const MAX_TOPIC_LENGTH = 40;
 export const MAX_BIO_LENGTH = 500;
+export const MAX_NAME_LENGTH = 80;
+export const MAX_TITLE_LENGTH = 120;
+/** Fit is scored for every speaker on every listed call, so the roster has a ceiling. */
+export const MAX_SPEAKERS = 50;
+
+/** The account already has `MAX_SPEAKERS` speakers. */
+export class SpeakerLimitError extends Error {
+  constructor() {
+    super(`A roster holds at most ${MAX_SPEAKERS} speakers`);
+    this.name = 'SpeakerLimitError';
+  }
+}
 
 const DEFAULTS = {
   seniority: 'experienced',
@@ -51,8 +65,10 @@ const optionalText = (max: number) =>
     .nullish()
     .transform((value) => (value ? value : null));
 
-/** Validates `PUT /api/profile`; every field is optional in the body and defaulted here. */
+/** Validates a speaker sent to `/api/speakers`; only the name is required, the rest is defaulted here. */
 export const speakerProfileInputSchema = z.object({
+  name: z.string({ error: 'Enter a name' }).trim().min(1, 'Enter a name').max(MAX_NAME_LENGTH),
+  title: z.string().trim().max(MAX_TITLE_LENGTH).default(''),
   topics: z
     .array(z.string().trim().max(MAX_TOPIC_LENGTH))
     .max(MAX_TOPICS)
@@ -72,6 +88,8 @@ export const speakerProfileInputSchema = z.object({
 export interface SpeakerProfileRow {
   id: string;
   userId: string;
+  name: string;
+  title: string;
   topics: string;
   bio: string;
   seniority: string;
@@ -108,6 +126,8 @@ export function profileFromRow(row: SpeakerProfileRow): SpeakerProfileWithDates 
   return {
     id: row.id,
     userId: row.userId,
+    name: row.name,
+    title: row.title,
     topics: parseStringArray(row.topics),
     bio: row.bio,
     seniority: oneOf(SENIORITIES, row.seniority, DEFAULTS.seniority),
@@ -126,6 +146,8 @@ export function profileFromRow(row: SpeakerProfileRow): SpeakerProfileWithDates 
 
 export function profileToData(input: SpeakerProfileInput) {
   return {
+    name: input.name,
+    title: input.title,
     topics: JSON.stringify(input.topics),
     bio: input.bio,
     seniority: input.seniority,
@@ -138,34 +160,48 @@ export function profileToData(input: SpeakerProfileInput) {
   };
 }
 
-/**
- * The account's profile row. Neither this nor the save below leans on the
- * unique index on `userId`: the roster (several profiles per account) drops
- * it, and a preview build pushes that schema to the production database
- * before the code that goes with it is merged. Until then the oldest row is
- * the profile.
- */
-function findProfileRow(userId: string) {
-  return prisma.speakerProfile.findFirst({ where: { userId }, orderBy: { createdAt: 'asc' } });
+/** The account's speakers, oldest first: the order the roster lists them in. */
+export async function listSpeakers(userId: string): Promise<SpeakerProfileWithDates[]> {
+  const rows = await prisma.speakerProfile.findMany({ where: { userId }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] });
+  return rows.map(profileFromRow);
 }
 
-export async function getProfile(userId: string): Promise<SpeakerProfileWithDates | null> {
-  const row = await findProfileRow(userId);
+/** One of the account's speakers, or null when the id is not theirs. */
+export async function getSpeaker(userId: string, id: string): Promise<SpeakerProfileWithDates | null> {
+  const row = await prisma.speakerProfile.findFirst({ where: { id, userId } });
   return row ? profileFromRow(row) : null;
 }
 
-/** The profile reduced to what the score reads, or null when the user has none. */
+/**
+ * Whose fit a list is scored for when nobody was chosen: the account's first
+ * speaker, or null when it has none. An account that only ever kept one
+ * profile is scored exactly as before the roster.
+ */
 export async function getMatchProfile(userId: string): Promise<MatchProfile | null> {
-  return getProfile(userId);
+  const row = await prisma.speakerProfile.findFirst({ where: { userId }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] });
+  return row ? profileFromRow(row) : null;
 }
 
-export async function upsertProfile(userId: string, input: SpeakerProfileInput): Promise<SpeakerProfileWithDates> {
-  const data = profileToData(input);
-  // Not `upsert`: Prisma sends that as INSERT ... ON CONFLICT ("userId"), which
-  // Postgres rejects (42P10) once no unique index covers the column.
-  const existing = await findProfileRow(userId);
-  const row = existing
-    ? await prisma.speakerProfile.update({ where: { id: existing.id }, data })
-    : await prisma.speakerProfile.create({ data: { userId, ...data } });
+export async function createSpeaker(userId: string, input: SpeakerProfileInput): Promise<SpeakerProfileWithDates> {
+  if ((await prisma.speakerProfile.count({ where: { userId } })) >= MAX_SPEAKERS) throw new SpeakerLimitError();
+  const row = await prisma.speakerProfile.create({ data: { userId, ...profileToData(input) } });
   return profileFromRow(row);
+}
+
+/** Replaces one speaker's profile; null when the id is not the account's. */
+export async function updateSpeaker(
+  userId: string,
+  id: string,
+  input: SpeakerProfileInput
+): Promise<SpeakerProfileWithDates | null> {
+  const existing = await prisma.speakerProfile.findFirst({ where: { id, userId }, select: { id: true } });
+  if (!existing) return null;
+  const row = await prisma.speakerProfile.update({ where: { id: existing.id }, data: profileToData(input) });
+  return profileFromRow(row);
+}
+
+/** Removes one speaker and, through the schema's cascade, the calls saved for them. False when the id is not the account's. */
+export async function deleteSpeaker(userId: string, id: string): Promise<boolean> {
+  const { count } = await prisma.speakerProfile.deleteMany({ where: { id, userId } });
+  return count > 0;
 }
