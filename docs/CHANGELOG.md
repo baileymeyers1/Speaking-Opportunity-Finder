@@ -2,6 +2,17 @@
 
 Reverse chronological. Current state lives in `docs/STATUS.md`.
 
+## 2026-11-20 — The call page: one row of action, then description beside facts
+
+Third piece of the UI rework, sketched as a wireframe and agreed before it was built.
+- **Layout.** The outer card, the row of badges and the large button at the foot are gone. Under the title sits one row: the days-left figure (the same one a Browse row leads with), when the call closes in its own zone and on the viewer's clock, Save and Apply. Apply is the page's one red button and is now at the top. Below, the description on the left and a short list of facts on the right; on a phone the facts come first.
+- **Facts** (`components/call/CallFacts.tsx`): event date, pay, sectors, topics, fit with its reasons, when the listing was last checked, source and other sources. A fact the page did not give says "Not stated". Pay details that only repeat the description (some sources put the whole call text there) are not shown twice.
+- **Wording** (`lib/callStanding.ts`, tested): "Closes Monday, November 30, 2026, 11:59 PM AoE" with "Dec 1, 6:59 AM your time" under it; an approximate deadline reads "Closes around" a day and says why; an open call says how long it stays open; an event with no call says what was found and what to do.
+- **Description** is shown in full as plain prose: `plainDescription` drops the Markdown heading and bold marks that pages read through the reader arrive with.
+- **Earlier years.** The editions list sits on the page as rows. Its deadlines used a UTC date, which read a day late for an "end of day, anywhere on Earth" deadline (Nov 21 beside the page's own Nov 20); `EventEdition` now carries `deadlineTimezone` and the list formats each in its own zone.
+- **Left out on purpose:** the timeline track and per-claim footnotes from the mockup, and the quality score badge.
+- **Shared with Browse:** `lib/callDisplay.ts` (organization, place and pay wording), `lib/formatIcons.ts`, `useSaveCall` (now with `onSaved`, so saving a live result still moves the page to the stored row). `SaveOpportunityMenu` has a labelled form for the page. `DetailDates` and `SaveOpportunitySelect` are removed.
+
 ## 2026-11-20 — Browse answers "what closes soon": three lanes of rows under two rows of controls
 
 Second piece of the UI rework. On the 778 calls production listed that morning: 560 have a deadline (about 67 within a week and 246 within a month), 127 are open with none, 91 are events with no call found.
