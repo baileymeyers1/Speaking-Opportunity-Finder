@@ -9,6 +9,7 @@
  * card, the detail page and the API share one definition of "closed".
  */
 export {
+  calendarDaysUntilDeadline,
   daysUntilDeadline,
   describeDeadline,
   formatDeadline,

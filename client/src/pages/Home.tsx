@@ -1,13 +1,18 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { FilterPanel } from '../components/FilterPanel';
-import { OpportunityGrid } from '../components/OpportunityGrid';
+import { CallList } from '../components/browse/CallList';
+import { LaneSwitch } from '../components/browse/LaneSwitch';
+import { SectorStrip } from '../components/browse/SectorStrip';
+import { SituationLine } from '../components/browse/SituationLine';
 import { LiveSearchBanner } from '../components/LiveSearchBanner';
 import { SavedSearches } from '../components/SavedSearches';
 import { isRateLimitError } from '../api/client';
-import type { OpportunityFilters } from '../types';
+import type { Lane, OpportunityFilters } from '../types';
+import { DEFAULT_LANE } from '../filters/constants';
 import {
   canLiveSearch,
+  countActiveFilters,
   filtersToSearchParams,
   savedSearchToFilters,
   searchParamsToFilters,
@@ -23,7 +28,7 @@ import { AlertCircle, Loader2, Sparkles, X } from 'lucide-react';
 
 const BANNER_DISMISSED_KEY = 'loginBannerDismissed';
 
-/** Filters and page live in the URL; this is the only place that writes them. */
+/** Filters, lane and page live in the URL; this is the only place that writes them. */
 function useBrowseFilters() {
   const [searchParams, setSearchParams] = useSearchParams();
   const filters = useMemo(() => searchParamsToFilters(searchParams), [searchParams]);
@@ -40,12 +45,12 @@ function useBrowseFilters() {
     (nextPage: number) => updateFilters((previous) => ({ ...previous, page: nextPage })),
     [updateFilters]
   );
-  return { filters, page: filters.page ?? 1, updateFilters, setPage };
+  return { filters, lane: filters.lane ?? DEFAULT_LANE, page: filters.page ?? 1, updateFilters, setPage };
 }
 
 export function Home() {
   const { isAuthenticated } = useAuth();
-  const { filters, page, updateFilters, setPage } = useBrowseFilters();
+  const { filters, lane, page, updateFilters, setPage } = useBrowseFilters();
   const query = useOpportunities(filters);
   const liveSearch = useLiveSearch(filters);
   const profileQuery = useProfile({ enabled: isAuthenticated });
@@ -85,12 +90,17 @@ export function Home() {
     }
   }, [data, page, setPage]);
 
-  const handleFiltersChange = (next: OpportunityFilters) => updateFilters(() => ({ ...next, page: 1 }));
-  const handleClearFilters = () => updateFilters(() => ({}));
+  // A change of filters keeps the lane: the lane is which list is showing, not what is being looked for.
+  const handleFiltersChange = (next: OpportunityFilters) =>
+    updateFilters((previous) => ({ ...next, lane: previous.lane, page: 1 }));
+  const handleClearFilters = () => updateFilters((previous) => ({ lane: previous.lane }));
+  const handleLaneChange = (next: Lane) => updateFilters((previous) => ({ ...previous, lane: next, page: 1 }));
+  const handleSectorsChange = (sectors: string[]) =>
+    updateFilters((previous) => ({ ...previous, sectors: sectors.length > 0 ? sectors : undefined, page: 1 }));
   const handleLiveSearch = (effective: OpportunityFilters) => {
     if (!canLiveSearch(effective)) return;
-    updateFilters(() => ({ ...effective, page: 1 }));
-    liveSearch.run(effective);
+    updateFilters((previous) => ({ ...effective, lane: previous.lane, page: 1 }));
+    liveSearch.run({ ...effective, lane });
   };
   const handleApplySavedSearch = (savedQuery: string, savedFilters: Record<string, unknown>) =>
     updateFilters(() => savedSearchToFilters(savedQuery, savedFilters));
@@ -100,17 +110,11 @@ export function Home() {
   };
 
   const hasLocationFilter = Boolean(filters.locations && filters.locations.length > 0);
+  const isFiltered = Boolean(filters.search) || countActiveFilters(filters) > 0;
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="title text-foreground">
-          Find <em className="accent-word">speaking</em> opportunities
-        </h1>
-        <p className="text-muted-foreground mt-1">
-          Discover conferences, meetups, and events looking for speakers
-        </p>
-      </div>
+      <SituationLine lanes={data?.lanes} />
 
       {/* Saved Searches sits beside the filters on wide screens and under them on phones */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
@@ -121,51 +125,19 @@ export function Home() {
             onLiveSearch={handleLiveSearch}
             isSearching={liveSearch.isSearching}
             matchSortAvailable={hasProfile}
+            lane={lane}
           />
         </div>
         {isAuthenticated && (
           <SavedSearches
             currentQuery={filters.search || ''}
-            currentFilters={{ ...filters, page: undefined } as Record<string, unknown>}
+            currentFilters={{ ...filters, lane: undefined, page: undefined } as Record<string, unknown>}
             onApplySearch={handleApplySavedSearch}
           />
         )}
       </div>
 
-      {isRefreshing && (
-        <div
-          className="flex items-center gap-2 rounded-md border border-border bg-muted/50 px-4 py-2 text-sm text-muted-foreground"
-          role="status"
-          aria-live="polite"
-        >
-          <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-          Showing cached results while loading fresh data...
-        </div>
-      )}
-
-      {needsProfile && (
-        <p className="flex items-center gap-2 rounded-lg border bg-muted/50 px-4 py-3 text-sm text-muted-foreground">
-          <Sparkles className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
-          <span>
-            <Link to="/profile" className="link font-medium">Set up your speaker profile</Link>
-            {' '}to see a match score on every opportunity and sort by best match.
-          </span>
-        </p>
-      )}
-
-      {!isAuthenticated && !bannerDismissed && (
-        <div className="flex items-center justify-between gap-2 rounded-lg border bg-muted/50 px-4 py-3">
-          <p className="text-sm text-muted-foreground">
-            <Link to="/register" className="link font-medium">Sign up</Link>
-            {' '}or{' '}
-            <Link to="/login" className="link font-medium">log in</Link>
-            {' '}to save opportunities and searches.
-          </p>
-          <Button variant="ghost" size="icon" onClick={handleDismissBanner} aria-label="Dismiss banner">
-            <X className="h-4 w-4" />
-          </Button>
-        </div>
-      )}
+      <SectorStrip selected={filters.sectors ?? []} onChange={handleSectorsChange} />
 
       {loadError ? (
         <div
@@ -184,10 +156,21 @@ export function Home() {
           </Button>
         </div>
       ) : (
-        <>
+        <div className="space-y-4 pt-2">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+            <LaneSwitch lane={lane} counts={data?.lanes?.counts} onChange={handleLaneChange} />
+            {/* Beside the switch, not above the list: the stored rows stay put while fresh ones load. */}
+            {isRefreshing && (
+              <p className="flex items-center gap-2 text-[13px] text-muted-foreground" role="status" aria-live="polite">
+                <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+                Updating
+              </p>
+            )}
+          </div>
           {!isLoading && (
             <LiveSearchBanner
               resultCount={opportunities.length}
+              total={data?.total ?? opportunities.length}
               liveResultCount={liveResultCount}
               pendingLiveHits={pendingLiveHits}
               liveFoundCount={liveFoundCount}
@@ -209,17 +192,46 @@ export function Home() {
               onDismissLiveError={() => liveSearch.reset()}
             />
           )}
-          <OpportunityGrid
+          <CallList
             opportunities={opportunities}
             isLoading={isLoading}
+            lane={lane}
+            counts={data?.lanes?.counts}
             locations={filters.locations}
+            isFiltered={isFiltered}
+            onLaneChange={handleLaneChange}
             onClearFilters={handleClearFilters}
             page={page}
             totalPages={data?.totalPages ?? 1}
             showPagination={liveResultCount === 0}
             onPageChange={setPage}
           />
-        </>
+        </div>
+      )}
+
+      {/* What an account adds, after the list: the list is what the page is for. */}
+      {needsProfile && (
+        <p className="flex items-center gap-2 border-t pt-5 text-sm text-muted-foreground">
+          <Sparkles className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
+          <span>
+            <Link to="/profile" className="link font-medium">Set up your speaker profile</Link>
+            {' '}to see a match score on every call and sort by best match.
+          </span>
+        </p>
+      )}
+
+      {!isAuthenticated && !bannerDismissed && (
+        <div className="flex items-center justify-between gap-2 border-t pt-4">
+          <p className="text-sm text-muted-foreground">
+            <Link to="/register" className="link font-medium">Sign up</Link>
+            {' '}or{' '}
+            <Link to="/login" className="link font-medium">log in</Link>
+            {' '}to save opportunities and searches.
+          </p>
+          <Button variant="ghost" size="icon" onClick={handleDismissBanner} aria-label="Dismiss banner">
+            <X aria-hidden="true" />
+          </Button>
+        </div>
       )}
     </div>
   );

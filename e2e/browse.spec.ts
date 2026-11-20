@@ -10,10 +10,29 @@ test.describe('Browse page', () => {
     // Verify the page title/branding in the navbar
     await expect(page.getByText('Speaking Finder')).toBeVisible();
 
-    // Verify the page heading
-    await expect(
-      page.getByRole('heading', { name: 'Find Speaking Opportunities' })
-    ).toBeVisible();
+    // The page heading is a sentence computed from the list: what closes soon
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText(
+      /close within a (week|month)\.|Nothing closes within a month\.|Nothing here has a deadline\.|No calls match\./
+    );
+  });
+
+  test('lists calls in three lanes and switches between them', async ({ page }) => {
+    await page.goto('/');
+
+    const lanes = page.getByRole('group', { name: 'Which calls to list' });
+    await expect(lanes.getByRole('button', { name: /Closing/ })).toHaveAttribute('aria-pressed', 'true');
+
+    await lanes.getByRole('button', { name: /Always open/ }).click();
+    await expect(page).toHaveURL(/lane=open/);
+    await expect(lanes.getByRole('button', { name: /Always open/ })).toHaveAttribute('aria-pressed', 'true');
+    // No deadlines in this lane, so the default order is by event date and says so
+    await expect(page.getByLabel('Sort by')).toHaveText('Event date (soonest)');
+
+    await lanes.getByRole('button', { name: /To watch/ }).click();
+    await expect(page).toHaveURL(/lane=watch/);
+
+    await lanes.getByRole('button', { name: /Closing/ }).click();
+    await expect(page).not.toHaveURL(/lane=/);
   });
 
   test('search updates URL with query parameter', async ({ page }) => {

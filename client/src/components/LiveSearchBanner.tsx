@@ -4,7 +4,9 @@ import { Button } from '@/components/ui/button';
 import { LiveSearchSummary } from './LiveSearchSummary';
 
 interface LiveSearchBannerProps {
+  /** Rows on this page, and rows in the lane across every page. */
   resultCount: number;
+  total: number;
   liveResultCount: number;
   /** Live hits found but not read yet; listed by name, unchecked. */
   pendingLiveHits: PendingLiveHit[];
@@ -26,12 +28,13 @@ interface LiveSearchBannerProps {
 }
 
 /**
- * Status row above the grid: result counts, where live results came from,
+ * Status row above the list: result counts, where live results came from,
  * what the live search did with the pages it found, and the two non-fatal notices (rate limit, live search failure) that keep
  * the stored results on screen.
  */
 export function LiveSearchBanner({
   resultCount,
+  total,
   liveResultCount,
   pendingLiveHits,
   liveFoundCount,
@@ -98,7 +101,9 @@ export function LiveSearchBanner({
       {resultCount > 0 && (
         <div className="flex flex-wrap items-center justify-between gap-2" aria-live="polite">
           <p className="text-sm text-muted-foreground">
-            Showing {resultCount} result{resultCount !== 1 ? 's' : ''}
+            {total > resultCount
+              ? `Showing ${resultCount} of ${total.toLocaleString('en-US')}`
+              : `Showing all ${resultCount}`}
             {locationMatchedCount !== null && (
               <span className="ml-1">({locationMatchedCount} in your area)</span>
             )}

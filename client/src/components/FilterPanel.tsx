@@ -3,14 +3,13 @@ import { SlidersHorizontal, Zap, ChevronDown, ChevronUp, Loader2 } from 'lucide-
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from '@/components/ui/select';
-import { Card } from '@/components/ui/card';
 import { SearchBar } from './filters/SearchBar';
 import { ActiveFilterPills } from './filters/ActiveFilterPills';
 import { AdvancedFilters } from './filters/AdvancedFilters';
 import { useSearchDraft } from './filters/useSearchDraft';
 import { canLiveSearch, countActiveFilters } from '../filters/serialize';
 import { DEFAULT_SORT } from '../filters/constants';
-import type { OpportunityFilters, SortBy } from '../types';
+import type { Lane, OpportunityFilters, SortBy } from '../types';
 
 interface FilterPanelProps {
   filters: OpportunityFilters;
@@ -21,6 +20,8 @@ interface FilterPanelProps {
   isSearching?: boolean;
   /** True when the signed-in user has a speaker profile, which "Best match" needs. */
   matchSortAvailable?: boolean;
+  /** The lane the list is showing: only the closing lane has deadlines to sort by. */
+  lane?: Lane;
 }
 
 export function FilterPanel({
@@ -29,6 +30,7 @@ export function FilterPanel({
   onLiveSearch,
   isSearching = false,
   matchSortAvailable = false,
+  lane = 'closing',
 }: FilterPanelProps) {
   const [isExpanded, setIsExpanded] = useState(false);
 
@@ -46,10 +48,13 @@ export function FilterPanel({
   };
 
   const activeFilterCount = countActiveFilters(filters);
+  // Outside the closing lane nothing has a deadline, so the default order is by event date and says so.
+  const hasDeadlines = lane === 'closing';
+  const sortValue = !hasDeadlines && filters.sortBy === 'eventDate' ? DEFAULT_SORT : filters.sortBy || DEFAULT_SORT;
   const liveSearchDisabled = isSearching || !canLiveSearch({ ...filters, search: search.draft });
 
   return (
-    <Card className="p-4 mb-6">
+    <div>
       <SearchBar value={search.draft} onChange={search.update} onSubmit={search.flush} />
 
       <ActiveFilterPills filters={filters} onFiltersChange={onFiltersChange} />
@@ -59,15 +64,15 @@ export function FilterPanel({
         <div className="flex items-center gap-2">
           <span className="text-sm font-medium text-muted-foreground">Sort</span>
           <Select
-            value={filters.sortBy || DEFAULT_SORT}
+            value={sortValue}
             onValueChange={(value) => onFiltersChange({ ...filters, sortBy: value as SortBy })}
           >
             <SelectTrigger className="w-[180px] h-9" aria-label="Sort by">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="deadline">Deadline (soonest)</SelectItem>
-              <SelectItem value="eventDate">Event date (soonest)</SelectItem>
+              <SelectItem value="deadline">{hasDeadlines ? 'Deadline (soonest)' : 'Event date (soonest)'}</SelectItem>
+              {hasDeadlines && <SelectItem value="eventDate">Event date (soonest)</SelectItem>}
               <SelectItem value="quality">Quality (highest)</SelectItem>
               {(matchSortAvailable || filters.sortBy === 'match') && (
                 <SelectItem value="match" disabled={!matchSortAvailable}>
@@ -133,6 +138,6 @@ export function FilterPanel({
         isExpanded={isExpanded}
         activeFilterCount={activeFilterCount}
       />
-    </Card>
+    </div>
   );
 }
