@@ -325,6 +325,17 @@ function calendarDayDelta(from: Date, to: Date, zone: string): number {
 }
 
 /**
+ * Days until the deadline's own calendar day: 0 on the day it closes, 1 the
+ * day before. `daysUntilDeadline` counts 24-hour spans instead, so it still
+ * says 1 with three hours to go. Null without a deadline.
+ */
+export function calendarDaysUntilDeadline(row: DeadlineFields, now: Date = new Date()): number | null {
+  const instant = deadlineInstant(row);
+  if (!instant) return null;
+  return calendarDayDelta(now, instant, deadlineZone(row));
+}
+
+/**
  * "closes in 3 days (11:59 PM AoE · Dec 1, 3:59 AM your time)", "closes today (…)",
  * "closed Nov 30, 2026 (…)". Days are counted on the deadline's own calendar,
  * the one the date on the card is shown in. Null without a deadline.

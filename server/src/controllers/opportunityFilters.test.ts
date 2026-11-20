@@ -34,6 +34,20 @@ describe('buildFilters: sectors', () => {
   });
 });
 
+describe('buildFilters: lane', () => {
+  it('reads one of the three lanes', () => {
+    expect(buildFilters({ lane: 'closing' }).lane).toBe('closing');
+    expect(buildFilters({ lane: 'open' }).lane).toBe('open');
+    expect(buildFilters({ lane: 'watch' }).lane).toBe('watch');
+  });
+
+  it('ignores anything else, so the list holds every lane as it did before lanes', () => {
+    expect(buildFilters({}).lane).toBeUndefined();
+    expect(buildFilters({ lane: 'all' }).lane).toBeUndefined();
+    expect(buildFilters({ lane: ['closing', 'open'] }).lane).toBeUndefined();
+  });
+});
+
 describe('liveSearchTopics', () => {
   it('searches for the term of each selected sector', () => {
     expect(liveSearchTopics({ sectors: ['pr-communications', 'hr'] })).toEqual(['public relations', 'human resources']);

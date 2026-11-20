@@ -6,17 +6,17 @@ import { AppError } from '../middleware/errorHandler.js';
 import { parseDateConfidence } from './extraction.js';
 import { assignEvents } from './eventAssignment.js';
 import { attachEventContext, shadowedEditionIds } from './eventContext.js';
+import { LANE_ROW_SELECT, laneComparator, laneOf, laneWhere, summarizeLanes, type LaneRow } from './lanes.js';
 import { MATCH_SORT_CANDIDATE_CAP, scoreOpportunities, type MatchProfile } from './matchScore.js';
 import {
   buildOpportunityOrderBy,
   buildOpportunityWhere,
-  compareByClosing,
   computeSearchRelevance,
   matchesSearch,
   sortsByClosing,
   type OpportunityFilters,
 } from './opportunityQuery.js';
-import type { CompensationType, OpportunityFormat, OpportunityWithDates, PaginatedResponse, SectorOption } from 'shared';
+import type { CompensationType, LaneSummary, OpportunityFormat, OpportunityWithDates, PaginatedResponse, SectorOption } from 'shared';
 
 export type { OpportunityFilters } from './opportunityQuery.js';
 
@@ -132,13 +132,41 @@ export async function getListedByApplyUrls(
   return attachEventContext(withMatchScores(rows.map(transformOpportunity), options));
 }
 
+/**
+ * Lane counts and what closes soon for a set of listed rows, with the call
+ * that closes first named (one small read: the rows here carry no title).
+ */
+async function laneSummary(rows: readonly LaneRow[], now: Date): Promise<LaneSummary> {
+  const { nextToCloseId, ...totals } = summarizeLanes(rows, now);
+  const next = nextToCloseId
+    ? await prisma.opportunity.findUnique({
+        where: { id: nextToCloseId },
+        select: { id: true, title: true, cfpDeadline: true, deadlineTimezone: true },
+      })
+    : null;
+  return {
+    ...totals,
+    nextToClose: next?.cfpDeadline
+      ? { id: next.id, title: next.title, cfpDeadline: next.cfpDeadline.toISOString(), deadlineTimezone: next.deadlineTimezone }
+      : null,
+  };
+}
+
+/**
+ * One page of the list. `filters.lane` picks which of Browse's three lists is
+ * paged; the summary counts all three under the other filters, so the lane
+ * switch can say what is behind each choice.
+ */
 export async function getOpportunities(
   filters: OpportunityFilters = {},
   pagination: PaginationParams = {},
   options: ListOptions = {}
 ): Promise<PaginatedResponse<OpportunityWithDates>> {
   const { page = 1, pageSize = 20 } = pagination;
-  const where = await buildGroupedWhere(filters, options.now);
+  const now = options.now ?? new Date();
+  const { lane } = filters;
+  const everyLane = await buildGroupedWhere(filters, options.now);
+  const where = lane ? { AND: [everyLane, laneWhere(lane)] } : everyLane;
   const orderBy = buildOpportunityOrderBy(filters.sortBy);
   const sortByMatch = filters.sortBy === 'match' && Boolean(options.profile);
 
@@ -146,16 +174,22 @@ export async function getOpportunities(
   // paginating; a page-sized DB slice would only re-sort within itself.
   if (filters.search) {
     const search = filters.search;
-    // ILIKE is a coarse pass ("ai" is inside "said"); the whole-word rule runs here.
-    const allMatches = (await prisma.opportunity.findMany({ where, orderBy })).filter((item) => matchesSearch(item, search));
-    const total = allMatches.length;
-    const ranked = allMatches
+    // ILIKE is a coarse pass ("ai" is inside "said"); the whole-word rule runs here,
+    // so the lanes are counted from what it keeps.
+    const allMatches = (await prisma.opportunity.findMany({ where: everyLane, orderBy })).filter((item) => matchesSearch(item, search));
+    const lanes = await laneSummary(allMatches, now);
+    const inLane = lane ? allMatches.filter((item) => laneOf(item) === lane) : allMatches;
+    const ranked = inLane
       .map((item) => ({ item, relevance: computeSearchRelevance(item, search) }))
       .sort((a, b) => b.relevance - a.relevance)
       .map((entry) => transformOpportunity(entry.item));
-    const result = paginate(withMatchScores(ranked, options, sortByMatch), page, pageSize, total);
-    return { ...result, items: await attachEventContext(result.items) };
+    const result = paginate(withMatchScores(ranked, options, sortByMatch), page, pageSize, inLane.length);
+    return { ...result, items: await attachEventContext(result.items), lanes };
   }
+
+  // Every lane's rows, as the few columns the summary and the default order need.
+  const keys = await prisma.opportunity.findMany({ where: everyLane, select: LANE_ROW_SELECT });
+  const lanes = await laneSummary(keys, now);
 
   // Best match has no column to order by: score a capped candidate set in memory.
   if (sortByMatch) {
@@ -165,20 +199,16 @@ export async function getOpportunities(
     ]);
     const ranked = withMatchScores(candidates.map(transformOpportunity), options, true);
     const result = paginate(ranked, page, pageSize, Math.min(count, MATCH_SORT_CANDIDATE_CAP));
-    return { ...result, items: await attachEventContext(result.items) };
+    return { ...result, items: await attachEventContext(result.items), lanes };
   }
 
-  // Soonest to close first. A row without a deadline closes when its event
-  // starts, or is a rolling call, so the order is not one column's: sort the
-  // matching ids by `compareByClosing`, then load the page's rows.
+  // The default order is not one column's (a row without a deadline closes
+  // when its event starts, or is a rolling call; a lane without deadlines goes
+  // by the event): sort the lane's keys in memory, then load the page's rows.
   if (sortsByClosing(filters.sortBy)) {
-    const now = options.now ?? new Date();
-    const keys = await prisma.opportunity.findMany({
-      where,
-      select: { id: true, cfpDeadline: true, eventDate: true, qualityScore: true },
-    });
-    const pageIds = keys
-      .sort((a, b) => compareByClosing(a, b, now))
+    const inLane = lane ? keys.filter((key) => laneOf(key) === lane) : keys;
+    const pageIds = inLane
+      .sort(laneComparator(lane, now))
       .slice((page - 1) * pageSize, page * pageSize)
       .map((key) => key.id);
     const rows = pageIds.length > 0 ? await prisma.opportunity.findMany({ where: { id: { in: pageIds } } }) : [];
@@ -186,10 +216,11 @@ export async function getOpportunities(
     const ordered = pageIds.flatMap((id) => byId.get(id) ?? []);
     return {
       items: await attachEventContext(withMatchScores(ordered.map(transformOpportunity), options)),
-      total: keys.length,
+      total: inLane.length,
       page,
       pageSize,
-      totalPages: Math.ceil(keys.length / pageSize),
+      totalPages: Math.ceil(inLane.length / pageSize),
+      lanes,
     };
   }
 
@@ -204,6 +235,7 @@ export async function getOpportunities(
     page,
     pageSize,
     totalPages: Math.ceil(total / pageSize),
+    lanes,
   };
 }
 
