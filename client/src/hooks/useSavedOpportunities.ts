@@ -33,16 +33,23 @@ export function useRemoveSavedOpportunity() {
   });
 }
 
-export function useUpdateSavedCategory() {
+/** What a saved call can be moved to: another stage, another speaker (null: nobody), or both. */
+export interface SavedCallChange {
+  savedId: string;
+  category?: SavedCategory;
+  speakerId?: string | null;
+}
+
+export function useChangeSavedCall() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (input: { savedId: string; category: SavedCategory }) => {
-      await apiClient.patch(`/saved/${input.savedId}`, { category: input.category });
-      return input;
+    mutationFn: async ({ savedId, ...change }: SavedCallChange) => {
+      await apiClient.patch(`/saved/${savedId}`, change);
+      return { savedId, ...change };
     },
-    onSuccess: ({ savedId, category }) => {
+    onSuccess: ({ savedId, ...change }) => {
       queryClient.setQueryData<SavedOpportunity[]>(queryKeys.saved.all, (items) =>
-        items?.map((item) => (item.id === savedId ? { ...item, category } : item))
+        items?.map((item) => (item.id === savedId ? { ...item, ...change } : item))
       );
     },
   });

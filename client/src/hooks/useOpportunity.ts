@@ -46,9 +46,15 @@ export function useOpportunity(id: string | undefined) {
       return response.data;
     },
     // Seed from the list that linked here so the page renders at once; the
-    // list's own timestamp decides whether a background refetch is due.
+    // list's own timestamp decides whether a background refetch is due. A
+    // list row carries each speaker's score without the reasons, which the
+    // call's own page shows: such a seed counts as stale, so they are fetched.
     initialData: () => findInLists()?.item,
-    initialDataUpdatedAt: () => findInLists()?.updatedAt,
+    initialDataUpdatedAt: () => {
+      const cached = findInLists();
+      const unexplained = cached?.item.speakerFits?.some((fit) => fit.reasons === undefined);
+      return unexplained ? 0 : cached?.updatedAt;
+    },
     retry: (failureCount, error) => !(error instanceof LiveResultExpiredError) && failureCount < 1,
   });
 }

@@ -4,6 +4,7 @@ import { FilterPanel } from '../components/FilterPanel';
 import { CallList } from '../components/browse/CallList';
 import { LaneCaption } from '../components/browse/LaneCaption';
 import { LaneSwitch } from '../components/browse/LaneSwitch';
+import { ForWhomSelect } from '../components/ForWhomSelect';
 import { SortSelect } from '../components/browse/SortSelect';
 import { LiveSearchBanner } from '../components/LiveSearchBanner';
 import { SavedSearches } from '../components/SavedSearches';
@@ -23,6 +24,8 @@ import { useAuth } from '../hooks/useAuth';
 import { useOpportunities } from '../hooks/useOpportunities';
 import { useLiveSearch } from '../hooks/useLiveSearch';
 import { useSpeakers } from '../hooks/useSpeakers';
+import { useForWhom } from '../hooks/useForWhom';
+import { speakerParam } from '../lib/forWhom';
 import { Button } from '@/components/ui/button';
 import { AlertCircle, Sparkles, X } from 'lucide-react';
 
@@ -51,9 +54,12 @@ function useBrowseFilters() {
 export function Home() {
   const { isAuthenticated } = useAuth();
   const { filters, lane, page, updateFilters, setPage } = useBrowseFilters();
-  const query = useOpportunities(filters);
-  const liveSearch = useLiveSearch(filters);
-  // Fit is scored for the roster's first speaker; with nobody on it there is no fit to sort by.
+  // Whose fit the rows lead with: one speaker when chosen, otherwise whoever fits each call best.
+  const forWhom = useForWhom();
+  const speakerId = speakerParam(forWhom.choice);
+  const query = useOpportunities(filters, speakerId);
+  const liveSearch = useLiveSearch(filters, speakerId);
+  // With nobody on the roster there is no fit to show or sort by.
   const speakersQuery = useSpeakers({ enabled: isAuthenticated });
   const hasSpeaker = (speakersQuery.data?.length ?? 0) > 0;
   const needsSpeaker = isAuthenticated && speakersQuery.isSuccess && !hasSpeaker;
@@ -151,7 +157,15 @@ export function Home() {
           <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
             <LaneSwitch lane={lane} counts={data?.lanes?.counts} onChange={handleLaneChange} />
             <LaneCaption lane={lane} lanes={data?.lanes} isRefreshing={isRefreshing} />
-            <div className="ml-auto">
+            <div className="ml-auto flex flex-wrap items-center justify-end gap-x-1">
+              {forWhom.canChoose && (
+                <ForWhomSelect
+                  label="Fit for"
+                  speakers={forWhom.speakers}
+                  value={forWhom.choice}
+                  onChange={forWhom.setChoice}
+                />
+              )}
               <SortSelect value={filters.sortBy} lane={lane} matchSortAvailable={hasSpeaker} onChange={handleSortChange} />
             </div>
           </div>

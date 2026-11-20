@@ -9,9 +9,10 @@ export type OpportunityPage = PaginatedResponse<Opportunity>;
 
 export async function fetchOpportunityPage(
   filters: BrowseFilters,
-  options: { liveSearch?: boolean; signal?: AbortSignal } = {}
+  options: { liveSearch?: boolean; signal?: AbortSignal; speakerId?: string } = {}
 ): Promise<OpportunityPage> {
   const query = filtersToApiQuery(filters, { liveSearch: options.liveSearch });
+  if (options.speakerId) query.set('speaker', options.speakerId);
   const response = await apiClient.get<OpportunityPage>(`/opportunities?${query.toString()}`, {
     signal: options.signal,
   });
@@ -24,11 +25,14 @@ export async function fetchOpportunityPage(
  * always maps to the same cache entry (back navigation restores it) and any
  * filter change is a new key (an in-flight request for the old key is
  * cancelled through the signal, so it can never land on the new list).
+ *
+ * `speakerId` is the speaker whose fit the rows lead with (and "best match"
+ * sorts by); without one, each row leads with whoever on the roster fits best.
  */
-export function useOpportunities(filters: BrowseFilters) {
+export function useOpportunities(filters: BrowseFilters, speakerId?: string) {
   return useQuery({
-    queryKey: queryKeys.opportunities.list(filters),
-    queryFn: ({ signal }) => fetchOpportunityPage(filters, { signal }),
+    queryKey: queryKeys.opportunities.list(filters, speakerId),
+    queryFn: ({ signal }) => fetchOpportunityPage(filters, { signal, speakerId }),
     placeholderData: keepPreviousData,
     // Long enough that a live search result survives a round trip to a detail page.
     staleTime: 5 * ONE_MINUTE,

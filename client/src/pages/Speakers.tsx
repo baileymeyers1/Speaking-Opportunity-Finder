@@ -1,19 +1,21 @@
 import { Link, Navigate } from 'react-router-dom';
 import { Loader2, Plus } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
+import { useSavedOpportunities } from '../hooks/useSavedOpportunities';
 import { useSpeakers } from '../hooks/useSpeakers';
-import { fitCaption } from '../lib/speakerDisplay';
+import { savedSummary } from '../lib/forWhom';
 import { SpeakerRow, SpeakerRowSkeleton } from '../components/speakers/SpeakerRow';
 import { Button } from '@/components/ui/button';
 
 /**
- * The roster: the people this account finds stages for, one row each. One
- * row of control (what Browse scores fit for, and the way to add someone),
- * then the list.
+ * The roster: the people this account finds stages for, one row each, with
+ * what is saved for them. One control (the way to add someone), then the list.
  */
 export function Speakers() {
   const { isAuthenticated, isLoading: authLoading } = useAuth();
   const speakersQuery = useSpeakers({ enabled: isAuthenticated });
+  // What is saved for each speaker; the rows simply go without it until it loads.
+  const savedQuery = useSavedOpportunities({ enabled: isAuthenticated });
 
   if (authLoading) {
     return (
@@ -62,14 +64,17 @@ export function Speakers() {
         </div>
       ) : (
         <>
-          <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
-            <p className="text-[13px] text-muted-foreground">{fitCaption(speakers)}</p>
-            {addSpeaker}
-          </div>
+          <div className="flex justify-end">{addSpeaker}</div>
           <ul className="border-t" aria-busy={isLoading}>
             {isLoading
               ? Array.from({ length: 3 }).map((_, index) => <SpeakerRowSkeleton key={index} />)
-              : speakers.map((speaker) => <SpeakerRow key={speaker.id} speaker={speaker} />)}
+              : speakers.map((speaker) => (
+                  <SpeakerRow
+                    key={speaker.id}
+                    speaker={speaker}
+                    saved={savedQuery.data ? savedSummary(savedQuery.data, speaker.id) : undefined}
+                  />
+                ))}
           </ul>
         </>
       )}

@@ -3,7 +3,7 @@ import * as opportunityService from '../services/opportunityService.js';
 import * as liveSearchService from '../services/liveSearchService.js';
 import { recordSearch } from '../services/searchLog.js';
 import * as speakerService from '../services/speakerService.js';
-import { scoreOpportunities } from '../services/matchScore.js';
+import { scoreForRoster } from '../services/matchScore.js';
 import { buildFilters, liveSearchTopics } from './opportunityFilters.js';
 import { AppError } from '../middleware/errorHandler.js';
 import { isValidTimezone } from '../lib/deadlines.js';
@@ -58,13 +58,25 @@ function liveResultToOpportunity(r: liveSearchService.EnrichedLiveResult): Oppor
 async function liveOutcomeToItems(
   outcome: liveSearchService.LiveSearchOutcome,
   filters: opportunityService.OpportunityFilters,
-  listOptions: opportunityService.ListOptions,
-  profile: opportunityService.ListOptions['profile']
+  listOptions: opportunityService.ListOptions
 ): Promise<{ live: Opportunity[]; stored: OpportunityWithDates[] }> {
   const liveItems = outcome.results.map(liveResultToOpportunity);
-  const live = profile ? scoreOpportunities(profile, liveItems) : liveItems;
+  const live = scoreForRoster(listOptions.roster ?? [], liveItems, undefined, { speakerId: listOptions.speakerId });
   const stored = await opportunityService.getListedByApplyUrls(outcome.storedUrls, filters, listOptions);
   return { live, stored };
+}
+
+/**
+ * Whose fit the rows of this request carry: every speaker on the signed-in
+ * account's roster, led by the one asked for (`speaker=<id>`) when they are
+ * on it, otherwise by whoever fits each row best. Signed out, or with an
+ * empty roster, rows carry no fit.
+ */
+async function fitOptions(req: Request): Promise<opportunityService.ListOptions> {
+  if (!req.user) return {};
+  const roster = await speakerService.getRoster(req.user.userId);
+  const asked = typeof req.query.speaker === 'string' ? req.query.speaker : null;
+  return { roster, speakerId: roster.some((member) => member.id === asked) ? asked : null };
 }
 
 export async function getOpportunities(
@@ -73,7 +85,8 @@ export async function getOpportunities(
   next: NextFunction
 ): Promise<void> {
   try {
-    const { liveSearch: doLiveSearch, page, pageSize, ...queryParams } = req.query;
+    // `speaker` says whose fit to lead with (fitOptions); it is not a filter on the list.
+    const { liveSearch: doLiveSearch, page, pageSize, speaker: _speaker, ...queryParams } = req.query;
 
     const filters = buildFilters(queryParams);
     const pagination = {
@@ -81,9 +94,8 @@ export async function getOpportunities(
       pageSize: pageSize ? parseInt(String(pageSize), 10) : undefined,
     };
 
-    // A signed-in user with a speaker profile gets a match score on every row.
-    const profile = req.user ? await speakerService.getMatchProfile(req.user.userId) : null;
-    const listOptions: opportunityService.ListOptions = { profile };
+    // A signed-in account with speakers on its roster gets a fit score on every row.
+    const listOptions = await fitOptions(req);
 
     // Always fetch DB results
     const dbResults = await opportunityService.getOpportunities(filters, pagination, listOptions);
@@ -122,7 +134,7 @@ export async function getOpportunities(
     }
 
     const { live: liveOpportunities, stored: storedHits } = liveOutcome
-      ? await liveOutcomeToItems(liveOutcome, filters, listOptions, profile)
+      ? await liveOutcomeToItems(liveOutcome, filters, listOptions)
       : { live: [], stored: [] };
 
     // A row surfaced by the live search is listed once, from the live side.
@@ -134,7 +146,7 @@ export async function getOpportunities(
     // page by the deadline column here used to push every row without a
     // deadline to the foot of its page, and a search's hits out of relevance order.
     const surfaced: SerializableOpportunity[] = [...liveOpportunities, ...storedHits];
-    const sortBy = filters.sortBy === 'match' && !profile ? 'quality' : filters.sortBy || 'deadline';
+    const sortBy = filters.sortBy === 'match' && !listOptions.roster?.length ? 'quality' : filters.sortBy || 'deadline';
     const dateVal = (v: string | Date | null) => {
       if (!v) return Number.MAX_SAFE_INTEGER;
       const d = new Date(v).getTime();
@@ -178,8 +190,8 @@ export async function getOpportunityById(
 ): Promise<void> {
   try {
     const { id } = req.params;
-    const profile = req.user ? await speakerService.getMatchProfile(req.user.userId) : null;
-    const opportunity = await opportunityService.getOpportunityById(id, { profile });
+    // A call's own page says why each speaker fits, not only how well.
+    const opportunity = await opportunityService.getOpportunityById(id, { ...(await fitOptions(req)), explainFits: true });
 
     const payload: ApiResponse<OpportunityWithDates> = { success: true, data: opportunity };
     res.json(payload);
@@ -260,8 +272,7 @@ export async function liveSearch(
       userId: req.user?.userId,
     });
 
-    const profile = req.user ? await speakerService.getMatchProfile(req.user.userId) : null;
-    const { live, stored } = await liveOutcomeToItems(outcome, {}, { profile }, profile);
+    const { live, stored } = await liveOutcomeToItems(outcome, {}, await fitOptions(req));
     res.json({
       success: true,
       data: [...live, ...stored],

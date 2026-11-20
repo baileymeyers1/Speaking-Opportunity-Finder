@@ -6,14 +6,14 @@ import { Badge } from '@/components/ui/badge';
 
 /** The grid the row and its skeleton share. */
 export const SPEAKER_ROW_GRID =
-  '-mx-3 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 border-b px-3 py-4';
+  '-mx-3 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 border-b px-3 py-4 sm:grid-cols-[minmax(0,1fr)_auto_auto]';
 
 /**
  * One speaker on the roster: who they are, where they go, what they speak
- * about. The name is the row's link and covers the row, as a call's title
- * does on Browse.
+ * about, and what is saved for them ("4 interested, 2 applied"). The name is
+ * the row's link and covers the row, as a call's title does on Browse.
  */
-export function SpeakerRow({ speaker }: { speaker: SpeakerProfile }) {
+export function SpeakerRow({ speaker, saved }: { speaker: SpeakerProfile; saved?: string }) {
   const { shown, more } = topicsPreview(speaker.topics);
 
   return (
@@ -42,8 +42,11 @@ export function SpeakerRow({ speaker }: { speaker: SpeakerProfile }) {
           ))}
           {more > 0 && <li>and {more} more</li>}
           {speaker.topics.length === 0 && <li>No topics yet: fit is scored on call quality alone</li>}
+          {/* On a phone the saved calls fold into this line. */}
+          {saved && <li className="sm:hidden">{saved}</li>}
         </ul>
       </div>
+      {saved && <p className="hidden text-[13px] text-muted-foreground sm:block">{saved}</p>}
       <ChevronRight className="size-4 text-faint" aria-hidden="true" />
     </li>
   );

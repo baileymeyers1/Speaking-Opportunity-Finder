@@ -20,18 +20,18 @@ function firstPage(filters: BrowseFilters): BrowseFilters {
  * searched, so it survives leaving and returning to the page mid-search and is
  * true only when the search in flight is for the filters now in the URL.
  */
-export function useLiveSearch(filters: BrowseFilters) {
+export function useLiveSearch(filters: BrowseFilters, speakerId?: string) {
   const queryClient = useQueryClient();
 
   const mutation = useMutation({
     mutationKey: LIVE_SEARCH_KEY,
     mutationFn: async (searchFilters: BrowseFilters) => {
       const target = firstPage(searchFilters);
-      await queryClient.cancelQueries({ queryKey: queryKeys.opportunities.list(target) });
-      return fetchOpportunityPage(target, { liveSearch: true });
+      await queryClient.cancelQueries({ queryKey: queryKeys.opportunities.list(target, speakerId) });
+      return fetchOpportunityPage(target, { liveSearch: true, speakerId });
     },
     onSuccess: (page, searchFilters) => {
-      queryClient.setQueryData(queryKeys.opportunities.list(firstPage(searchFilters)), page);
+      queryClient.setQueryData(queryKeys.opportunities.list(firstPage(searchFilters), speakerId), page);
     },
   });
 

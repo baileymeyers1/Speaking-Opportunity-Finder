@@ -4,7 +4,9 @@ import { serializeFilters, type BrowseFilters } from '../filters/serialize';
 export const queryKeys = {
   opportunities: {
     all: ['opportunities'] as const,
-    list: (filters: BrowseFilters) => ['opportunities', serializeFilters(filters)] as const,
+    /** `speakerId`: whose fit the rows lead with; everyone's best fit when absent. A different list, so a different key. */
+    list: (filters: BrowseFilters, speakerId?: string) =>
+      ['opportunities', serializeFilters(filters), speakerId ?? 'everyone'] as const,
     detail: (id: string) => ['opportunity', id] as const,
   },
   liveSearch: (filters: BrowseFilters) => ['liveSearch', serializeFilters(filters)] as const,

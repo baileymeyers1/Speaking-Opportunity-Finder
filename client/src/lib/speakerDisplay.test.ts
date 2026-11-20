@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { fitCaption, speakerName, speakerReach, topicsPreview } from './speakerDisplay';
+import { speakerName, speakerReach, topicsPreview } from './speakerDisplay';
 
 const placed = (overrides: Partial<Parameters<typeof speakerReach>[0]> = {}) => ({
   homeCity: 'Lagos',
@@ -45,21 +45,5 @@ describe('topicsPreview', () => {
     expect(topicsPreview(['a', 'b', 'c', 'd', 'e', 'f'])).toEqual({ shown: ['a', 'b', 'c', 'd'], more: 2 });
     expect(topicsPreview(['a'])).toEqual({ shown: ['a'], more: 0 });
     expect(topicsPreview([])).toEqual({ shown: [], more: 0 });
-  });
-});
-
-describe('fitCaption', () => {
-  it('says nothing for an empty roster or a roster of one', () => {
-    expect(fitCaption([])).toBe('');
-    expect(fitCaption([{ name: 'Dana Okafor' }])).toBe('');
-  });
-
-  it('names the first speaker once there is a choice', () => {
-    expect(fitCaption([{ name: 'Dana Okafor' }, { name: 'Marcus Lee' }])).toBe(
-      'Browse shows fit for Dana Okafor, the first on this list.'
-    );
-    expect(fitCaption([{ name: '' }, { name: 'Marcus Lee' }])).toBe(
-      'Browse shows fit for Unnamed speaker, the first on this list.'
-    );
   });
 });

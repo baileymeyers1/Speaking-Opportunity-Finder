@@ -1,5 +1,5 @@
 import { ExternalLink } from 'lucide-react';
-import type { Opportunity, SavedCategory } from '../../types';
+import type { Opportunity, SavedCategory, SavedOpportunity } from '../../types';
 import { callState, countdownText } from '../../lib/callState';
 import { callStanding } from '../../lib/callStanding';
 import { SaveOpportunityMenu } from '../SaveOpportunityMenu';
@@ -8,9 +8,10 @@ import { cn } from '@/lib/utils';
 
 interface CallStandingProps {
   opportunity: Opportunity;
-  savedCategory: SavedCategory | '';
+  /** The rows this call is saved under: one per speaker it is saved for, and one for nobody. */
+  savedRows: SavedOpportunity[];
   isSaving: boolean;
-  onSave: (category: SavedCategory) => void;
+  onSave: (category: SavedCategory, speakerId: string | null) => void;
 }
 
 /**
@@ -19,7 +20,7 @@ interface CallStandingProps {
  * two things to do about it. "Apply" is the page's one red button; an event
  * with no call gets a quiet link to its page instead.
  */
-export function CallStanding({ opportunity, savedCategory, isSaving, onSave }: CallStandingProps) {
+export function CallStanding({ opportunity, savedRows, isSaving, onSave }: CallStandingProps) {
   const state = callState(opportunity);
   const { figure, unit } = countdownText(state);
   const standing = callStanding(opportunity);
@@ -56,7 +57,7 @@ export function CallStanding({ opportunity, savedCategory, isSaving, onSave }: C
       </div>
 
       <div className="col-span-full flex flex-wrap items-center gap-2 md:col-span-1 md:justify-end">
-        <SaveOpportunityMenu savedCategory={savedCategory} isSaving={isSaving} onSave={onSave} withLabel />
+        <SaveOpportunityMenu opportunity={opportunity} savedRows={savedRows} isSaving={isSaving} onSave={onSave} withLabel />
         <Button variant={hasCall ? 'default' : 'outline'} asChild>
           <a
             href={opportunity.applyUrl}

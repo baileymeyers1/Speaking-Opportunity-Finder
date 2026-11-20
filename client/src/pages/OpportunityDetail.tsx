@@ -22,7 +22,7 @@ export function OpportunityDetail() {
   const navigate = useNavigate();
   const location = useLocation();
   const { data: opportunity, isPending: isLoading, error: loadError } = useOpportunity(id);
-  const { savedCategory, isSaving, save } = useSaveCall(opportunity, {
+  const { savedRows, isSaving, save } = useSaveCall(opportunity, {
     // Saving a live result stores it; the page moves to the stored row's address.
     onSaved: (result) => {
       if (result.opportunity.id !== id) {
@@ -90,7 +90,7 @@ export function OpportunityDetail() {
       </header>
 
       <div className="mt-6">
-        <CallStanding opportunity={opportunity} savedCategory={savedCategory} isSaving={isSaving} onSave={save} />
+        <CallStanding opportunity={opportunity} savedRows={savedRows} isSaving={isSaving} onSave={save} />
       </div>
 
       <div className={CALL_PAGE_COLUMNS}>

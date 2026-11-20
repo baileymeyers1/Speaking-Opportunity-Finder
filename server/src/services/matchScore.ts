@@ -1,4 +1,4 @@
-import type { DateConfidence, MatchExplanation, SpeakerProfileInput } from 'shared';
+import type { DateConfidence, MatchExplanation, SpeakerFit, SpeakerProfileInput } from 'shared';
 
 /**
  * Deterministic, explainable match between a speaker profile and one
@@ -10,6 +10,10 @@ import type { DateConfidence, MatchExplanation, SpeakerProfileInput } from 'shar
  * The weighted mean of the applicable components is blended with the row's
  * quality score, then small penalties are taken for things that make the
  * listing risky to act on. An empty profile therefore scores on quality alone.
+ *
+ * Reasons and misses are written without a subject ("in-person in Berlin,
+ * prefers remote"): they are read beside a speaker's name, who is often not
+ * the person reading.
  */
 
 export type MatchProfile = Pick<
@@ -46,6 +50,27 @@ export type ScoredOpportunity<T> = T & {
   matchReasons: string[];
   matchMisses: string[];
 };
+
+/** One person on a roster, as the score needs them. */
+export interface RosterMember {
+  id: string;
+  profile: MatchProfile;
+}
+
+/** A row scored for a whole roster: its own score is one member's, and every member's is listed. */
+export type RosterScoredOpportunity<T> = ScoredOpportunity<T> & {
+  matchSpeakerId: string;
+  speakerFits: SpeakerFit[];
+};
+
+export interface RosterScoreOptions {
+  /** Best match first, sooner deadline on ties. */
+  sort?: boolean;
+  /** Whose score the row carries. Absent, or not on the roster: the best-fitting member's. */
+  speakerId?: string | null;
+  /** Send each member's reasons and misses too. A call's own page wants them; a list carries scores alone. */
+  explain?: boolean;
+}
 
 /** `sort=match` scores at most this many rows in memory before paginating. */
 export const MATCH_SORT_CANDIDATE_CAP = 500;
@@ -122,7 +147,7 @@ function assessRemote(profile: MatchProfile): Assessment {
     case 'prefer_remote':
       return { component: { weight: WEIGHTS.location, fit: 1 }, reasons: ['remote'], misses: [] };
     case 'prefer_in_person':
-      return { component: { weight: WEIGHTS.location, fit: 0.6 }, reasons: [], misses: ['remote, you prefer in person'] };
+      return { component: { weight: WEIGHTS.location, fit: 0.6 }, reasons: [], misses: ['remote, prefers in person'] };
     default:
       return { component: { weight: WEIGHTS.location, fit: 1 }, reasons: ['remote'], misses: [] };
   }
@@ -132,7 +157,7 @@ function assessInPerson(profile: MatchProfile, location: string | null): Assessm
   const weight = WEIGHTS.location;
   const where = location ? `in-person in ${location}` : 'in-person';
   if (profile.remotePreference === 'remote_only') {
-    return { component: { weight, fit: 0 }, reasons: [], misses: [`${where}, you prefer remote`] };
+    return { component: { weight, fit: 0 }, reasons: [], misses: [`${where}, prefers remote`] };
   }
   const hasHome = Boolean(profile.homeCity || profile.homeCountry);
   if (!location) {
@@ -155,14 +180,14 @@ function assessInPerson(profile: MatchProfile, location: string | null): Assessm
     return { component: { weight, fit: 1 * soften }, reasons: [`in ${profile.homeCity}`], misses: [] };
   }
   if (profile.travelRadius === 'local') {
-    return { component: { weight, fit: 0.2 * soften }, reasons: [], misses: [`${where}, you only travel locally`] };
+    return { component: { weight, fit: 0.2 * soften }, reasons: [], misses: [`${where}, only travels locally`] };
   }
   if (sameCountry) {
-    const reason = profile.homeCountry ? `within ${profile.homeCountry}` : 'in your country';
+    const reason = profile.homeCountry ? `within ${profile.homeCountry}` : 'in the home country';
     return { component: { weight, fit: 0.9 * soften }, reasons: [reason], misses: [] };
   }
   if (profile.travelRadius === 'country') {
-    const outside = profile.homeCountry ? `outside ${profile.homeCountry}` : 'outside your country';
+    const outside = profile.homeCountry ? `outside ${profile.homeCountry}` : 'outside the home country';
     return { component: { weight, fit: 0.1 * soften }, reasons: [], misses: [`${where}, ${outside}`] };
   }
   return { component: { weight, fit: 0.7 * soften }, reasons: [], misses: [] };
@@ -182,11 +207,11 @@ function assessCompensation(profile: MatchProfile, row: MatchCandidate): Assessm
   if (profile.compensationRequirement === 'travel_covered') {
     return type === 'travel'
       ? { component: { weight, fit: 1 }, reasons: ['travel covered'], misses: [] }
-      : { component: { weight, fit: 0 }, reasons: [], misses: ['exposure only, you need travel covered'] };
+      : { component: { weight, fit: 0 }, reasons: [], misses: ['exposure only, needs travel covered'] };
   }
   return type === 'travel'
-    ? { component: { weight, fit: 0.3 }, reasons: [], misses: ['travel only, you need a paid slot'] }
-    : { component: { weight, fit: 0 }, reasons: [], misses: ['unpaid, you need a paid slot'] };
+    ? { component: { weight, fit: 0.3 }, reasons: [], misses: ['travel only, needs a paid slot'] }
+    : { component: { weight, fit: 0 }, reasons: [], misses: ['unpaid, needs a paid slot'] };
 }
 
 function assessFormat(profile: MatchProfile, row: MatchCandidate): Assessment {
@@ -198,7 +223,7 @@ function assessFormat(profile: MatchProfile, row: MatchCandidate): Assessment {
   return {
     component: { weight: WEIGHTS.format, fit: 0 },
     reasons: [],
-    misses: [`${row.format}, you prefer ${preferred.join(' or ')}`],
+    misses: [`${row.format}, prefers ${preferred.join(' or ')}`],
   };
 }
 
@@ -265,16 +290,38 @@ function deadlineTime(date: Date | string | null): number {
   return Number.isNaN(time) ? Number.MAX_SAFE_INTEGER : time;
 }
 
-/** Score every item; with `sort`, best match first and sooner deadline on ties. */
-export function scoreOpportunities<T extends MatchCandidate>(
-  profile: MatchProfile,
+/**
+ * Score every item for every member of a roster. The row's own score, reasons
+ * and misses are the chosen member's, or with nobody chosen the best-fitting
+ * member's (the earlier member on the roster wins a tie). `speakerFits` lists
+ * every member, best first. An empty roster scores nothing.
+ */
+export function scoreForRoster<T extends MatchCandidate>(
+  roster: readonly RosterMember[],
   items: T[],
   now: Date = new Date(),
-  options: { sort?: boolean } = {}
-): ScoredOpportunity<T>[] {
+  options: RosterScoreOptions = {}
+): Array<T | RosterScoredOpportunity<T>> {
+  if (roster.length === 0) return items;
+  const chosen = options.speakerId ? roster.findIndex((member) => member.id === options.speakerId) : -1;
+
   const scored = items.map((item) => {
-    const match = computeMatchScore(profile, item, now);
-    return { ...item, matchScore: match.score, matchReasons: match.reasons, matchMisses: match.misses };
+    const matches = roster.map((member) => computeMatchScore(member.profile, item, now));
+    // Best first; `sort` is stable, so members with the same score keep their roster order.
+    const order = matches.map((_, index) => index).sort((a, b) => matches[b].score - matches[a].score);
+    const own = chosen >= 0 ? chosen : order[0];
+    return {
+      ...item,
+      matchScore: matches[own].score,
+      matchReasons: matches[own].reasons,
+      matchMisses: matches[own].misses,
+      matchSpeakerId: roster[own].id,
+      speakerFits: order.map((index) => ({
+        speakerId: roster[index].id,
+        score: matches[index].score,
+        ...(options.explain ? { reasons: matches[index].reasons, misses: matches[index].misses } : {}),
+      })),
+    };
   });
   if (options.sort) {
     scored.sort((a, b) => b.matchScore - a.matchScore || deadlineTime(a.cfpDeadline) - deadlineTime(b.cfpDeadline));

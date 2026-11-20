@@ -9,7 +9,7 @@ import type {
   SpeakerSeniority,
   TravelRadius,
 } from 'shared';
-import type { MatchProfile } from './matchScore.js';
+import type { RosterMember } from './matchScore.js';
 
 /**
  * The roster: the people an account places, one `SpeakerProfile` row each,
@@ -173,13 +173,12 @@ export async function getSpeaker(userId: string, id: string): Promise<SpeakerPro
 }
 
 /**
- * Whose fit a list is scored for when nobody was chosen: the account's first
- * speaker, or null when it has none. An account that only ever kept one
- * profile is scored exactly as before the roster.
+ * The account's speakers as the match score needs them, in roster order (so
+ * the earlier speaker wins a tie). Empty when nobody is on the roster: rows
+ * then carry no fit.
  */
-export async function getMatchProfile(userId: string): Promise<MatchProfile | null> {
-  const row = await prisma.speakerProfile.findFirst({ where: { userId }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] });
-  return row ? profileFromRow(row) : null;
+export async function getRoster(userId: string): Promise<RosterMember[]> {
+  return (await listSpeakers(userId)).map((speaker) => ({ id: speaker.id, profile: speaker }));
 }
 
 export async function createSpeaker(userId: string, input: SpeakerProfileInput): Promise<SpeakerProfileWithDates> {

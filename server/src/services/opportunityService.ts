@@ -7,7 +7,7 @@ import { parseDateConfidence } from './extraction.js';
 import { assignEvents } from './eventAssignment.js';
 import { attachEventContext, shadowedEditionIds } from './eventContext.js';
 import { LANE_ROW_SELECT, laneComparator, laneOf, laneWhere, summarizeLanes } from './lanes.js';
-import { MATCH_SORT_CANDIDATE_CAP, scoreOpportunities, type MatchProfile } from './matchScore.js';
+import { MATCH_SORT_CANDIDATE_CAP, scoreForRoster, type RosterMember } from './matchScore.js';
 import {
   buildOpportunityOrderBy,
   buildOpportunityWhere,
@@ -26,8 +26,12 @@ export interface PaginationParams {
 }
 
 export interface ListOptions {
-  /** The signed-in user's speaker profile; when set, every row gets a match score. */
-  profile?: MatchProfile | null;
+  /** The signed-in account's speakers; when there are any, every row gets a fit score for each. */
+  roster?: readonly RosterMember[];
+  /** Whose fit a row leads with and `sort=match` orders by; absent, the best-fitting speaker's. */
+  speakerId?: string | null;
+  /** Send every speaker's reasons with the row (a single call's page). */
+  explainFits?: boolean;
   now?: Date;
 }
 
@@ -94,14 +98,18 @@ async function buildGroupedWhere(filters: OpportunityFilters, now: Date | undefi
   return where;
 }
 
-/** Adds `matchScore` / reasons / misses when there is a profile to score against. */
+/** Adds the fit scores when the account has a roster to score against. */
 export function withMatchScores(
   items: OpportunityWithDates[],
   options: ListOptions,
   sort = false
 ): OpportunityWithDates[] {
-  if (!options.profile) return items;
-  return scoreOpportunities(options.profile, items, options.now, { sort });
+  if (!options.roster?.length) return items;
+  return scoreForRoster(options.roster, items, options.now, {
+    sort,
+    speakerId: options.speakerId,
+    explain: options.explainFits,
+  });
 }
 
 function paginate<T>(items: T[], page: number, pageSize: number, total: number): PaginatedResponse<T> {
@@ -148,7 +156,7 @@ export async function getOpportunities(
   const everyLane = await buildGroupedWhere(filters, options.now);
   const where = lane ? { AND: [everyLane, laneWhere(lane)] } : everyLane;
   const orderBy = buildOpportunityOrderBy(filters.sortBy);
-  const sortByMatch = filters.sortBy === 'match' && Boolean(options.profile);
+  const sortByMatch = filters.sortBy === 'match' && Boolean(options.roster?.length);
 
   // A search term is ranked by keyword relevance across every match before
   // paginating; a page-sized DB slice would only re-sort within itself.

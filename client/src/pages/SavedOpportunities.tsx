@@ -2,10 +2,12 @@ import { Link, Navigate, useSearchParams } from 'react-router-dom';
 import { AlertTriangle, Loader2 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { useRowLeaving } from '../hooks/useRowLeaving';
+import { useForWhom } from '../hooks/useForWhom';
+import { EVERYONE, savedFor, savedForLabel } from '../lib/forWhom';
 import {
   useRemoveSavedOpportunity,
   useSavedOpportunities,
-  useUpdateSavedCategory,
+  useChangeSavedCall,
 } from '../hooks/useSavedOpportunities';
 import type { SavedCategory } from '../types';
 import {
@@ -21,6 +23,7 @@ import {
 import { CallRowSkeleton } from '../components/browse/CallList';
 import { SavedCallRow } from '../components/saved/SavedCallRow';
 import { SegmentedSwitch } from '../components/SegmentedSwitch';
+import { ForWhomSelect } from '../components/ForWhomSelect';
 import { Button } from '@/components/ui/button';
 
 const STAGE_HEADINGS: Record<SavedCategory, string> = {
@@ -53,18 +56,23 @@ const EMPTY_STAGE: Record<SavedCategory, { title: string; body: string }> = {
 /**
  * The calls you saved, as a pipeline: one row of control (the stage switch,
  * with what is in each stage), then that stage's calls as the same rows Browse
- * uses. The stage is in the URL, so back and a shared link land on it.
+ * uses. The stage is in the URL, so back and a shared link land on it. On a
+ * roster of several, the list is everyone's (each row says whose) or one
+ * person's, and a row can be given to someone else.
  */
 export function SavedOpportunities() {
   const { isAuthenticated, isLoading: authLoading } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const savedQuery = useSavedOpportunities({ enabled: isAuthenticated });
   const removeSaved = useRemoveSavedOpportunity();
-  const updateCategory = useUpdateSavedCategory();
+  const changeSaved = useChangeSavedCall();
+  const forWhom = useForWhom({ allowNobody: true });
 
   const stageParam = searchParams.get('stage');
   const stage = isStage(stageParam) ? stageParam : DEFAULT_STAGE;
-  const items = savedQuery.data ?? [];
+  const allItems = savedQuery.data ?? [];
+  // Everything below (the counts, the caption, the rows) is about the people chosen.
+  const items = savedFor(allItems, forWhom.choice);
   const inStage = savedInStage(items, stage);
   const { listRef, notice, setNotice, rowLeft } = useRowLeaving(inStage);
 
@@ -88,20 +96,32 @@ export function SavedOpportunities() {
   const isLoading = savedQuery.isPending;
   const counts = countByStage(items);
   const caption = stageCaption(stage, inStage);
-  const nothingSaved = !isLoading && items.length === 0;
+  const nothingSaved = !isLoading && allItems.length === 0;
 
   const isBusy = (savedId: string) =>
-    (updateCategory.isPending && updateCategory.variables?.savedId === savedId) ||
+    (changeSaved.isPending && changeSaved.variables?.savedId === savedId) ||
     (removeSaved.isPending && removeSaved.variables === savedId);
 
   const handleMove = (saved: SavedCall, category: SavedCategory) =>
-    updateCategory.mutate(
+    changeSaved.mutate(
       { savedId: saved.id, category },
       {
         onSuccess: () => rowLeft(saved.id, `${saved.opportunity.title} moved to ${STAGE_LABELS[category]}.`),
         onError: () => setNotice({ text: `${saved.opportunity.title} was not moved. Try again.`, failed: true }),
       }
     );
+
+  const handleGive = (saved: SavedCall, speakerId: string | null) => {
+    const said = `${saved.opportunity.title} is now saved for ${savedForLabel(speakerId, forWhom.speakers)}.`;
+    changeSaved.mutate(
+      { savedId: saved.id, speakerId },
+      {
+        // With everyone listed the row stays and only its name changes; otherwise it leaves this list.
+        onSuccess: () => (forWhom.choice === EVERYONE ? setNotice({ text: said }) : rowLeft(saved.id, said)),
+        onError: () => setNotice({ text: `${saved.opportunity.title} was not moved. Try again.`, failed: true }),
+      }
+    );
+  };
 
   const handleRemove = (saved: SavedCall) =>
     removeSaved.mutate(saved.id, {
@@ -135,6 +155,20 @@ export function SavedOpportunities() {
           {notice?.failed && <AlertTriangle className="size-3.5 flex-none text-critical" aria-hidden="true" />}
           {notice?.text}
         </p>
+        {forWhom.canChoose && (
+          <div className="ml-auto">
+            <ForWhomSelect
+              label="For"
+              speakers={forWhom.speakers}
+              value={forWhom.choice}
+              onChange={(next) => {
+                setNotice(null);
+                forWhom.setChoice(next);
+              }}
+              withNobody
+            />
+          </div>
+        )}
       </div>
 
       <section ref={listRef} tabIndex={-1} aria-labelledby="saved-stage-heading" className="focus:outline-none">
@@ -175,7 +209,11 @@ export function SavedOpportunities() {
                 key={saved.id}
                 saved={saved}
                 isBusy={isBusy(saved.id)}
+                speakers={forWhom.speakers}
+                showsWho={forWhom.canChoose && forWhom.choice === EVERYONE}
+                takenBy={allItems.filter((item) => item.opportunityId === saved.opportunityId).map((item) => item.speakerId)}
                 onMove={handleMove}
+                onGive={handleGive}
                 onRemove={handleRemove}
               />
             ))}

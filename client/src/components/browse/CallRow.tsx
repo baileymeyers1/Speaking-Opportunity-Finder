@@ -29,6 +29,8 @@ interface CallRowFrameProps {
   actions: ReactNode;
   /** A row whose moment has passed (a call that closed before you applied) steps back. */
   dimmed?: boolean;
+  /** Leads the line under the title: on Saved, who the call is saved for. */
+  tag?: ReactNode;
 }
 
 /**
@@ -37,7 +39,7 @@ interface CallRowFrameProps {
  * way in either. The title is the row's link and covers the row; everything
  * else you can act on sits above it.
  */
-export function CallRowFrame({ opportunity, lead, actions, dimmed = false }: CallRowFrameProps) {
+export function CallRowFrame({ opportunity, lead, actions, dimmed = false, tag }: CallRowFrameProps) {
   const location = useLocation();
   const state = callState(opportunity);
   const FormatIcon = FORMAT_ICONS[opportunity.format] ?? FORMAT_ICONS.other;
@@ -67,6 +69,7 @@ export function CallRowFrame({ opportunity, lead, actions, dimmed = false }: Cal
           </Link>
         </h3>
         <ul className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[13px] text-muted-foreground [&_svg]:size-3.5 [&_svg]:flex-none">
+          {tag && <li className="relative z-[1] max-w-full">{tag}</li>}
           {opportunity.isLiveResult && (
             <li>
               <Badge variant="good">
@@ -151,7 +154,7 @@ export function ApplyLink({ opportunity, applied = false }: { opportunity: Oppor
 
 /** One call on Browse: it leads with where the call stands, and can be saved or applied to. */
 export function CallRow({ opportunity }: { opportunity: Opportunity }) {
-  const { savedCategory, isSaving, save } = useSaveCall(opportunity);
+  const { savedRows, isSaving, save } = useSaveCall(opportunity);
   const state = callState(opportunity);
 
   return (
@@ -162,7 +165,7 @@ export function CallRow({ opportunity }: { opportunity: Opportunity }) {
       actions={
         <>
           <MatchPill opportunity={opportunity} />
-          <SaveOpportunityMenu savedCategory={savedCategory} isSaving={isSaving} onSave={save} />
+          <SaveOpportunityMenu opportunity={opportunity} savedRows={savedRows} isSaving={isSaving} onSave={save} />
           <ApplyLink opportunity={opportunity} />
         </>
       }
