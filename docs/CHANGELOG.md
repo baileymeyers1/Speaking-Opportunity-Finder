@@ -2,6 +2,19 @@
 
 Reverse chronological. Current state lives in `docs/STATUS.md`.
 
+## 2026-11-20 — For whom: fit and saved calls per speaker
+
+Third and last PR for the roster. No schema change.
+- **Fit for the whole roster.** `scoreForRoster` scores each row for every speaker. A row leads with the speaker asked for (`?speaker=<id>` on the list, live search and call endpoints) or, with nobody asked for, the one who fits best (the earlier speaker wins a tie), and carries everyone's score in `speakerFits`; a single call also carries each speaker's reasons. `sort=match` orders by the leading score. An account with one speaker sees what it saw before.
+- **One choice, two pages.** Everyone, one speaker, or on Saved "No one yet": remembered per browser (`useForWhom`), shared by Browse and Saved, shown as words with a chevron beside the sort and only on a roster of two or more.
+- **Browse.** With everyone chosen the pill names the best-fitting speaker ("Dana Okafor 82%") and its popover lists the rest of the roster; the bookmark asks who to save for, best fit first, with "No one yet" last. With one speaker chosen, or a roster of one, the bookmark lists the stages and saves for them. The bookmark now shows what is saved from the account's saved list, not only what was saved in this visit.
+- **Saved.** Everyone's list names the person on each row; the row's menu gives the call to someone else or back to nobody. A speaker who already has the call saved is not offered, and the server refuses it (409).
+- **Call page.** "Who fits" lists every speaker with their score and a line of reasons. "Save" asks who for in the same way.
+- **Roster.** Each row says what is saved for that speaker ("2 interested, 1 applied").
+- **Wording.** Fit reasons lost their "you": "in-person in Berlin, prefers remote" reads right beside anyone's name.
+- **Calls saved before the roster** belong to nobody. `scripts/assignSavedCalls.ts` gives each to its account's first speaker (dry run first; idempotent; skips an account with no speakers and a call the speaker already has).
+- **Server.** `saveCall` takes a speaker and checks they are on the account's roster; `changeSavedCall` moves a saved call between stages and people under the same lock.
+
 ## 2026-11-20 — A roster of speakers: several profiles per account, and a Speakers page
 
 Second of three PRs for the roster, built from a wireframe agreed the same day. Fit and saved calls per person come in the third.
