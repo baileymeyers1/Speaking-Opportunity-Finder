@@ -138,8 +138,19 @@ export function profileToData(input: SpeakerProfileInput) {
   };
 }
 
+/**
+ * The account's profile row. Neither this nor the save below leans on the
+ * unique index on `userId`: the roster (several profiles per account) drops
+ * it, and a preview build pushes that schema to the production database
+ * before the code that goes with it is merged. Until then the oldest row is
+ * the profile.
+ */
+function findProfileRow(userId: string) {
+  return prisma.speakerProfile.findFirst({ where: { userId }, orderBy: { createdAt: 'asc' } });
+}
+
 export async function getProfile(userId: string): Promise<SpeakerProfileWithDates | null> {
-  const row = await prisma.speakerProfile.findUnique({ where: { userId } });
+  const row = await findProfileRow(userId);
   return row ? profileFromRow(row) : null;
 }
 
@@ -150,10 +161,11 @@ export async function getMatchProfile(userId: string): Promise<MatchProfile | nu
 
 export async function upsertProfile(userId: string, input: SpeakerProfileInput): Promise<SpeakerProfileWithDates> {
   const data = profileToData(input);
-  const row = await prisma.speakerProfile.upsert({
-    where: { userId },
-    create: { userId, ...data },
-    update: data,
-  });
+  // Not `upsert`: Prisma sends that as INSERT ... ON CONFLICT ("userId"), which
+  // Postgres rejects (42P10) once no unique index covers the column.
+  const existing = await findProfileRow(userId);
+  const row = existing
+    ? await prisma.speakerProfile.update({ where: { id: existing.id }, data })
+    : await prisma.speakerProfile.create({ data: { userId, ...data } });
   return profileFromRow(row);
 }
