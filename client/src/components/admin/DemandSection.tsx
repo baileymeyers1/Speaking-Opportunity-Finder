@@ -32,25 +32,25 @@ export function DemandSection({
 
           <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-4">
             <div>
-              <h3 className="mb-2 text-sm font-semibold text-foreground">Saved queries</h3>
+              <h3 className="mb-2 text-sm font-medium text-foreground">Saved queries</h3>
               <CountList items={data.savedSearches.topQueries} emptyText="No saved queries yet." />
             </div>
             <div>
-              <h3 className="mb-2 text-sm font-semibold text-foreground">Saved sectors</h3>
+              <h3 className="mb-2 text-sm font-medium text-foreground">Saved sectors</h3>
               <CountList items={data.savedSearches.topSectors ?? []} emptyText="No sector filters saved." />
             </div>
             <div>
-              <h3 className="mb-2 text-sm font-semibold text-foreground">Saved locations</h3>
+              <h3 className="mb-2 text-sm font-medium text-foreground">Saved locations</h3>
               <CountList items={data.savedSearches.topLocations} emptyText="No location filters saved." />
             </div>
             <div>
-              <h3 className="mb-2 text-sm font-semibold text-foreground">Saved formats</h3>
+              <h3 className="mb-2 text-sm font-medium text-foreground">Saved formats</h3>
               <CountList items={data.savedSearches.topFormats} emptyText="No format filters saved." />
             </div>
           </div>
 
           <div>
-            <h3 className="mb-2 text-sm font-semibold text-foreground">Live-search queries</h3>
+            <h3 className="mb-2 text-sm font-medium text-foreground">Live-search queries</h3>
             <div className="mb-3 grid grid-cols-2 gap-3 md:grid-cols-4">
               <StatTile label="Searches in 7 days" value={data.searchLog.total7d} />
               <StatTile label="Searches in 30 days" value={data.searchLog.total30d} note={`${data.searchLog.distinctQueries30d} distinct queries`} />

@@ -55,7 +55,7 @@ export function OpportunityList({
         <div className="rounded-full bg-muted p-4 mb-4">
           <SearchX className="h-8 w-8 text-muted-foreground" />
         </div>
-        <h3 className="text-lg font-semibold text-foreground">
+        <h3 className="text-lg font-medium text-foreground">
           No opportunities found
         </h3>
         <p className="text-sm text-muted-foreground mt-1 max-w-sm">

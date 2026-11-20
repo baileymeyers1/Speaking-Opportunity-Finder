@@ -1,90 +1,40 @@
 import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Menu, Mic2, Moon, Sun } from 'lucide-react';
+import { Menu } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
-import { useTheme } from '../context/ThemeContext';
 import { Button } from '@/components/ui/button';
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-  SheetTrigger,
-} from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { Separator } from '@/components/ui/separator';
-import { cn } from '@/lib/utils';
+import { Lockup } from './Lockup';
+import { NavTabs, type NavTab } from './NavTabs';
+import { ThemeSwitch } from './ThemeSwitch';
 
 export function Navbar() {
   const { isAuthenticated, user, logout } = useAuth();
-  const { resolvedTheme, setTheme } = useTheme();
-  const location = useLocation();
+  const { pathname } = useLocation();
   const [sheetOpen, setSheetOpen] = useState(false);
 
-  const isAdmin = user?.isAdmin;
+  const tabs: NavTab[] = [
+    { to: '/', label: 'Browse' },
+    ...(isAuthenticated ? [{ to: '/saved', label: 'Saved' }, { to: '/profile', label: 'Profile' }] : []),
+    ...(isAuthenticated && user?.isAdmin ? [{ to: '/admin/dashboard', label: 'Analytics' }] : []),
+  ];
 
-  const isActive = (path: string) => location.pathname === path;
-
-  const navLinkClass = (path: string) =>
-    cn(
-      'text-sm font-medium transition-colors hover:text-foreground/80',
-      isActive(path) ? 'text-foreground' : 'text-foreground/60'
-    );
-
-  const toggleTheme = () => {
-    setTheme(resolvedTheme === 'dark' ? 'light' : 'dark');
-  };
+  const closeSheet = () => setSheetOpen(false);
 
   return (
-    <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-      <div className="container flex h-14 items-center">
-        {/* Logo */}
-        <Link to="/" className="mr-6 flex items-center space-x-2" aria-label="Speaking Finder home">
-          <Mic2 className="h-5 w-5" aria-hidden="true" />
-          <span className="font-bold">Speaking Finder</span>
-        </Link>
+    <header className="sticky top-0 z-50 w-full border-b bg-background">
+      <div className="container grid h-16 grid-cols-[auto_1fr_auto] items-stretch gap-[18px] md:gap-9">
+        <div className="flex items-center">
+          <Lockup />
+        </div>
 
-        {/* Desktop nav links */}
-        <nav aria-label="Main navigation" className="hidden md:flex items-center space-x-6">
-          <Link to="/" className={navLinkClass('/')} aria-current={isActive('/') ? 'page' : undefined}>
-            Browse
-          </Link>
-          {isAuthenticated && (
-            <Link to="/saved" className={navLinkClass('/saved')} aria-current={isActive('/saved') ? 'page' : undefined}>
-              Saved
-            </Link>
-          )}
-          {isAuthenticated && (
-            <Link to="/profile" className={navLinkClass('/profile')} aria-current={isActive('/profile') ? 'page' : undefined}>
-              Profile
-            </Link>
-          )}
-          {isAuthenticated && isAdmin && (
-            <Link
-              to="/admin/dashboard"
-              className={navLinkClass('/admin/dashboard')}
-              aria-current={isActive('/admin/dashboard') ? 'page' : undefined}
-            >
-              Analytics
-            </Link>
-          )}
-        </nav>
+        <NavTabs tabs={tabs} />
 
-        {/* Right side: theme toggle + auth (desktop) */}
-        <div className="ml-auto flex items-center space-x-2">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={toggleTheme}
-            aria-label="Toggle theme"
-          >
-            {resolvedTheme === 'dark' ? (
-              <Sun className="h-4 w-4" />
-            ) : (
-              <Moon className="h-4 w-4" />
-            )}
-          </Button>
+        <div className="col-start-3 flex items-center gap-3">
+          <ThemeSwitch />
 
-          <div className="hidden md:flex items-center space-x-2">
+          <div className="hidden items-center gap-3 md:flex">
             {isAuthenticated ? (
               <Button variant="ghost" size="sm" onClick={logout}>
                 Logout
@@ -94,116 +44,61 @@ export function Navbar() {
                 <Button variant="ghost" size="sm" asChild>
                   <Link to="/login">Login</Link>
                 </Button>
-                <Button size="sm" asChild>
-                  <Link to="/register">Sign Up</Link>
+                <Button variant="outline" size="sm" asChild>
+                  <Link to="/register">Sign up</Link>
                 </Button>
               </>
             )}
           </div>
 
-          {/* Mobile: sheet trigger */}
           <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
             <SheetTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="md:hidden"
-                aria-label="Open menu"
-              >
-                <Menu className="h-5 w-5" />
+              <Button variant="ghost" size="icon" className="md:hidden" aria-label="Open menu">
+                <Menu aria-hidden="true" />
               </Button>
             </SheetTrigger>
             <SheetContent side="right" className="w-72">
               <SheetHeader>
-                <SheetTitle className="flex items-center space-x-2">
-                  <Mic2 className="h-5 w-5" />
-                  <span>Speaking Finder</span>
-                </SheetTitle>
+                <SheetTitle className="text-left text-[15px] font-medium">Speaking Finder</SheetTitle>
+                <SheetDescription className="sr-only">Pages and your account</SheetDescription>
               </SheetHeader>
-              <nav aria-label="Mobile navigation" className="mt-6 flex flex-col space-y-3">
-                <Link
-                  to="/"
-                  onClick={() => setSheetOpen(false)}
-                  aria-current={isActive('/') ? 'page' : undefined}
-                  className={cn(
-                    'px-2 py-1.5 text-sm font-medium rounded-md transition-colors',
-                    isActive('/')
-                      ? 'bg-accent text-accent-foreground'
-                      : 'text-foreground/60 hover:text-foreground hover:bg-accent/50'
-                  )}
-                >
-                  Browse
-                </Link>
-                {isAuthenticated && (
+              <nav aria-label="Mobile navigation" className="mt-6 flex flex-col">
+                {tabs.map((tab) => (
                   <Link
-                    to="/saved"
-                    onClick={() => setSheetOpen(false)}
-                    aria-current={isActive('/saved') ? 'page' : undefined}
-                    className={cn(
-                      'px-2 py-1.5 text-sm font-medium rounded-md transition-colors',
-                      isActive('/saved')
-                        ? 'bg-accent text-accent-foreground'
-                        : 'text-foreground/60 hover:text-foreground hover:bg-accent/50'
-                    )}
+                    key={tab.to}
+                    to={tab.to}
+                    onClick={closeSheet}
+                    aria-current={pathname === tab.to ? 'page' : undefined}
+                    className="-ml-px border-l-2 border-transparent py-2 pl-3 text-[15px] text-muted-foreground transition-colors hover:text-foreground aria-[current=page]:border-primary aria-[current=page]:text-foreground"
                   >
-                    Saved
+                    {tab.label}
                   </Link>
-                )}
-                {isAuthenticated && (
-                  <Link
-                    to="/profile"
-                    onClick={() => setSheetOpen(false)}
-                    aria-current={isActive('/profile') ? 'page' : undefined}
-                    className={cn(
-                      'px-2 py-1.5 text-sm font-medium rounded-md transition-colors',
-                      isActive('/profile')
-                        ? 'bg-accent text-accent-foreground'
-                        : 'text-foreground/60 hover:text-foreground hover:bg-accent/50'
-                    )}
-                  >
-                    Profile
-                  </Link>
-                )}
-                {isAuthenticated && isAdmin && (
-                  <Link
-                    to="/admin/dashboard"
-                    onClick={() => setSheetOpen(false)}
-                    aria-current={isActive('/admin/dashboard') ? 'page' : undefined}
-                    className={cn(
-                      'px-2 py-1.5 text-sm font-medium rounded-md transition-colors',
-                      isActive('/admin/dashboard')
-                        ? 'bg-accent text-accent-foreground'
-                        : 'text-foreground/60 hover:text-foreground hover:bg-accent/50'
-                    )}
-                  >
-                    Analytics
-                  </Link>
-                )}
-                <Separator />
+                ))}
+                <Separator className="my-4" />
                 {isAuthenticated ? (
                   <Button
                     variant="ghost"
-                    className="justify-start"
+                    className="justify-start px-3"
                     onClick={() => {
                       logout();
-                      setSheetOpen(false);
+                      closeSheet();
                     }}
                   >
                     Logout
                   </Button>
                 ) : (
-                  <>
-                    <Button variant="ghost" className="justify-start" asChild>
-                      <Link to="/login" onClick={() => setSheetOpen(false)}>
+                  <div className="flex flex-col gap-3">
+                    <Button variant="ghost" className="justify-start px-3" asChild>
+                      <Link to="/login" onClick={closeSheet}>
                         Login
                       </Link>
                     </Button>
-                    <Button asChild>
-                      <Link to="/register" onClick={() => setSheetOpen(false)}>
-                        Sign Up
+                    <Button variant="outline" asChild>
+                      <Link to="/register" onClick={closeSheet}>
+                        Sign up
                       </Link>
                     </Button>
-                  </>
+                  </div>
                 )}
               </nav>
             </SheetContent>

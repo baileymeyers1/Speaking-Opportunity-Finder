@@ -23,7 +23,7 @@ export function PipelineEvents({ events, now }: { events: AdminPipelineEvent[]; 
             <Icon
               className={cn(
                 'mt-0.5 h-4 w-4 shrink-0',
-                event.status === 'error' ? 'text-red-700 dark:text-red-300' : 'text-emerald-700 dark:text-emerald-300'
+                event.status === 'error' ? 'text-critical' : 'text-good'
               )}
               aria-hidden="true"
             />

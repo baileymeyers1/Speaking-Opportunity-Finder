@@ -173,8 +173,8 @@ export function SavedOpportunities() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight text-foreground">
-          Saved Opportunities
+        <h1 className="title text-foreground">
+          Saved opportunities
         </h1>
         <p className="text-muted-foreground mt-1">
           Track and manage your speaking opportunity pipeline
@@ -199,9 +199,8 @@ export function SavedOpportunities() {
                 <Badge
                   variant="secondary"
                   className={cn(
-                    'h-5 min-w-[20px] px-1.5 text-[10px]',
-                    activeCategory === cat.value &&
-                      'bg-primary/10 text-primary'
+                    'h-5 min-w-[20px] justify-center px-1.5 text-[11px] tabular-nums',
+                    activeCategory === cat.value && 'border-transparent bg-foreground text-background'
                   )}
                 >
                   {getCategoryCount(cat.value)}

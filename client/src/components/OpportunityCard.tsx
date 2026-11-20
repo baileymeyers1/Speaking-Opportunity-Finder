@@ -76,13 +76,13 @@ export function OpportunityCard({ opportunity, showSave = true, isPast }: Opport
 
   return (
     <Card className={cn(
-      'group hover:shadow-lg hover:border-primary/20 transition-all duration-200',
+      'group hover:shadow-lg transition-shadow duration-200',
       isPastDeadline && 'opacity-50 grayscale'
     )}>
       <CardHeader className="pb-3">
         {/* Title row with badges */}
         <div className="flex items-start justify-between gap-2">
-          <h3 className="text-base font-semibold leading-snug">
+          <h3 className="text-base font-medium leading-snug">
             <Link
               to={`/opportunities/${current.id}`}
               state={{ from: `${location.pathname}${location.search}` }}
@@ -95,13 +95,13 @@ export function OpportunityCard({ opportunity, showSave = true, isPast }: Opport
           <div className="flex flex-wrap items-center justify-end gap-1.5">
             <MatchPill opportunity={current} />
             {isPastDeadline && (
-              <Badge variant="secondary" className="text-[11px] px-1.5 py-0">
+              <Badge variant="secondary">
                 Deadline passed
               </Badge>
             )}
             {isLive && (
-              <Badge className="bg-emerald-100 text-emerald-700 border-emerald-300 dark:bg-emerald-950 dark:text-emerald-400 dark:border-emerald-700">
-                <Zap className="h-3 w-3 mr-0.5" />
+              <Badge variant="good">
+                <Zap aria-hidden="true" />
                 Live
               </Badge>
             )}
@@ -145,7 +145,7 @@ export function OpportunityCard({ opportunity, showSave = true, isPast }: Opport
           <div className="flex items-center gap-1.5 text-muted-foreground">
             {current.isRemote ? (
               <>
-                <Globe className="h-3.5 w-3.5 flex-shrink-0 text-emerald-600 dark:text-emerald-400" />
+                <Globe className="h-3.5 w-3.5 flex-shrink-0" />
                 <span className="truncate">
                   {current.location ? `${current.location} (Remote)` : 'Remote'}
                 </span>
@@ -166,7 +166,7 @@ export function OpportunityCard({ opportunity, showSave = true, isPast }: Opport
           {/* Compensation -- only render if present */}
           {hasCompensation && compensationLabel && (
             <div className="flex items-center gap-1.5 text-muted-foreground">
-              <DollarSign className="h-3.5 w-3.5 flex-shrink-0 text-amber-600 dark:text-amber-400" />
+              <DollarSign className="h-3.5 w-3.5 flex-shrink-0" />
               <span className="truncate capitalize">{compensationLabel}</span>
             </div>
           )}
@@ -182,7 +182,7 @@ export function OpportunityCard({ opportunity, showSave = true, isPast }: Opport
         {((current.sectors?.length ?? 0) > 0 || (current.industries?.length ?? 0) > 0) && (
           <div className="flex flex-wrap gap-1.5 pt-1">
             {current.sectors?.map((sector) => (
-              <Badge key={sector} variant="secondary" className="text-[11px] px-2 py-0 font-medium">
+              <Badge key={sector} variant="secondary">
                 {sectorLabel(sector)}
               </Badge>
             ))}
@@ -190,7 +190,7 @@ export function OpportunityCard({ opportunity, showSave = true, isPast }: Opport
               <Badge
                 key={industry}
                 variant="outline"
-                className="text-[11px] px-2 py-0 font-normal capitalize"
+                className="font-normal capitalize"
               >
                 {industry}
               </Badge>

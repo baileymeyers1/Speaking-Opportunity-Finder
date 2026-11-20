@@ -61,7 +61,7 @@ export function MultiLocationInput({
 
   return (
     <div className="max-w-xs">
-      <label htmlFor="location-input" className="block text-sm font-medium text-gray-700 mb-2">
+      <label htmlFor="location-input" className="block text-sm font-medium text-foreground mb-2">
         {label}
       </label>
       <input
@@ -72,20 +72,20 @@ export function MultiLocationInput({
         onKeyDown={handleKeyDown}
         onBlur={handleBlur}
         placeholder={placeholder}
-        className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+        className="field w-full px-3 py-2 text-sm"
       />
       {selected.length > 0 && (
         <div className="flex flex-wrap gap-1 mt-2">
           {selected.map((item) => (
             <span
               key={item}
-              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-blue-50 text-blue-700 border border-blue-200"
+              className="inline-flex h-6 items-center gap-1.5 rounded-sm border border-border px-2 text-xs font-medium text-muted-foreground"
             >
               <span>{item}</span>
               <button
                 onClick={() => removeChip(item)}
                 aria-label={`Remove ${item}`}
-                className="hover:text-blue-900"
+                className="hover:text-foreground"
               >
                 &times;
               </button>
@@ -93,7 +93,7 @@ export function MultiLocationInput({
           ))}
         </div>
       )}
-      <p className="text-xs text-gray-500 mt-1">
+      <p className="text-xs text-muted-foreground mt-1">
         Type a location and press Enter or comma to add multiple.
       </p>
     </div>

@@ -3,18 +3,21 @@ import { cva, type VariantProps } from "class-variance-authority"
 
 import { cn } from "@/lib/utils"
 
+/* Tags in the JCI Intelligence system: a hairline outline, 6px corners, never a pill.
+   Status (good, warning, critical) keeps the label in secondary ink and puts the colour on the icon, so a
+   status tag always carries an icon. "default" is the one solid tag, for a count or the live state. */
 const badgeVariants = cva(
-  "inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
+  "inline-flex h-6 items-center gap-1.5 whitespace-nowrap rounded-sm border px-2 text-xs font-medium leading-none transition-colors [&_svg]:size-3.5 [&_svg]:shrink-0",
   {
     variants: {
       variant: {
-        default:
-          "border-transparent bg-primary text-primary-foreground hover:bg-primary/80",
-        secondary:
-          "border-transparent bg-secondary text-secondary-foreground hover:bg-secondary/80",
-        destructive:
-          "border-transparent bg-destructive text-destructive-foreground hover:bg-destructive/80",
-        outline: "text-foreground",
+        default: "border-transparent bg-foreground text-background",
+        secondary: "border-border text-muted-foreground",
+        outline: "border-border text-foreground",
+        destructive: "border-critical/35 text-critical",
+        good: "border-border text-muted-foreground [&_svg]:text-good",
+        warning: "border-border text-muted-foreground [&_svg]:text-warning",
+        critical: "border-border text-muted-foreground [&_svg]:text-critical",
       },
     },
     defaultVariants: {
@@ -27,10 +30,12 @@ export interface BadgeProps
   extends React.HTMLAttributes<HTMLDivElement>,
     VariantProps<typeof badgeVariants> {}
 
-function Badge({ className, variant, ...props }: BadgeProps) {
-  return (
-    <div className={cn(badgeVariants({ variant }), className)} {...props} />
+// Forwards its ref: a tag is often a tooltip's trigger, and the tooltip anchors to that ref.
+const Badge = React.forwardRef<HTMLDivElement, BadgeProps>(
+  ({ className, variant, ...props }, ref) => (
+    <div ref={ref} className={cn(badgeVariants({ variant }), className)} {...props} />
   )
-}
+)
+Badge.displayName = "Badge"
 
 export { Badge, badgeVariants }

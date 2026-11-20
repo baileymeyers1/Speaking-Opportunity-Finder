@@ -19,7 +19,7 @@ function BudgetMeter({ used, limit, date }: { used: number; limit: number; date:
     <div className="rounded-md border bg-muted/30 p-3">
       <div className="flex items-baseline justify-between gap-2">
         <p className="text-xs font-medium text-muted-foreground">Claude budget today (UTC {date})</p>
-        <p className="text-sm font-semibold tabular-nums text-foreground">
+        <p className="text-sm font-medium tabular-nums text-foreground">
           {formatCount(used)} / {formatCount(limit)}
         </p>
       </div>
@@ -32,13 +32,13 @@ function BudgetMeter({ used, limit, date }: { used: number; limit: number; date:
         aria-valuetext={`${used} of ${limit} calls used`}
         className={cn(
           'mt-2 h-2 w-full overflow-hidden rounded-full',
-          tone === 'critical' ? 'bg-red-200 dark:bg-red-900' : tone === 'warning' ? 'bg-amber-200 dark:bg-amber-900' : 'bg-emerald-200 dark:bg-emerald-900'
+          tone === 'critical' ? 'bg-critical/20' : tone === 'warning' ? 'bg-warning/20' : 'bg-good/20'
         )}
       >
         <div
           className={cn(
             'h-full rounded-full',
-            tone === 'critical' ? 'bg-red-600' : tone === 'warning' ? 'bg-amber-600' : 'bg-emerald-600'
+            tone === 'critical' ? 'bg-critical' : tone === 'warning' ? 'bg-warning' : 'bg-good'
           )}
           style={{ width: `${share * 100}%` }}
         />
@@ -54,7 +54,7 @@ function CronRow({ label, at, expected, now, overdue }: { label: string; at: str
   return (
     <li className="flex items-center justify-between gap-3 py-1.5 text-sm">
       <span className="text-foreground">{label}</span>
-      <span className={cn('tabular-nums', overdue ? 'font-medium text-red-700 dark:text-red-300' : 'text-muted-foreground')}>
+      <span className={cn('tabular-nums', overdue ? 'font-medium text-critical' : 'text-muted-foreground')}>
         {at ? <time dateTime={at}>{formatRelative(at, now)}</time> : 'never'}
         <span className="text-xs text-muted-foreground"> · {expected}</span>
         {overdue && <span className="sr-only"> (overdue)</span>}
@@ -150,7 +150,7 @@ export function PipelineSection({
           </div>
 
           <div>
-            <h3 className="mb-2 text-sm font-semibold text-foreground">Recent events</h3>
+            <h3 className="mb-2 text-sm font-medium text-foreground">Recent events</h3>
             <PipelineEvents events={data.events} now={now} />
           </div>
         </div>

@@ -41,7 +41,7 @@ export function SaveOpportunityMenu({ savedCategory, isSaving, onSave }: SaveOpp
           <DropdownMenuItem
             key={category.value}
             onClick={() => onSave(category.value)}
-            className={cn('cursor-pointer', savedCategory === category.value && 'font-semibold text-primary')}
+            className={cn('cursor-pointer', savedCategory === category.value && 'font-medium text-primary')}
           >
             {category.label}
             {savedCategory === category.value && (

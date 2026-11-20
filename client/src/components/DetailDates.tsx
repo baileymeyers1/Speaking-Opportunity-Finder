@@ -26,7 +26,7 @@ export function DetailDates({ opportunity }: { opportunity: Opportunity }) {
           <p className="text-sm font-medium text-foreground">CFP Deadline</p>
           {opportunity.hasOpenCall === false ? (
             <>
-              <p className="text-sm font-medium text-amber-800 dark:text-amber-300">No open call found</p>
+              <p className="text-sm font-medium text-warning">No open call found</p>
               <p className="mt-1 text-sm text-muted-foreground">{NO_OPEN_CALL_HINT}</p>
             </>
           ) : (

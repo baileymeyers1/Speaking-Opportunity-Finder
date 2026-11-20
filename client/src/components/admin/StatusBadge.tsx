@@ -4,15 +4,15 @@ import { cn } from '@/lib/utils';
 import type { AdminRunStatus, AdminSourceStatus } from '../../types';
 
 /**
- * Status is always an icon plus a word, never a colour alone. The colours are
- * the status palette: emerald for good, amber for warning, destructive for failing.
+ * Status is always an icon plus a word, never a colour alone. The word stays in
+ * secondary ink and the colour goes on the icon (the JCI Intelligence tag).
  */
 
 export const STATUS_TONES = {
-  good: 'border-emerald-600/50 bg-emerald-50 text-emerald-800 dark:border-emerald-400/40 dark:bg-emerald-950/40 dark:text-emerald-300',
-  warning: 'border-amber-600/50 bg-amber-50 text-amber-800 dark:border-amber-400/40 dark:bg-amber-950/40 dark:text-amber-300',
-  critical: 'border-red-600/50 bg-red-50 text-red-800 dark:border-red-400/40 dark:bg-red-950/40 dark:text-red-300',
-  neutral: 'border-border bg-muted text-muted-foreground',
+  good: 'text-muted-foreground [&_svg]:text-good',
+  warning: 'text-muted-foreground [&_svg]:text-warning',
+  critical: 'border-critical/35 text-critical',
+  neutral: 'text-muted-foreground',
 } as const;
 
 type Tone = keyof typeof STATUS_TONES;

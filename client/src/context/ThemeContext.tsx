@@ -1,25 +1,40 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
 
 type Theme = 'light' | 'dark' | 'system';
+type ResolvedTheme = 'light' | 'dark';
 
 interface ThemeContextType {
   theme: Theme;
   setTheme: (theme: Theme) => void;
-  resolvedTheme: 'light' | 'dark';
+  resolvedTheme: ResolvedTheme;
 }
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
 const DARK_QUERY = '(prefers-color-scheme: dark)';
+// index.html reads the same key before first paint, so the page never flashes the wrong theme.
+const STORAGE_KEY = 'theme';
+
+const resolveTheme = (theme: Theme, systemDark: boolean): ResolvedTheme =>
+  theme === 'dark' || (theme === 'system' && systemDark) ? 'dark' : 'light';
+
+const applyTheme = (resolved: ResolvedTheme) =>
+  document.documentElement.classList.toggle('dark', resolved === 'dark');
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [theme, setTheme] = useState<Theme>(() =>
-    (localStorage.getItem('theme') as Theme) || 'system'
+  const [theme, setThemeState] = useState<Theme>(() =>
+    (localStorage.getItem(STORAGE_KEY) as Theme) || 'system'
   );
   const [systemDark, setSystemDark] = useState(() => window.matchMedia(DARK_QUERY).matches);
 
-  const resolvedTheme: 'light' | 'dark' =
-    theme === 'dark' || (theme === 'system' && systemDark) ? 'dark' : 'light';
+  const resolvedTheme = resolveTheme(theme, systemDark);
+
+  // The document changes inside this call, not after the next render: the theme switch wraps it in a view
+  // transition, which snapshots the page as soon as the call returns.
+  const setTheme = useCallback((next: Theme) => {
+    applyTheme(resolveTheme(next, window.matchMedia(DARK_QUERY).matches));
+    setThemeState(next);
+  }, []);
 
   // Follow the OS preference while it changes
   useEffect(() => {
@@ -31,8 +46,8 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
   // Mirror the resolved theme onto the document and remember the choice
   useEffect(() => {
-    document.documentElement.classList.toggle('dark', resolvedTheme === 'dark');
-    localStorage.setItem('theme', theme);
+    applyTheme(resolvedTheme);
+    localStorage.setItem(STORAGE_KEY, theme);
   }, [theme, resolvedTheme]);
 
   return (

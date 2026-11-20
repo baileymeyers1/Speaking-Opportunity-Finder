@@ -44,9 +44,9 @@ export function CatalogueSection({
 
           <div className="grid gap-5 md:grid-cols-3">
             <div>
-              <h3 className="mb-2 text-sm font-semibold text-foreground">By deadline</h3>
+              <h3 className="mb-2 text-sm font-medium text-foreground">By deadline</h3>
               <CountList items={deadlineBuckets} emptyText="No active rows." />
-              <h3 className="mb-2 mt-5 text-sm font-semibold text-foreground">By location</h3>
+              <h3 className="mb-2 mt-5 text-sm font-medium text-foreground">By location</h3>
               <CountList
                 items={[
                   { label: 'Remote', count: data.remote },
@@ -57,18 +57,18 @@ export function CatalogueSection({
               <p className="mt-1 text-xs text-muted-foreground">{percentOf(data.remote, data.totals.active)}% remote</p>
             </div>
             <div>
-              <h3 className="mb-2 text-sm font-semibold text-foreground">By format</h3>
+              <h3 className="mb-2 text-sm font-medium text-foreground">By format</h3>
               <CountList items={data.byFormat} emptyText="No active rows." />
             </div>
             <div>
-              <h3 className="mb-2 text-sm font-semibold text-foreground">By sector</h3>
+              <h3 className="mb-2 text-sm font-medium text-foreground">By sector</h3>
               <CountList items={data.bySector ?? []} emptyText="No row has a sector yet." />
               <p className="mt-1 text-xs text-muted-foreground">
                 {data.withoutSector ?? 0} without a sector ({percentOf(data.withoutSector ?? 0, data.totals.active)}%)
               </p>
             </div>
             <div>
-              <h3 className="mb-2 text-sm font-semibold text-foreground">Top tags</h3>
+              <h3 className="mb-2 text-sm font-medium text-foreground">Top tags</h3>
               <CountList items={data.byIndustry} emptyText="No tags." />
             </div>
           </div>

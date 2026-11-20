@@ -19,11 +19,11 @@ export function AttentionStrip({ items, isPending }: { items: AttentionItem[]; i
     return (
       <section
         aria-label="Needs attention"
-        className="flex items-center gap-2 rounded-lg border border-emerald-600/40 bg-emerald-50 p-4 text-sm text-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200"
+        className="flex items-center gap-2 rounded-lg border border-good/40 bg-good/[0.07] p-4 text-sm text-foreground"
       >
-        <CheckCircle2 className="h-5 w-5 shrink-0" aria-hidden="true" />
+        <CheckCircle2 className="h-5 w-5 shrink-0 text-good" aria-hidden="true" />
         <span>
-          <span className="font-semibold">All clear.</span> Every source produced rows on its last run and the pipeline is
+          <span className="font-medium">All clear.</span> Every source produced rows on its last run and the pipeline is
           current.
         </span>
       </section>
@@ -45,11 +45,11 @@ export function AttentionStrip({ items, isPending }: { items: AttentionItem[]; i
       className={cn(
         'rounded-lg border p-4',
         critical > 0
-          ? 'border-red-600/50 bg-red-50 dark:bg-red-950/30'
-          : 'border-amber-600/50 bg-amber-50 dark:bg-amber-950/30'
+          ? 'border-critical/40 bg-critical/[0.06]'
+          : 'border-warning/40 bg-warning/[0.07]'
       )}
     >
-      <h2 className="text-sm font-semibold text-foreground">Needs attention: {summary}</h2>
+      <h2 className="text-sm font-medium text-foreground">Needs attention: {summary}</h2>
       <ul className="mt-2 space-y-2">
         {items.map((item) => {
           const Icon = item.severity === 'critical' ? XCircle : AlertTriangle;
@@ -58,7 +58,7 @@ export function AttentionStrip({ items, isPending }: { items: AttentionItem[]; i
               <Icon
                 className={cn(
                   'mt-0.5 h-4 w-4 shrink-0',
-                  item.severity === 'critical' ? 'text-red-700 dark:text-red-300' : 'text-amber-700 dark:text-amber-300'
+                  item.severity === 'critical' ? 'text-critical' : 'text-warning'
                 )}
                 aria-hidden="true"
               />

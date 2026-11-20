@@ -23,16 +23,16 @@ export function getDeadlineBadge(opportunity: DeadlineFields, now: Date = new Da
       label: `${daysLeft}d left`,
       variant: 'outline',
       className:
-        'border-amber-400 bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-400 dark:border-amber-700',
+        'border-warning/40 text-warning',
     };
   }
   return { label: formatDeadline(opportunity)!.date, variant: 'secondary' };
 }
 
 export function getQualityColor(score: number): string {
-  if (score >= 70) return 'bg-emerald-500';
-  if (score >= 40) return 'bg-amber-500';
-  return 'bg-red-500';
+  if (score >= 70) return 'bg-good';
+  if (score >= 40) return 'bg-warning';
+  return 'bg-critical';
 }
 
 export function getQualityLabel(score: number): string {

@@ -14,7 +14,7 @@ export function OpportunityDetailSkeleton() {
           {/* Title + format badge */}
           <div className="flex items-start justify-between gap-4">
             <Skeleton className="h-8 w-3/4" />
-            <Skeleton className="h-6 w-20 rounded-full" />
+            <Skeleton className="h-6 w-20 rounded-sm" />
           </div>
 
           {/* Organization */}
@@ -22,10 +22,10 @@ export function OpportunityDetailSkeleton() {
 
           {/* Metadata badges */}
           <div className="flex flex-wrap gap-2">
-            <Skeleton className="h-6 w-20 rounded-full" />
-            <Skeleton className="h-6 w-28 rounded-full" />
-            <Skeleton className="h-6 w-36 rounded-full" />
-            <Skeleton className="h-6 w-24 rounded-full" />
+            <Skeleton className="h-6 w-20 rounded-sm" />
+            <Skeleton className="h-6 w-28 rounded-sm" />
+            <Skeleton className="h-6 w-36 rounded-sm" />
+            <Skeleton className="h-6 w-24 rounded-sm" />
           </div>
         </CardHeader>
 
@@ -65,9 +65,9 @@ export function OpportunityDetailSkeleton() {
           <div className="space-y-3">
             <Skeleton className="h-4 w-20" />
             <div className="flex flex-wrap gap-2">
-              <Skeleton className="h-6 w-24 rounded-full" />
-              <Skeleton className="h-6 w-20 rounded-full" />
-              <Skeleton className="h-6 w-28 rounded-full" />
+              <Skeleton className="h-6 w-24 rounded-sm" />
+              <Skeleton className="h-6 w-20 rounded-sm" />
+              <Skeleton className="h-6 w-28 rounded-sm" />
             </div>
           </div>
 

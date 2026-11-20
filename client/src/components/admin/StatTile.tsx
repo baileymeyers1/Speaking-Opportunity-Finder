@@ -20,12 +20,12 @@ export function StatTile({
     <div
       className={cn(
         'rounded-md border bg-muted/30 p-3',
-        tone === 'warning' && 'border-amber-600/50 bg-amber-50/60 dark:bg-amber-950/30',
-        tone === 'critical' && 'border-red-600/50 bg-red-50/60 dark:bg-red-950/30'
+        tone === 'warning' && 'border-warning/40 bg-warning/[0.07]',
+        tone === 'critical' && 'border-critical/40 bg-critical/[0.06]'
       )}
     >
       <p className="text-xs font-medium text-muted-foreground">{label}</p>
-      <p className="mt-0.5 text-2xl font-semibold tabular-nums text-foreground">
+      <p className="mt-0.5 text-2xl font-light tabular-nums text-foreground">
         {typeof value === 'number' ? formatCount(value) : value}
       </p>
       {note && <p className="mt-1 text-xs text-muted-foreground">{note}</p>}
@@ -49,7 +49,7 @@ export function CountList({ items, emptyText }: { items: Array<{ label: string; 
             <span className="shrink-0 tabular-nums text-muted-foreground">{formatCount(item.count)}</span>
           </div>
           <div className="mt-0.5 h-1 rounded-full bg-muted" aria-hidden="true">
-            <div className="h-1 rounded-full bg-primary/60" style={{ width: `${Math.max(2, (item.count / max) * 100)}%` }} />
+            <div className="h-1 rounded-full bg-foreground/60" style={{ width: `${Math.max(2, (item.count / max) * 100)}%` }} />
           </div>
         </li>
       ))}

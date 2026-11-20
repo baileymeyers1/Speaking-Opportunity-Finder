@@ -21,7 +21,7 @@ export function ActiveFilterPills({ filters, onFiltersChange }: ActiveFilterPill
             <button
               type="button"
               onClick={() => onFiltersChange(pill.next)}
-              className="ml-0.5 rounded-full p-0.5 hover:bg-muted-foreground/20 transition-colors"
+              className="ml-0.5 rounded-sm p-0.5 hover:bg-muted hover:text-foreground transition-colors"
               aria-label={`Remove ${pill.label} filter`}
             >
               <X className="h-3 w-3" aria-hidden="true" />

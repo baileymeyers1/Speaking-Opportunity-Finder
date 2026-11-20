@@ -16,6 +16,8 @@ export default tseslint.config(
       'api/**',
       'prisma/**',
       'server/src/generated/**',
+      // The JCI Intelligence kit's own files, vendored unchanged.
+      'client/src/vendor/**',
       '**/*.config.{js,ts}',
       '**/*.d.ts',
     ],

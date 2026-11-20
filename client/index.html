@@ -2,9 +2,24 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <link rel="icon" type="image/svg+xml" href="/jci-logo.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Speaking Opportunity Finder</title>
+    <title>Speaking Finder | JCI Intelligence</title>
+    <script>
+      // The theme goes on before first paint, so a dark-theme visit never flashes paper.
+      // ThemeContext owns it from then on and reads the same key.
+      (function () {
+        try {
+          var stored = localStorage.getItem('theme');
+          var systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+          if (stored === 'dark' || ((!stored || stored === 'system') && systemDark)) {
+            document.documentElement.classList.add('dark');
+          }
+        } catch (error) {
+          /* storage blocked: the light theme stands until the app loads */
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

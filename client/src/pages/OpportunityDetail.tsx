@@ -65,7 +65,7 @@ export function OpportunityDetail() {
         <div className="rounded-full bg-destructive/10 p-4 mb-4">
           <AlertCircle className="h-8 w-8 text-destructive" aria-hidden="true" />
         </div>
-        <h2 className="text-xl font-semibold text-foreground mb-1">
+        <h2 className="text-xl font-medium text-foreground mb-1">
           {error || 'Opportunity not found'}
         </h2>
         <p className="text-sm text-muted-foreground mb-4">
@@ -99,17 +99,17 @@ export function OpportunityDetail() {
         <CardHeader className="space-y-4">
           {/* Title + badges */}
           <div className="flex items-start justify-between gap-4">
-            <h1 className="text-2xl font-bold tracking-tight text-foreground">
+            <h1 className="title text-foreground">
               {opportunity.title}
             </h1>
             <div className="flex items-center gap-2 flex-shrink-0">
               {opportunity.isLiveResult && (
-                <Badge className="bg-emerald-100 text-emerald-700 border-emerald-300 dark:bg-emerald-950 dark:text-emerald-400 dark:border-emerald-700">
-                  <Zap className="h-3 w-3 mr-0.5" />
+                <Badge variant="good">
+                  <Zap aria-hidden="true" />
                   Live
                 </Badge>
               )}
-              <Badge variant="secondary" className="capitalize text-sm">
+              <Badge variant="secondary" className="capitalize">
                 {opportunity.format}
               </Badge>
             </div>
@@ -123,20 +123,20 @@ export function OpportunityDetail() {
           {/* Quick metadata badges */}
           <div className="flex flex-wrap gap-2">
             {opportunity.isRemote && (
-              <Badge className="bg-emerald-100 text-emerald-700 border-emerald-300 dark:bg-emerald-950 dark:text-emerald-400 dark:border-emerald-700">
-                <Globe className="h-3 w-3 mr-1" />
+              <Badge variant="secondary">
+                <Globe aria-hidden="true" />
                 Remote
               </Badge>
             )}
             {opportunity.location && (
               <Badge variant="secondary">
-                <MapPin className="h-3 w-3 mr-1" />
+                <MapPin aria-hidden="true" />
                 {opportunity.location}
               </Badge>
             )}
             {opportunity.compensationType ? (
-              <Badge className="bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-950 dark:text-amber-400 dark:border-amber-700 capitalize">
-                <DollarSign className="h-3 w-3 mr-1" />
+              <Badge variant="outline" className="capitalize">
+                <DollarSign aria-hidden="true" />
                 {opportunity.compensationType}
                 {opportunity.compensationAmount
                   ? ` - $${opportunity.compensationAmount.toLocaleString()}`
@@ -148,8 +148,8 @@ export function OpportunityDetail() {
               </Badge>
             )}
             {hasQualityScore && (
-              <Badge variant="outline" className="gap-1">
-                <Star className="h-3 w-3" />
+              <Badge variant="outline" className="tabular-nums">
+                <Star aria-hidden="true" />
                 Quality {opportunity.qualityScore}/100
               </Badge>
             )}
@@ -170,7 +170,7 @@ export function OpportunityDetail() {
           {/* Description */}
           {opportunity.description && (
             <div className="space-y-2">
-              <h2 className="text-base font-semibold text-foreground">
+              <h2 className="text-base font-medium text-foreground">
                 Description
               </h2>
               <p className="text-sm text-muted-foreground whitespace-pre-wrap leading-relaxed">
@@ -282,7 +282,7 @@ export function OpportunityDetail() {
                   href={opportunity.sourceUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-primary hover:underline"
+                  className="link"
                 >
                   view
                 </a>
