@@ -2,13 +2,13 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { FilterPanel } from '../components/FilterPanel';
 import { CallList } from '../components/browse/CallList';
+import { LaneCaption } from '../components/browse/LaneCaption';
 import { LaneSwitch } from '../components/browse/LaneSwitch';
-import { SectorStrip } from '../components/browse/SectorStrip';
-import { SituationLine } from '../components/browse/SituationLine';
+import { SortSelect } from '../components/browse/SortSelect';
 import { LiveSearchBanner } from '../components/LiveSearchBanner';
 import { SavedSearches } from '../components/SavedSearches';
 import { isRateLimitError } from '../api/client';
-import type { Lane, OpportunityFilters } from '../types';
+import type { Lane, OpportunityFilters, SortBy } from '../types';
 import { DEFAULT_LANE } from '../filters/constants';
 import {
   canLiveSearch,
@@ -24,7 +24,7 @@ import { useOpportunities } from '../hooks/useOpportunities';
 import { useLiveSearch } from '../hooks/useLiveSearch';
 import { useProfile } from '../hooks/useProfile';
 import { Button } from '@/components/ui/button';
-import { AlertCircle, Loader2, Sparkles, X } from 'lucide-react';
+import { AlertCircle, Sparkles, X } from 'lucide-react';
 
 const BANNER_DISMISSED_KEY = 'loginBannerDismissed';
 
@@ -73,10 +73,6 @@ export function Home() {
   const backgroundChecksResumeAt = data?.backgroundChecksResumeAt ?? null;
   const isLoading = data === undefined && query.isPending;
   const isRefreshing = data !== undefined && query.isFetching;
-  const lastUpdated =
-    data !== undefined && !query.isPlaceholderData && query.dataUpdatedAt > 0
-      ? new Date(query.dataUpdatedAt)
-      : null;
 
   const rateLimited =
     !rateLimitDismissed && (isRateLimitError(query.error) || isRateLimitError(liveSearch.error));
@@ -95,8 +91,7 @@ export function Home() {
     updateFilters((previous) => ({ ...next, lane: previous.lane, page: 1 }));
   const handleClearFilters = () => updateFilters((previous) => ({ lane: previous.lane }));
   const handleLaneChange = (next: Lane) => updateFilters((previous) => ({ ...previous, lane: next, page: 1 }));
-  const handleSectorsChange = (sectors: string[]) =>
-    updateFilters((previous) => ({ ...previous, sectors: sectors.length > 0 ? sectors : undefined, page: 1 }));
+  const handleSortChange = (sortBy: SortBy) => updateFilters((previous) => ({ ...previous, sortBy, page: 1 }));
   const handleLiveSearch = (effective: OpportunityFilters) => {
     if (!canLiveSearch(effective)) return;
     updateFilters((previous) => ({ ...effective, lane: previous.lane, page: 1 }));
@@ -113,31 +108,26 @@ export function Home() {
   const isFiltered = Boolean(filters.search) || countActiveFilters(filters) > 0;
 
   return (
-    <div className="space-y-6">
-      <SituationLine lanes={data?.lanes} />
+    <div className="space-y-5">
+      {/* The page is the list. Its name is for screen readers and the tab; the "Browse" tab says where you are. */}
+      <h1 className="sr-only">Calls for speakers</h1>
 
-      {/* Saved Searches sits beside the filters on wide screens and under them on phones */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
-        <div className="flex-1 min-w-0">
-          <FilterPanel
-            filters={filters}
-            onFiltersChange={handleFiltersChange}
-            onLiveSearch={handleLiveSearch}
-            isSearching={liveSearch.isSearching}
-            matchSortAvailable={hasProfile}
-            lane={lane}
-          />
-        </div>
-        {isAuthenticated && (
-          <SavedSearches
-            currentQuery={filters.search || ''}
-            currentFilters={{ ...filters, lane: undefined, page: undefined } as Record<string, unknown>}
-            onApplySearch={handleApplySavedSearch}
-          />
-        )}
-      </div>
-
-      <SectorStrip selected={filters.sectors ?? []} onChange={handleSectorsChange} />
+      {/* Two rows before the first call: what to look for, then which list and in what order. */}
+      <FilterPanel
+        filters={filters}
+        onFiltersChange={handleFiltersChange}
+        onLiveSearch={handleLiveSearch}
+        isSearching={liveSearch.isSearching}
+        actions={
+          isAuthenticated && (
+            <SavedSearches
+              currentQuery={filters.search || ''}
+              currentFilters={{ ...filters, lane: undefined, page: undefined } as Record<string, unknown>}
+              onApplySearch={handleApplySavedSearch}
+            />
+          )
+        }
+      />
 
       {loadError ? (
         <div
@@ -156,21 +146,17 @@ export function Home() {
           </Button>
         </div>
       ) : (
-        <div className="space-y-4 pt-2">
+        <div className="space-y-4">
           <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
             <LaneSwitch lane={lane} counts={data?.lanes?.counts} onChange={handleLaneChange} />
-            {/* Beside the switch, not above the list: the stored rows stay put while fresh ones load. */}
-            {isRefreshing && (
-              <p className="flex items-center gap-2 text-[13px] text-muted-foreground" role="status" aria-live="polite">
-                <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
-                Updating
-              </p>
-            )}
+            <LaneCaption lane={lane} lanes={data?.lanes} isRefreshing={isRefreshing} />
+            <div className="ml-auto">
+              <SortSelect value={filters.sortBy} lane={lane} matchSortAvailable={hasProfile} onChange={handleSortChange} />
+            </div>
           </div>
           {!isLoading && (
             <LiveSearchBanner
               resultCount={opportunities.length}
-              total={data?.total ?? opportunities.length}
               liveResultCount={liveResultCount}
               pendingLiveHits={pendingLiveHits}
               liveFoundCount={liveFoundCount}
@@ -180,8 +166,6 @@ export function Home() {
               locationMatchedCount={
                 hasLocationFilter ? opportunities.filter((item) => item.matchesLocationFilter).length : null
               }
-              lastUpdated={lastUpdated}
-              isRefreshing={isRefreshing}
               rateLimited={rateLimited}
               liveSearchFailed={liveSearchFailed}
               onClearLiveResults={() => query.refetch()}

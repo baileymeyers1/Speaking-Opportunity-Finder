@@ -1,15 +1,14 @@
-import { useState } from 'react';
-import { SlidersHorizontal, Zap, ChevronDown, ChevronUp, Loader2 } from 'lucide-react';
+import { useState, type ReactNode } from 'react';
+import { ChevronDown, ChevronUp, Loader2, SlidersHorizontal, Zap } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from '@/components/ui/select';
 import { SearchBar } from './filters/SearchBar';
 import { ActiveFilterPills } from './filters/ActiveFilterPills';
 import { AdvancedFilters } from './filters/AdvancedFilters';
 import { useSearchDraft } from './filters/useSearchDraft';
+import { SectorMenu } from './browse/SectorMenu';
 import { canLiveSearch, countActiveFilters } from '../filters/serialize';
-import { DEFAULT_SORT } from '../filters/constants';
-import type { Lane, OpportunityFilters, SortBy } from '../types';
+import type { OpportunityFilters } from '../types';
 
 interface FilterPanelProps {
   filters: OpportunityFilters;
@@ -18,20 +17,16 @@ interface FilterPanelProps {
   /** Called with the effective filters, including any search text not yet committed. */
   onLiveSearch?: (filters: OpportunityFilters) => void;
   isSearching?: boolean;
-  /** True when the signed-in user has a speaker profile, which "Best match" needs. */
-  matchSortAvailable?: boolean;
-  /** The lane the list is showing: only the closing lane has deadlines to sort by. */
-  lane?: Lane;
+  /** Extra controls at the end of the row (saved searches, for someone signed in). */
+  actions?: ReactNode;
 }
 
-export function FilterPanel({
-  filters,
-  onFiltersChange,
-  onLiveSearch,
-  isSearching = false,
-  matchSortAvailable = false,
-  lane = 'closing',
-}: FilterPanelProps) {
+/**
+ * Browse's tools, on one row: the search box, sectors, the rest of the filters.
+ * Live search sits inside the search box and only once there is something to
+ * search for. What is filtering the list shows as removable tags underneath.
+ */
+export function FilterPanel({ filters, onFiltersChange, onLiveSearch, isSearching = false, actions }: FilterPanelProps) {
   const [isExpanded, setIsExpanded] = useState(false);
 
   const search = useSearchDraft(filters.search ?? '', (term) =>
@@ -48,88 +43,66 @@ export function FilterPanel({
   };
 
   const activeFilterCount = countActiveFilters(filters);
-  // Outside the closing lane nothing has a deadline, so the default order is by event date and says so.
-  const hasDeadlines = lane === 'closing';
-  const sortValue = !hasDeadlines && filters.sortBy === 'eventDate' ? DEFAULT_SORT : filters.sortBy || DEFAULT_SORT;
-  const liveSearchDisabled = isSearching || !canLiveSearch({ ...filters, search: search.draft });
+  // Sectors carry their own count on their own button.
+  const panelFilterCount = countActiveFilters({ ...filters, sectors: undefined });
+  const liveSearchReady = canLiveSearch({ ...filters, search: search.draft });
+
+  const liveSearch =
+    onLiveSearch && (liveSearchReady || isSearching) ? (
+      <Button onClick={handleLiveSearch} disabled={isSearching} size="sm" className="h-7 gap-1.5 px-2.5 text-[12.5px]">
+        {isSearching ? (
+          <>
+            <Loader2 className="animate-spin" aria-hidden="true" />
+            Searching...
+          </>
+        ) : (
+          <>
+            <Zap aria-hidden="true" />
+            Live search
+          </>
+        )}
+      </Button>
+    ) : null;
 
   return (
     <div>
-      <SearchBar value={search.draft} onChange={search.update} onSubmit={search.flush} />
-
-      <ActiveFilterPills filters={filters} onFiltersChange={onFiltersChange} />
-
-      {/* Second row: Sort + Live Search + Filter count + Filters toggle + Clear */}
-      <div className="flex flex-wrap items-center gap-3 mt-3">
-        <div className="flex items-center gap-2">
-          <span className="text-sm font-medium text-muted-foreground">Sort</span>
-          <Select
-            value={sortValue}
-            onValueChange={(value) => onFiltersChange({ ...filters, sortBy: value as SortBy })}
-          >
-            <SelectTrigger className="w-[180px] h-9" aria-label="Sort by">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="deadline">{hasDeadlines ? 'Deadline (soonest)' : 'Event date (soonest)'}</SelectItem>
-              {hasDeadlines && <SelectItem value="eventDate">Event date (soonest)</SelectItem>}
-              <SelectItem value="quality">Quality (highest)</SelectItem>
-              {(matchSortAvailable || filters.sortBy === 'match') && (
-                <SelectItem value="match" disabled={!matchSortAvailable}>
-                  Best match
-                </SelectItem>
-              )}
-            </SelectContent>
-          </Select>
+      <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+        <div className="min-w-0 flex-1 basis-full sm:basis-64">
+          <SearchBar value={search.draft} onChange={search.update} onSubmit={search.flush} action={liveSearch} />
         </div>
 
-        {onLiveSearch && (
-          <Button onClick={handleLiveSearch} disabled={liveSearchDisabled} size="sm" className="gap-1.5">
-            {isSearching ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Searching...
-              </>
-            ) : (
-              <>
-                <Zap className="h-4 w-4" />
-                Live Search
-              </>
-            )}
-          </Button>
-        )}
+        <SectorMenu
+          selected={filters.sectors ?? []}
+          onChange={(sectors) => onFiltersChange({ ...filters, sectors: sectors.length > 0 ? sectors : undefined })}
+        />
 
-        <div className="ml-auto flex items-center gap-2">
-          {activeFilterCount > 0 && (
-            <Button
-              variant="link"
-              size="sm"
-              onClick={handleClearFilters}
-              className="text-muted-foreground hover:text-foreground px-1 h-auto"
-            >
-              Clear all
-            </Button>
+        <Button
+          variant="outline"
+          onClick={() => setIsExpanded(!isExpanded)}
+          aria-expanded={isExpanded}
+          aria-controls="advanced-filters"
+        >
+          <SlidersHorizontal aria-hidden="true" />
+          Filters
+          {panelFilterCount > 0 && (
+            <Badge variant="default" className="h-5 min-w-5 justify-center px-1 text-[11px] tabular-nums">
+              {panelFilterCount}
+            </Badge>
           )}
+          {isExpanded ? <ChevronUp aria-hidden="true" /> : <ChevronDown aria-hidden="true" />}
+        </Button>
 
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setIsExpanded(!isExpanded)}
-            aria-expanded={isExpanded}
-            aria-controls="advanced-filters"
-            className="gap-1.5"
-          >
-            <SlidersHorizontal className="h-4 w-4" />
-            Filters
-            {activeFilterCount > 0 && (
-              <Badge variant="default" className="ml-1 h-5 w-5 p-0 justify-center text-[10px]">
-                {activeFilterCount}
-              </Badge>
-            )}
-            {isExpanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+        {actions}
+      </div>
+
+      {activeFilterCount > 0 && (
+        <div className="flex flex-wrap items-center gap-x-3">
+          <ActiveFilterPills filters={filters} onFiltersChange={onFiltersChange} />
+          <Button variant="link" size="sm" onClick={handleClearFilters} className="mt-3 h-auto px-1 text-muted-foreground">
+            Clear all
           </Button>
         </div>
-      </div>
+      )}
 
       <AdvancedFilters
         filters={filters}

@@ -10,10 +10,22 @@ test.describe('Browse page', () => {
     // Verify the page title/branding in the navbar
     await expect(page.getByText('Speaking Finder')).toBeVisible();
 
-    // The page heading is a sentence computed from the list: what closes soon
-    await expect(page.getByRole('heading', { level: 1 })).toHaveText(
-      /close within a (week|month)\.|Nothing closes within a month\.|Nothing here has a deadline\.|No calls match\./
-    );
+    // The page is the list; its name is there for screen readers
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('Calls for speakers');
+
+    // Two rows of controls sit above the list: the tools, then the lanes with the sort
+    await expect(page.getByRole('button', { name: /Sectors/ })).toBeVisible();
+    await expect(page.getByRole('group', { name: 'Which calls to list' })).toBeVisible();
+  });
+
+  test('offers live search only once there is something to search for', async ({ page }) => {
+    await page.goto('/');
+
+    const liveSearch = page.getByRole('button', { name: 'Live search' });
+    await expect(liveSearch).toHaveCount(0);
+
+    await page.getByPlaceholder('Search opportunities...').fill('kubernetes');
+    await expect(liveSearch).toBeVisible();
   });
 
   test('lists calls in three lanes and switches between them', async ({ page }) => {

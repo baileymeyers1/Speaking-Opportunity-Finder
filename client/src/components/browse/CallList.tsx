@@ -57,7 +57,7 @@ function SkeletonRow() {
         <Skeleton className="h-3.5 w-28" />
         <Skeleton className="h-3.5 w-32" />
       </div>
-      <div className="col-start-2 flex gap-2 lg:col-start-auto">
+      <div className="col-start-2 flex gap-2 md:col-start-auto">
         <Skeleton className="h-8 w-8" />
         <Skeleton className="h-8 w-20" />
       </div>

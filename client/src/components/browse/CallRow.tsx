@@ -40,7 +40,7 @@ const FORMAT_ICONS: Record<OpportunityFormat, LucideIcon> = {
 
 /** The grid every row and the skeleton share, so the columns line up down the list. */
 export const CALL_ROW_GRID =
-  '-mx-3 grid grid-cols-[4.75rem_minmax(0,1fr)] items-start gap-x-4 gap-y-3 border-b px-3 py-4 lg:grid-cols-[5.5rem_minmax(0,1fr)_10.5rem_auto] lg:items-center lg:gap-x-6';
+  '-mx-3 grid grid-cols-[4.75rem_minmax(0,1fr)] items-start gap-x-4 gap-y-3 border-b px-3 py-4 md:grid-cols-[5.25rem_minmax(0,1fr)_auto] md:items-center lg:grid-cols-[5.5rem_minmax(0,1fr)_10.5rem_auto] lg:gap-x-6';
 
 const sameText = (a: string | null | undefined, b: string) => (a ?? '').trim().toLowerCase() === b.trim().toLowerCase();
 
@@ -149,7 +149,7 @@ export function CallRow({ opportunity }: { opportunity: Opportunity }) {
         </div>
       </dl>
 
-      <div className="relative z-[1] col-start-2 flex items-center gap-2 lg:col-start-auto lg:justify-end">
+      <div className="relative z-[1] col-start-2 flex items-center gap-2 md:col-start-auto md:justify-end">
         <MatchPill opportunity={opportunity} />
         <SaveOpportunityMenu savedCategory={savedCategory} isSaving={isSaving} onSave={save} />
         <Button variant="outline" size="sm" asChild>

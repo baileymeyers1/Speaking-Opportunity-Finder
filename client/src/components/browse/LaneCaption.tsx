@@ -1,40 +1,26 @@
-import { Link, useLocation } from 'react-router-dom';
-import type { LaneSummary } from '../../types';
-import { situationHeadline, situationNote } from '../../lib/situation';
+import { Loader2 } from 'lucide-react';
+import type { Lane, LaneSummary } from '../../types';
+import { laneCaption } from '../../lib/laneCaption';
+
+interface LaneCaptionProps {
+  lane: Lane;
+  lanes: LaneSummary | undefined;
+  /** True while fresh rows load behind the stored ones. */
+  isRefreshing: boolean;
+}
 
 /**
- * What Browse opens with: one sentence saying what closes soon under the
- * filters in force, then the call that closes first. The accented phrase is
- * the page's one use of JCI's red Fraunces italic.
+ * The quiet line beside the lane switch: what closes soon, or what the lane
+ * holds. While the list refreshes it says so here, so the rows never move.
  */
-export function SituationLine({ lanes }: { lanes: LaneSummary | undefined }) {
-  const location = useLocation();
-  const headline = situationHeadline(lanes);
-  const note = situationNote(lanes);
+export function LaneCaption({ lane, lanes, isRefreshing }: LaneCaptionProps) {
+  const caption = laneCaption(lane, lanes);
+  if (!caption && !isRefreshing) return null;
 
   return (
-    <header>
-      <h1 className="display text-foreground">
-        {headline.lead}
-        <em className="accent-word">{headline.accent}</em>
-        {headline.tail}
-      </h1>
-      {/* The line keeps its height while the numbers load, so the list below does not jump. */}
-      <p className="mt-3 min-h-[1.55em] max-w-[68ch] text-muted-foreground" aria-live="polite">
-        {note?.next && (
-          <>
-            <Link
-              to={`/opportunities/${note.next.id}`}
-              state={{ from: `${location.pathname}${location.search}` }}
-              className="link"
-            >
-              {note.next.title}
-            </Link>{' '}
-            closes first, {note.next.when}.{note.rest ? ' ' : ''}
-          </>
-        )}
-        {note?.rest}
-      </p>
-    </header>
+    <p className="flex items-center gap-2 text-[13px] text-muted-foreground" role="status" aria-live="polite">
+      {isRefreshing && <Loader2 className="h-3.5 w-3.5 flex-none animate-spin" aria-hidden="true" />}
+      {caption || 'Updating'}
+    </p>
   );
 }

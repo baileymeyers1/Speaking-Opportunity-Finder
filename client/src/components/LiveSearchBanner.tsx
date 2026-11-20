@@ -4,9 +4,8 @@ import { Button } from '@/components/ui/button';
 import { LiveSearchSummary } from './LiveSearchSummary';
 
 interface LiveSearchBannerProps {
-  /** Rows on this page, and rows in the lane across every page. */
+  /** Rows on this page. */
   resultCount: number;
-  total: number;
   liveResultCount: number;
   /** Live hits found but not read yet; listed by name, unchecked. */
   pendingLiveHits: PendingLiveHit[];
@@ -18,8 +17,6 @@ interface LiveSearchBannerProps {
   backgroundChecksResumeAt: string | null;
   /** Number of results matching the location filter, when one is active. */
   locationMatchedCount: number | null;
-  lastUpdated: Date | null;
-  isRefreshing: boolean;
   rateLimited: boolean;
   liveSearchFailed: boolean;
   onClearLiveResults: () => void;
@@ -28,13 +25,14 @@ interface LiveSearchBannerProps {
 }
 
 /**
- * Status row above the list: result counts, where live results came from,
- * what the live search did with the pages it found, and the two non-fatal notices (rate limit, live search failure) that keep
- * the stored results on screen.
+ * What sits between the lane row and the list only when there is something to
+ * say: the two non-fatal notices (rate limit, live search failure) that keep
+ * the stored results on screen, what a live search did with the pages it
+ * found, and how many of the rows came from it or match the location filter.
+ * An ordinary list shows none of it.
  */
 export function LiveSearchBanner({
   resultCount,
-  total,
   liveResultCount,
   pendingLiveHits,
   liveFoundCount,
@@ -42,8 +40,6 @@ export function LiveSearchBanner({
   liveNoCallCount,
   backgroundChecksResumeAt,
   locationMatchedCount,
-  lastUpdated,
-  isRefreshing,
   rateLimited,
   liveSearchFailed,
   onClearLiveResults,
@@ -98,28 +94,21 @@ export function LiveSearchBanner({
         backgroundChecksResumeAt={backgroundChecksResumeAt}
       />
 
-      {resultCount > 0 && (
+      {resultCount > 0 && (liveResultCount > 0 || locationMatchedCount !== null) && (
         <div className="flex flex-wrap items-center justify-between gap-2" aria-live="polite">
-          <p className="text-sm text-muted-foreground">
-            {total > resultCount
-              ? `Showing ${resultCount} of ${total.toLocaleString('en-US')}`
-              : `Showing all ${resultCount}`}
+          <p className="text-[13px] text-muted-foreground">
+            Showing {resultCount}
             {locationMatchedCount !== null && (
               <span className="ml-1">({locationMatchedCount} in your area)</span>
             )}
             {liveResultCount > 0 && <span className="ml-1">({liveResultCount} from live search)</span>}
           </p>
-          <div className="flex items-center gap-3">
-            {liveResultCount > 0 && (
-              <Button variant="ghost" size="sm" onClick={onClearLiveResults} className="text-muted-foreground">
-                <X className="h-4 w-4" aria-hidden="true" />
-                Clear live results
-              </Button>
-            )}
-            {lastUpdated && !isRefreshing && liveResultCount === 0 && (
-              <span className="text-xs text-muted-foreground">Updated {lastUpdated.toLocaleTimeString()}</span>
-            )}
-          </div>
+          {liveResultCount > 0 && (
+            <Button variant="ghost" size="sm" onClick={onClearLiveResults} className="text-muted-foreground">
+              <X aria-hidden="true" />
+              Clear live results
+            </Button>
+          )}
         </div>
       )}
     </>
