@@ -2,6 +2,16 @@
 
 Reverse chronological. Current state lives in `docs/STATUS.md`.
 
+## 2026-11-20 — A roster of speakers: several profiles per account, and a Speakers page
+
+Second of three PRs for the roster, built from a wireframe agreed the same day. Fit and saved calls per person come in the third.
+- **Schema.** `SpeakerProfile` is many per account (the unique index on `userId` becomes a plain one) and gains `name` and `title`. `SavedOpportunity` gains a nullable `speakerId` (cascade on delete) that nothing sets yet, so the whole schema change lands once. Its unique index on account and call becomes a plain one: a call will be saved once per person, and a unique constraint could not be added on a table with rows through `db push` (and would not count the rows with no speaker).
+- **One saved row per call, kept by code.** `services/savedCalls.ts` `saveCall` takes an advisory lock for the account and call, then finds and updates or creates. Six saves sent together leave one row (tested against Postgres). The saved endpoints now refuse a stage that is not one of the four.
+- **API.** `GET/POST /api/speakers`, `PUT/DELETE /api/speakers/:id` replace `GET/PUT /api/profile` (`services/speakerService.ts`, renamed from `profileService.ts`). Every query is scoped to the account; another account's speaker reads as not found. A roster holds at most 50.
+- **Fit** is scored for the roster's first speaker until the picker exists, so an account with one profile sees what it saw before.
+- **Speakers page** (`/speakers`, the tab that was Profile; `/profile` redirects). No visible headline: a quiet line saying whose fit Browse shows (only once there are two speakers), "Add speaker", then one row per person: name, title, where they are and how far they go, topics. A speaker opens on their own page (`/speakers/:id`), which is the old profile form with a name and a title, worded for someone who may not be the reader. Removing a speaker is two steps and says what goes with them.
+- **Rehearsed** on a copy of the local database: the schema pushes with no flag, and with it in place the code from PR #35 reads and saves profiles and saved calls.
+
 ## 2026-11-20 — Saving a profile no longer needs one profile per account
 
 Groundwork for the roster of speakers; nothing visible changes.
