@@ -1,88 +1,42 @@
-import { Card, CardHeader, CardContent } from '@/components/ui/card';
-import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
+import { CALL_PAGE_COLUMNS, CALL_PAGE_WIDTH } from './call/layout';
 
-/** Placeholder matching the detail page layout while the opportunity loads. */
+/** Placeholder in the shape of the call page while the call loads. */
 export function OpportunityDetailSkeleton() {
   return (
-    <div className="max-w-3xl mx-auto space-y-4">
-      {/* Back button */}
-      <Skeleton className="h-9 w-48" />
+    <div className={CALL_PAGE_WIDTH} aria-busy="true" aria-label="Loading the call">
+      <Skeleton className="h-8 w-32" />
 
-      <Card>
-        <CardHeader className="space-y-4">
-          {/* Title + format badge */}
-          <div className="flex items-start justify-between gap-4">
-            <Skeleton className="h-8 w-3/4" />
-            <Skeleton className="h-6 w-20 rounded-sm" />
-          </div>
+      <div className="mt-5 space-y-3">
+        <Skeleton className="h-8 w-3/4" />
+        <Skeleton className="h-4 w-1/2" />
+      </div>
 
-          {/* Organization */}
-          <Skeleton className="h-5 w-1/2" />
+      <div className="mt-6 flex items-center gap-6 border-y border-input py-5">
+        <Skeleton className="h-12 w-16" />
+        <div className="flex-1 space-y-2">
+          <Skeleton className="h-4 w-72 max-w-full" />
+          <Skeleton className="h-4 w-44" />
+        </div>
+        <Skeleton className="hidden h-control w-24 md:block" />
+        <Skeleton className="hidden h-control w-24 md:block" />
+      </div>
 
-          {/* Metadata badges */}
-          <div className="flex flex-wrap gap-2">
-            <Skeleton className="h-6 w-20 rounded-sm" />
-            <Skeleton className="h-6 w-28 rounded-sm" />
-            <Skeleton className="h-6 w-36 rounded-sm" />
-            <Skeleton className="h-6 w-24 rounded-sm" />
-          </div>
-        </CardHeader>
-
-        <CardContent className="space-y-6">
-          {/* Description */}
-          <div className="space-y-2">
-            <Skeleton className="h-4 w-24" />
-            <Skeleton className="h-4 w-full" />
-            <Skeleton className="h-4 w-full" />
-            <Skeleton className="h-4 w-5/6" />
-            <Skeleton className="h-4 w-3/4" />
-          </div>
-
-          <Separator />
-
-          {/* Date details grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-            <div className="flex items-start gap-3">
-              <Skeleton className="h-8 w-8 rounded-md" />
-              <div className="space-y-1.5">
-                <Skeleton className="h-4 w-20" />
-                <Skeleton className="h-4 w-44" />
-              </div>
-            </div>
-            <div className="flex items-start gap-3">
-              <Skeleton className="h-8 w-8 rounded-md" />
-              <div className="space-y-1.5">
-                <Skeleton className="h-4 w-24" />
-                <Skeleton className="h-4 w-40" />
-              </div>
-            </div>
-          </div>
-
-          <Separator />
-
-          {/* Industries */}
-          <div className="space-y-3">
-            <Skeleton className="h-4 w-20" />
-            <div className="flex flex-wrap gap-2">
-              <Skeleton className="h-6 w-24 rounded-sm" />
-              <Skeleton className="h-6 w-20 rounded-sm" />
-              <Skeleton className="h-6 w-28 rounded-sm" />
-            </div>
-          </div>
-
-          <Separator />
-
-          {/* Action buttons */}
-          <div className="flex flex-col sm:flex-row gap-3">
-            <Skeleton className="h-11 flex-1 rounded-md" />
-            <Skeleton className="h-11 w-[160px] rounded-md" />
-          </div>
-
-          {/* Source */}
-          <Skeleton className="h-3 w-32" />
-        </CardContent>
-      </Card>
+      <div className={CALL_PAGE_COLUMNS}>
+        <div className="order-2 space-y-3 lg:order-1">
+          <Skeleton className="h-4 w-28" />
+          <Skeleton className="h-4 w-full" />
+          <Skeleton className="h-4 w-full" />
+          <Skeleton className="h-4 w-5/6" />
+          <Skeleton className="h-4 w-2/3" />
+        </div>
+        <div className="order-1 space-y-4 lg:order-2">
+          <Skeleton className="h-4 w-full" />
+          <Skeleton className="h-4 w-4/5" />
+          <Skeleton className="h-4 w-full" />
+          <Skeleton className="h-4 w-3/5" />
+        </div>
+      </div>
     </div>
   );
 }

@@ -1,23 +1,11 @@
 import { Link, useLocation } from 'react-router-dom';
-import {
-  Calendar,
-  CalendarDays,
-  ExternalLink,
-  MapPin,
-  MessagesSquare,
-  Mic,
-  MonitorPlay,
-  Presentation,
-  Users,
-  Wallet,
-  Wrench,
-  Zap,
-  type LucideIcon,
-} from 'lucide-react';
-import type { Opportunity, OpportunityFormat } from '../../types';
+import { Calendar, ExternalLink, MapPin, Wallet, Zap } from 'lucide-react';
+import type { Opportunity } from '../../types';
 import { useSaveCall } from '../../hooks/useSaveCall';
+import { organizationLabel, payLabel, whereLabel } from '../../lib/callDisplay';
 import { callState } from '../../lib/callState';
 import { formatDeadline } from '../../lib/dates';
+import { FORMAT_ICONS } from '../../lib/formatIcons';
 import { sectorLabel } from '../../lib/sectors';
 import { approximate, isLowConfidence } from '../../utils/verification';
 import { MatchPill } from '../MatchHints';
@@ -28,33 +16,9 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
-const FORMAT_ICONS: Record<OpportunityFormat, LucideIcon> = {
-  conference: Presentation,
-  meetup: Users,
-  podcast: Mic,
-  webinar: MonitorPlay,
-  workshop: Wrench,
-  panel: MessagesSquare,
-  other: CalendarDays,
-};
-
 /** The grid every row and the skeleton share, so the columns line up down the list. */
 export const CALL_ROW_GRID =
   '-mx-3 grid grid-cols-[4.75rem_minmax(0,1fr)] items-start gap-x-4 gap-y-3 border-b px-3 py-4 md:grid-cols-[5.25rem_minmax(0,1fr)_auto] md:items-center lg:grid-cols-[5.5rem_minmax(0,1fr)_10.5rem_auto] lg:gap-x-6';
-
-const sameText = (a: string | null | undefined, b: string) => (a ?? '').trim().toLowerCase() === b.trim().toLowerCase();
-
-function whereLabel(opportunity: Opportunity): string | null {
-  if (!opportunity.isRemote) return opportunity.location;
-  return opportunity.location ? `${opportunity.location}, or remote` : 'Remote';
-}
-
-function payLabel(opportunity: Opportunity): string | null {
-  if (!opportunity.compensationType) return null;
-  return opportunity.compensationAmount
-    ? `${opportunity.compensationType}, $${opportunity.compensationAmount.toLocaleString('en-US')}`
-    : opportunity.compensationType;
-}
 
 /**
  * One call on Browse. It leads with where the call stands (days left), then
@@ -67,8 +31,8 @@ export function CallRow({ opportunity }: { opportunity: Opportunity }) {
   const { savedCategory, isSaving, save } = useSaveCall(opportunity);
   const state = callState(opportunity);
   const hasCall = state.kind !== 'watch';
-  const FormatIcon = FORMAT_ICONS[opportunity.format] ?? CalendarDays;
-  const organization = sameText(opportunity.organization, opportunity.title) ? null : opportunity.organization;
+  const FormatIcon = FORMAT_ICONS[opportunity.format] ?? FORMAT_ICONS.other;
+  const organization = organizationLabel(opportunity);
   const where = whereLabel(opportunity);
   const pay = payLabel(opportunity);
   const closes = state.kind === 'closing' ? formatDeadline(opportunity)?.date : null;

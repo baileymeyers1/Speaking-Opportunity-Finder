@@ -101,3 +101,24 @@ test.describe('Browse page', () => {
     await expect(page.getByRole('heading', { name: 'Location', exact: true })).toBeVisible();
   });
 });
+
+test.describe('Call page', () => {
+  test('a row opens its call, and back returns to the list', async ({ page }) => {
+    await page.goto('/');
+
+    const firstCall = page.locator('main li h3 a').first();
+    const title = (await firstCall.textContent()) ?? '';
+    await firstCall.click();
+
+    await expect(page).toHaveURL(/\/opportunities\//);
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText(title);
+    // One row of action under the title, then the facts beside the description
+    await expect(page.getByRole('region', { name: 'When this call closes' })).toBeVisible();
+    await expect(page.getByRole('complementary', { name: 'Facts about this call' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'About this call' })).toBeVisible();
+
+    await page.getByRole('link', { name: 'Back to calls' }).click();
+    await expect(page).not.toHaveURL(/\/opportunities\//);
+    await expect(page.getByRole('group', { name: 'Which calls to list' })).toBeVisible();
+  });
+});
