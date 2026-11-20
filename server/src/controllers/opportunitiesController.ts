@@ -129,17 +129,18 @@ export async function getOpportunities(
     const surfacedUrls = new Set([...liveOpportunities, ...storedHits].map((item) => item.applyUrl));
     const dedupedDbItems: OpportunityWithDates[] = dbResults.items.filter((item) => !surfacedUrls.has(item.applyUrl));
 
-    // Combine and sort
-    const combined: SerializableOpportunity[] = [...liveOpportunities, ...storedHits, ...dedupedDbItems];
+    // What the live search surfaced leads the list, in the order asked for. The
+    // stored rows follow exactly as the service ordered them: re-sorting the
+    // page by the deadline column here used to push every row without a
+    // deadline to the foot of its page, and a search's hits out of relevance order.
+    const surfaced: SerializableOpportunity[] = [...liveOpportunities, ...storedHits];
     const sortBy = filters.sortBy === 'match' && !profile ? 'quality' : filters.sortBy || 'deadline';
-
-    combined.sort((a, b) => {
-      const dateVal = (v: string | Date | null) => {
-        if (!v) return Number.MAX_SAFE_INTEGER;
-        const d = new Date(v).getTime();
-        return isNaN(d) ? Number.MAX_SAFE_INTEGER : d;
-      };
-
+    const dateVal = (v: string | Date | null) => {
+      if (!v) return Number.MAX_SAFE_INTEGER;
+      const d = new Date(v).getTime();
+      return isNaN(d) ? Number.MAX_SAFE_INTEGER : d;
+    };
+    surfaced.sort((a, b) => {
       if (sortBy === 'match') {
         return (b.matchScore ?? -1) - (a.matchScore ?? -1) || dateVal(a.cfpDeadline) - dateVal(b.cfpDeadline);
       }
@@ -147,6 +148,7 @@ export async function getOpportunities(
       if (sortBy === 'eventDate') return dateVal(a.eventDate) - dateVal(b.eventDate);
       return dateVal(a.cfpDeadline) - dateVal(b.cfpDeadline);
     });
+    const combined: SerializableOpportunity[] = [...surfaced, ...dedupedDbItems];
 
     const payload: OpportunitiesResponse<SerializableOpportunity> = {
       success: true,

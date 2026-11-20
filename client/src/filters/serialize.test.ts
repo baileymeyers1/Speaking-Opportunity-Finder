@@ -89,6 +89,32 @@ describe('filtersToSearchParams / searchParamsToFilters', () => {
   });
 });
 
+describe('lane', () => {
+  it('is in the URL only when it is not the default', () => {
+    expect(filtersToSearchParams({ lane: 'closing' }).toString()).toBe('');
+    expect(filtersToSearchParams({}).toString()).toBe('');
+    expect(filtersToSearchParams({ lane: 'open' }).toString()).toBe('lane=open');
+    expect(filtersToSearchParams({ lane: 'watch', page: 2 }).toString()).toBe('lane=watch&page=2');
+  });
+
+  it('round-trips, dropping the default and anything that is not a lane', () => {
+    expect(searchParamsToFilters(new URLSearchParams('lane=watch'))).toEqual({ lane: 'watch' });
+    expect(searchParamsToFilters(new URLSearchParams('lane=closing'))).toEqual({});
+    expect(searchParamsToFilters(new URLSearchParams('lane=everything'))).toEqual({});
+  });
+
+  it('is always sent to the API, so a list is never every lane at once', () => {
+    expect(filtersToApiQuery({}).get('lane')).toBe('closing');
+    expect(filtersToApiQuery({ lane: 'open' }).get('lane')).toBe('open');
+  });
+
+  it('is part of the cache key and not an active filter', () => {
+    expect(serializeFilters({ lane: 'open' })).not.toBe(serializeFilters({}));
+    expect(serializeFilters({ lane: 'closing' })).toBe(serializeFilters({}));
+    expect(countActiveFilters({ lane: 'watch' })).toBe(0);
+  });
+});
+
 describe('serializeFilters', () => {
   it('is order-independent for multi-value filters', () => {
     const a = serializeFilters({ industries: ['ai', 'technology'], format: ['podcast', 'conference'] });
@@ -126,9 +152,9 @@ describe('filtersToApiQuery', () => {
     expect(query.get('liveSearch')).toBe('true');
   });
 
-  it('defaults to page 1 and no liveSearch flag', () => {
+  it('defaults to page 1, the closing lane and no liveSearch flag', () => {
     const query = filtersToApiQuery({});
-    expect(query.toString()).toBe('page=1');
+    expect(query.toString()).toBe('page=1&lane=closing');
   });
 });
 

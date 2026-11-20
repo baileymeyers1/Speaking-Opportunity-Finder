@@ -1,12 +1,15 @@
-import type { CompensationType, OpportunityFilters, OpportunityFormat, SortBy } from '../types';
-import { COMPENSATION_TYPES, OPPORTUNITY_FORMATS, SORT_OPTIONS } from './constants';
+import type { CompensationType, Lane, OpportunityFilters, OpportunityFormat, SortBy } from '../types';
+import { COMPENSATION_TYPES, DEFAULT_LANE, LANES, OPPORTUNITY_FORMATS, SORT_OPTIONS } from './constants';
 import { isSector } from '../lib/sectors';
 
 /**
- * Everything the browse page needs to render a list: the filters plus the page.
- * The URL is the single source of truth for this object; nothing else stores it.
+ * Everything the browse page needs to render a list: the filters, which of the
+ * three lanes is showing, and the page. The URL is the single source of truth
+ * for this object; nothing else stores it.
  */
 export interface BrowseFilters extends OpportunityFilters {
+  /** Absent means the default lane (`DEFAULT_LANE`). */
+  lane?: Lane;
   page?: number;
 }
 
@@ -25,6 +28,7 @@ const URL_KEYS = {
   compensationMax: 'compMax',
   qualityMin: 'quality',
   sortBy: 'sort',
+  lane: 'lane',
   page: 'page',
 } as const;
 
@@ -38,6 +42,10 @@ function isCompensationType(value: string): value is CompensationType {
 
 function isSortBy(value: string): value is SortBy {
   return (SORT_OPTIONS as readonly string[]).includes(value);
+}
+
+function isLane(value: string): value is Lane {
+  return (LANES as readonly string[]).includes(value);
 }
 
 function parseNonNegativeInt(value: string | null): number | undefined {
@@ -71,6 +79,7 @@ export function filtersToSearchParams(filters: BrowseFilters): URLSearchParams {
     params.set(URL_KEYS.qualityMin, String(filters.qualityMin));
   }
   if (filters.sortBy) params.set(URL_KEYS.sortBy, filters.sortBy);
+  if (filters.lane && filters.lane !== DEFAULT_LANE) params.set(URL_KEYS.lane, filters.lane);
   if (filters.page !== undefined && filters.page > 1) params.set(URL_KEYS.page, String(filters.page));
   return params;
 }
@@ -112,6 +121,9 @@ export function searchParamsToFilters(params: URLSearchParams): BrowseFilters {
   const sortBy = params.get(URL_KEYS.sortBy);
   if (sortBy && isSortBy(sortBy)) filters.sortBy = sortBy;
 
+  const lane = params.get(URL_KEYS.lane);
+  if (lane && isLane(lane) && lane !== DEFAULT_LANE) filters.lane = lane;
+
   const page = parseNonNegativeInt(params.get(URL_KEYS.page));
   if (page !== undefined && page > 1) filters.page = page;
 
@@ -141,6 +153,7 @@ export function filtersToApiQuery(
 ): URLSearchParams {
   const params = new URLSearchParams();
   params.set('page', String(filters.page ?? 1));
+  params.set('lane', filters.lane ?? DEFAULT_LANE);
   if (filters.search) params.set('search', filters.search);
   if (filters.isRemote) params.set('isRemote', 'true');
   if (filters.compensationMin) params.set('compensationMin', String(filters.compensationMin));
@@ -156,7 +169,7 @@ export function filtersToApiQuery(
   return params;
 }
 
-/** Number of non-default filters set, excluding search text, sort and page. */
+/** Number of non-default filters set, excluding search text, sort, lane and page. */
 export function countActiveFilters(filters: BrowseFilters): number {
   return [
     filters.format?.length,

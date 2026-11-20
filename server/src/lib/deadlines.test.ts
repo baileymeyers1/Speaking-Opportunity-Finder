@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   AOE,
   calendarDate,
+  calendarDaysUntilDeadline,
   daysUntilDeadline,
   deadlineInstant,
   describeDeadline,
@@ -116,6 +117,28 @@ describe('deadlineInstant', () => {
     expect(deadlineInstant({ cfpDeadline: null })).toBeNull();
     expect(deadlineInstant({ cfpDeadline: undefined })).toBeNull();
     expect(deadlineInstant({ cfpDeadline: 'soon' })).toBeNull();
+  });
+});
+
+describe('calendarDaysUntilDeadline', () => {
+  const berlin = { cfpDeadline: new Date('2026-11-30T22:59:59Z'), deadlineTimezone: 'Europe/Berlin' };
+
+  it('is 0 on the day it closes, where the 24-hour count still says 1', () => {
+    const threeHoursBefore = new Date('2026-11-30T19:59:59Z');
+    expect(calendarDaysUntilDeadline(berlin, threeHoursBefore)).toBe(0);
+    expect(daysUntilDeadline(berlin, threeHoursBefore)).toBe(1);
+  });
+
+  it('counts on the deadline\'s own calendar, not the viewer\'s', () => {
+    // 23:30 on the 28th in Berlin: two calendar days before the 30th there.
+    expect(calendarDaysUntilDeadline(berlin, new Date('2026-11-28T22:30:00Z'))).toBe(2);
+    // An hour later it is the 29th in Berlin.
+    expect(calendarDaysUntilDeadline(berlin, new Date('2026-11-28T23:30:00Z'))).toBe(1);
+  });
+
+  it('is negative once the day has passed and null without a deadline', () => {
+    expect(calendarDaysUntilDeadline(berlin, new Date('2026-12-02T12:00:00Z'))).toBe(-2);
+    expect(calendarDaysUntilDeadline({ cfpDeadline: null })).toBeNull();
   });
 });
 

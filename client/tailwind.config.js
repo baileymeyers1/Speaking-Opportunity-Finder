@@ -8,6 +8,8 @@ export default {
   content: [
     './index.html',
     './src/**/*.{js,ts,jsx,tsx}',
+    // The kit's script holds no class names of ours; scanning it turned `!btn` and `!filter` in its code into rules.
+    '!./src/vendor/**',
   ],
   theme: {
     // The kit's measure: 1240px, 20px gutters.
@@ -63,6 +65,12 @@ export default {
       },
       spacing: {
         control: 'var(--control-height)',
+      },
+      // The kit's clocks by name (an arbitrary `duration-[160ms]` is ambiguous beside tailwindcss-animate).
+      transitionDuration: {
+        hover: 'var(--dur-1)',
+        state: 'var(--dur-2)',
+        data: 'var(--dur-3)',
       },
       transitionTimingFunction: {
         out: 'var(--ease-out)',

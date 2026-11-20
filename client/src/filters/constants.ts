@@ -1,4 +1,4 @@
-import type { CompensationType, OpportunityFormat, SortBy } from '../types';
+import type { CompensationType, Lane, OpportunityFormat, SortBy } from '../types';
 
 export const OPPORTUNITY_FORMATS: readonly OpportunityFormat[] = [
   'conference',
@@ -21,6 +21,11 @@ export const COMPENSATION_TYPES: readonly CompensationType[] = [
 export const SORT_OPTIONS: readonly SortBy[] = ['deadline', 'eventDate', 'quality', 'match'];
 
 export const DEFAULT_SORT: SortBy = 'deadline';
+
+/** Browse's three lists, in the order the switch shows them. The first screen answers "what closes soon". */
+export const LANES: readonly Lane[] = ['closing', 'open', 'watch'];
+
+export const DEFAULT_LANE: Lane = 'closing';
 
 /** Upper bound of the compensation sliders; a max at this value means "no upper bound". */
 export const COMPENSATION_MAX = 2000;

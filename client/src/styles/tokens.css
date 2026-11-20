@@ -2,103 +2,104 @@
    Light is "Brief": paper, sand, warm ink, JCI red. Dark is "Situation Room": warm black, steps chosen on the
    dark surface rather than inverted from light.
    Colours are R G B channels, so Tailwind can apply alpha (bg-background/95); the hex beside each is the kit's.
-   Change a value here only when the kit changes it. */
-@layer base {
-  :root {
-    color-scheme: light;
+   Change a value here only when the kit changes it.
+   Not inside an @layer: Tailwind would treat `.dark` as a class to build variants of. */
+:root {
+  color-scheme: light;
 
-    --page: 250 247 240;        /* #FAF7F0 paper */
-    --surface: 255 253 248;     /* #FFFDF8 vellum: sheets and controls */
-    --surface-2: 243 238 227;   /* #F3EEE3 quiet fills */
-    --band: 236 229 211;        /* #ECE5D3 sand */
-    --ink: 24 20 16;            /* #181410 warm ink, never a cold black */
-    --ink-2: 91 82 73;          /* #5B5249 secondary text */
-    --ink-3: 138 129 117;       /* #8A8175 placeholders and marks; too light for body text */
-    --red: 197 33 41;           /* #C52129 JCI red: primary action, focus, "look here" */
-    --red-deep: 162 27 34;      /* #A21B22 the primary button's fill */
-    --red-ink: 255 248 242;     /* #FFF8F2 text on red */
-    --good: 45 122 78;          /* #2D7A4E */
-    --warning: 162 98 10;       /* #A2620A */
-    --critical: 197 33 41;      /* #C52129 */
-    --info: 54 65 78;           /* #36414E slate */
-    --focus: 197 33 41;         /* #C52129 */
+  --page: 250 247 240;        /* #FAF7F0 paper */
+  --surface: 255 253 248;     /* #FFFDF8 vellum: sheets and controls */
+  --surface-2: 243 238 227;   /* #F3EEE3 quiet fills */
+  --band: 236 229 211;        /* #ECE5D3 sand */
+  --ink: 24 20 16;            /* #181410 warm ink, never a cold black */
+  --ink-2: 91 82 73;          /* #5B5249 secondary text */
+  --ink-3: 138 129 117;       /* #8A8175 placeholders and marks; too light for body text */
+  --red: 197 33 41;           /* #C52129 JCI red: primary action, focus, "look here" */
+  --red-deep: 162 27 34;      /* #A21B22 the primary button's fill */
+  --red-ink: 255 248 242;     /* #FFF8F2 text on red */
+  --good: 45 122 78;          /* #2D7A4E */
+  --warning: 162 98 10;       /* #A2620A */
+  --critical: 197 33 41;      /* #C52129 */
+  --info: 54 65 78;           /* #36414E slate */
+  --focus: 197 33 41;         /* #C52129 */
 
-    --rule: rgb(24 20 16 / 0.1);
-    --rule-2: rgb(24 20 16 / 0.2);
-    --rule-hover: rgb(24 20 16 / 0.34);
-    --row-hover: rgb(24 20 16 / 0.045);
-    --focus-ring: rgb(197 33 41 / 0.14);
-    --scrim: rgb(24 20 16 / 0.45);
+  --rule: rgb(24 20 16 / 0.1);
+  --rule-2: rgb(24 20 16 / 0.2);
+  --rule-hover: rgb(24 20 16 / 0.34);
+  --row-hover: rgb(24 20 16 / 0.045);
+  --focus-ring: rgb(197 33 41 / 0.14);
+  --scrim: rgb(24 20 16 / 0.45);
 
-    --panel-shadow: 0 0 #0000;
-    --float-shadow: 0 14px 34px -14px rgb(60 40 20 / 0.3), 0 2px 6px rgb(60 40 20 / 0.06);
-    --btn-primary-shadow: inset 0 1px 0 rgb(255 255 255 / 0.18), 0 1px 2px rgb(120 20 25 / 0.25);
+  --panel-shadow: 0 0 #0000;
+  --float-shadow: 0 14px 34px -14px rgb(60 40 20 / 0.3), 0 2px 6px rgb(60 40 20 / 0.06);
+  --btn-primary-shadow: inset 0 1px 0 rgb(255 255 255 / 0.18), 0 1px 2px rgb(120 20 25 / 0.25);
 
-    /* Liquid glass bezel (kit.css .lg-lens) and the theme switch that wears it. */
-    --lg-fill: 255 255 255; --lg-rim: 255 255 255;
-    --lg-rim-a: 0.7; --lg-key-a: 0.95; --lg-back-a: 0.45; --lg-depth-a: 0.1; --lg-drop-a: 0.14; --lg-sheen-a: 0.55;
-    --lswitch-track: rgb(24 20 16 / 0.08); --lswitch-knob-a: 0.16;
-    --check-on: var(--ink);     /* a ticked box is ink in light, red in dark */
+  /* Liquid glass bezel (kit.css .lg-lens) and the theme switch that wears it. */
+  --lg-fill: 255 255 255; --lg-rim: 255 255 255;
+  --lg-rim-a: 0.7; --lg-key-a: 0.95; --lg-back-a: 0.45; --lg-depth-a: 0.1; --lg-drop-a: 0.14; --lg-sheen-a: 0.55;
+  --lswitch-track: rgb(24 20 16 / 0.08); --lswitch-knob-a: 0.16;
+  --lseg-track: rgb(24 20 16 / 0.06); --lseg-a: 0.14;
+  --check-on: var(--ink);     /* a ticked box is ink in light, red in dark */
 
-    /* Two clocks: a choice tweens 700ms on --ease-out; anything that follows the pointer rides a spring. */
-    --ease-out: cubic-bezier(0.32, 0.72, 0, 1);
-    --ease-spring: linear(0, 0.039 3.3%, 0.135 6.7%, 0.262 10%, 0.4 13.3%, 0.535 16.7%, 0.66 20%, 0.768 23.3%, 0.857 26.7%, 0.926 30%, 0.978 33.3%, 1.015 36.7%, 1.038 40%, 1.051 43.3%, 1.056 46.7%, 1.055 50%, 1.051 53.3%, 1.044 56.7%, 1.036 60%, 1.029 63.3%, 1.021 66.7%, 1.015 70%, 1.01 73.3%, 1.005 76.7%, 1.002 80%, 1 83.3%, 0.998 86.7%, 0.997 90%, 0.997 93.3%, 0.997 96.7%, 1);
-    --dur-1: 160ms; --dur-2: 240ms; --dur-3: 700ms;
+  /* Two clocks: a choice tweens 700ms on --ease-out; anything that follows the pointer rides a spring. */
+  --ease-out: cubic-bezier(0.32, 0.72, 0, 1);
+  --ease-spring: linear(0, 0.039 3.3%, 0.135 6.7%, 0.262 10%, 0.4 13.3%, 0.535 16.7%, 0.66 20%, 0.768 23.3%, 0.857 26.7%, 0.926 30%, 0.978 33.3%, 1.015 36.7%, 1.038 40%, 1.051 43.3%, 1.056 46.7%, 1.055 50%, 1.051 53.3%, 1.044 56.7%, 1.036 60%, 1.029 63.3%, 1.021 66.7%, 1.015 70%, 1.01 73.3%, 1.005 76.7%, 1.002 80%, 1 83.3%, 0.998 86.7%, 0.997 90%, 0.997 93.3%, 0.997 96.7%, 1);
+  --dur-1: 160ms; --dur-2: 240ms; --dur-3: 700ms;
 
-    --radius-sheet: 14px; --radius-control: 10px; --radius-tag: 6px;
-    --control-height: 38px;
+  --radius-sheet: 14px; --radius-control: 10px; --radius-tag: 6px;
+  --control-height: 38px;
 
-    --font-sans: 'Outfit Variable', 'Outfit', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
-    --font-accent: 'Fraunces Variable', 'Fraunces', Georgia, 'Times New Roman', serif;
+  --font-sans: 'Outfit Variable', 'Outfit', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-accent: 'Fraunces Variable', 'Fraunces', Georgia, 'Times New Roman', serif;
 
-    /* shadcn roles, as BRAND.md section 9 maps them. */
-    --background: var(--page); --foreground: var(--ink);
-    --card: var(--surface); --card-foreground: var(--ink);
-    --popover: var(--surface); --popover-foreground: var(--ink);
-    --primary: var(--red); --primary-foreground: var(--red-ink);
-    --secondary: var(--band); --secondary-foreground: var(--ink);
-    --muted: var(--surface-2); --muted-foreground: var(--ink-2);
-    --accent: var(--band); --accent-foreground: var(--ink);
-    --destructive: var(--critical); --destructive-foreground: var(--red-ink);
-    --ring: var(--focus);
-  }
+  /* shadcn roles, as BRAND.md section 9 maps them. */
+  --background: var(--page); --foreground: var(--ink);
+  --card: var(--surface); --card-foreground: var(--ink);
+  --popover: var(--surface); --popover-foreground: var(--ink);
+  --primary: var(--red); --primary-foreground: var(--red-ink);
+  --secondary: var(--band); --secondary-foreground: var(--ink);
+  --muted: var(--surface-2); --muted-foreground: var(--ink-2);
+  --accent: var(--band); --accent-foreground: var(--ink);
+  --destructive: var(--critical); --destructive-foreground: var(--red-ink);
+  --ring: var(--focus);
+}
 
-  .dark {
-    color-scheme: dark;
+.dark {
+  color-scheme: dark;
 
-    --page: 13 11 9;            /* #0D0B09 */
-    --surface: 21 18 15;        /* #15120F */
-    --surface-2: 29 25 21;      /* #1D1915 */
-    --band: 22 18 15;           /* #16120F */
-    --ink: 244 239 230;         /* #F4EFE6 */
-    --ink-2: 181 171 157;       /* #B5AB9D */
-    --ink-3: 126 116 104;       /* #7E7468 */
-    --red: 229 72 77;           /* #E5484D */
-    --red-deep: 240 86 91;      /* #F0565B */
-    --red-ink: 255 255 255;     /* #FFFFFF */
-    --good: 63 185 139;         /* #3FB98B */
-    --warning: 227 166 62;      /* #E3A63E */
-    --critical: 229 72 77;      /* #E5484D */
-    --info: 143 167 192;        /* #8FA7C0 */
-    --focus: 240 86 91;         /* #F0565B */
+  --page: 13 11 9;            /* #0D0B09 */
+  --surface: 21 18 15;        /* #15120F */
+  --surface-2: 29 25 21;      /* #1D1915 */
+  --band: 22 18 15;           /* #16120F */
+  --ink: 244 239 230;         /* #F4EFE6 */
+  --ink-2: 181 171 157;       /* #B5AB9D */
+  --ink-3: 126 116 104;       /* #7E7468 */
+  --red: 229 72 77;           /* #E5484D */
+  --red-deep: 240 86 91;      /* #F0565B */
+  --red-ink: 255 255 255;     /* #FFFFFF */
+  --good: 63 185 139;         /* #3FB98B */
+  --warning: 227 166 62;      /* #E3A63E */
+  --critical: 229 72 77;      /* #E5484D */
+  --info: 143 167 192;        /* #8FA7C0 */
+  --focus: 240 86 91;         /* #F0565B */
 
-    --rule: rgb(250 247 240 / 0.08);
-    --rule-2: rgb(250 247 240 / 0.16);
-    --rule-hover: rgb(250 247 240 / 0.3);
-    --row-hover: rgb(250 247 240 / 0.04);
-    --focus-ring: rgb(229 72 77 / 0.22);
-    --scrim: rgb(0 0 0 / 0.6);
+  --rule: rgb(250 247 240 / 0.08);
+  --rule-2: rgb(250 247 240 / 0.16);
+  --rule-hover: rgb(250 247 240 / 0.3);
+  --row-hover: rgb(250 247 240 / 0.04);
+  --focus-ring: rgb(229 72 77 / 0.22);
+  --scrim: rgb(0 0 0 / 0.6);
 
-    --panel-shadow: inset 0 1px 0 rgb(250 247 240 / 0.04);
-    --float-shadow: 0 18px 40px -12px rgb(0 0 0 / 0.8);
+  --panel-shadow: inset 0 1px 0 rgb(250 247 240 / 0.04);
+  --float-shadow: 0 18px 40px -12px rgb(0 0 0 / 0.8);
 
-    --lg-fill: 250 247 240; --lg-rim: 250 247 240;
-    --lg-rim-a: 0.28; --lg-key-a: 0.6; --lg-back-a: 0.22; --lg-depth-a: 0.5; --lg-drop-a: 0.5; --lg-sheen-a: 0.2;
-    --lswitch-track: rgb(250 247 240 / 0.09); --lswitch-knob-a: 0.08;
-    --check-on: var(--red);
+  --lg-fill: 250 247 240; --lg-rim: 250 247 240;
+  --lg-rim-a: 0.28; --lg-key-a: 0.6; --lg-back-a: 0.22; --lg-depth-a: 0.5; --lg-drop-a: 0.5; --lg-sheen-a: 0.2;
+  --lswitch-track: rgb(250 247 240 / 0.09); --lswitch-knob-a: 0.08;
+  --lseg-track: rgb(250 247 240 / 0.06); --lseg-a: 0.07;
+  --check-on: var(--red);
 
-    --secondary: var(--surface-2);
-    --accent: var(--surface-2);
-    --destructive-foreground: 255 255 255;
-  }
+  --secondary: var(--surface-2);
+  --accent: var(--surface-2);
+  --destructive-foreground: 255 255 255;
 }

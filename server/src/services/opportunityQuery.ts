@@ -1,5 +1,5 @@
 import { Prisma } from '../generated/prisma/client.js';
-import type { SortBy } from 'shared';
+import type { Lane, SortBy } from 'shared';
 import type { Sector } from '../lib/sectors.js';
 import { SEARCH_SOURCES } from './searchSources.js';
 import { matchesAllTerms, searchTerms, termAlternatives, termMatches } from './searchTerms.js';
@@ -19,6 +19,8 @@ export interface OpportunityFilters {
   cfpDeadlineAfter?: Date;
   sortBy?: SortBy;
   qualityMin?: number;
+  /** Which of Browse's three lists to page through (services/lanes.ts); absent lists every lane together. */
+  lane?: Lane;
 }
 
 /** Rows with almost no metadata (base score 5) never surface. */

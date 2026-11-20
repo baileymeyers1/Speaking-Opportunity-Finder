@@ -1,12 +1,10 @@
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
-import { MultiSelectDropdown } from '../MultiSelectDropdown';
 import { MultiLocationInput } from '../MultiLocationInput';
 import { useFilterOptions } from '../../hooks/useFilterOptions';
 import { COMPENSATION_MAX, COMPENSATION_TYPES, OPPORTUNITY_FORMATS } from '../../filters/constants';
 import { formatCompensationValue } from '../../filters/activeFilterPills';
-import { SECTORS, sectorLabel } from '../../lib/sectors';
 import type { CompensationType, OpportunityFilters, OpportunityFormat } from '../../types';
 
 interface AdvancedFiltersProps {
@@ -36,8 +34,6 @@ export function AdvancedFilters({
   const formats = filterOptions?.formats || OPPORTUNITY_FORMATS;
   const compensationTypes = filterOptions?.compensationTypes || COMPENSATION_TYPES;
   const hasCompensation = filterOptions?.compensationStats?.hasCompensation ?? true;
-  // The list of sectors is fixed; the API adds how many cards each one has.
-  const sectorCounts = new Map((filterOptions?.sectors || []).map((sector) => [sector.id, sector.count]));
   const selectedLocations = filters.locations || [];
 
   const handleFormatChange = (format: OpportunityFormat) =>
@@ -63,8 +59,8 @@ export function AdvancedFilters({
         <Separator className="mb-4" />
 
         <div className="space-y-6">
-          {/* Location + Sector row */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* Location. Sectors have their own button beside the search box. */}
+          <div>
             <div>
               <h3 className="text-sm font-medium text-foreground mb-2">Location</h3>
               <MultiLocationInput
@@ -86,21 +82,6 @@ export function AdvancedFilters({
                 />
                 <span className="ml-2 text-sm text-foreground font-medium">Remote only</span>
               </label>
-            </div>
-
-            <div>
-              <h3 className="text-sm font-medium text-foreground mb-2">Sector</h3>
-              <MultiSelectDropdown
-                label="Sectors"
-                options={SECTORS.map((sector) => sector.id)}
-                selected={filters.sectors || []}
-                onChange={(selected) =>
-                  onFiltersChange({ ...filters, sectors: selected.length > 0 ? selected : undefined })
-                }
-                placeholder="Search sectors..."
-                getLabel={sectorLabel}
-                getCount={(sector) => sectorCounts.get(sector)}
-              />
             </div>
           </div>
 

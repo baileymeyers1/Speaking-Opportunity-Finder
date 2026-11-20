@@ -1,6 +1,7 @@
 import type { SortBy } from 'shared';
 import { isSector, sectorSearchTerm, type Sector } from '../lib/sectors.js';
 import type { OpportunityFilters } from '../services/opportunityService.js';
+import { isLane } from '../services/lanes.js';
 import { sectorsFromTags } from '../services/sectorMapping.js';
 
 const SORT_OPTIONS: readonly SortBy[] = ['quality', 'deadline', 'eventDate', 'match'];
@@ -56,6 +57,7 @@ export function buildFilters(query: Record<string, unknown>): OpportunityFilters
     cfpDeadlineAfter,
     sortBy,
     qualityMin,
+    lane,
   } = query;
 
   const filters: OpportunityFilters = {};
@@ -83,6 +85,9 @@ export function buildFilters(query: Record<string, unknown>): OpportunityFilters
     const value = parseInt(String(qualityMin), 10);
     if (!isNaN(value)) filters.qualityMin = value;
   }
+
+  // An unknown lane is ignored rather than refused: the list then holds every lane, as it did before lanes.
+  if (isLane(lane)) filters.lane = lane;
 
   return filters;
 }

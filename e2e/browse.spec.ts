@@ -10,10 +10,41 @@ test.describe('Browse page', () => {
     // Verify the page title/branding in the navbar
     await expect(page.getByText('Speaking Finder')).toBeVisible();
 
-    // Verify the page heading
-    await expect(
-      page.getByRole('heading', { name: 'Find Speaking Opportunities' })
-    ).toBeVisible();
+    // The page is the list; its name is there for screen readers
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('Calls for speakers');
+
+    // Two rows of controls sit above the list: the tools, then the lanes with the sort
+    await expect(page.getByRole('button', { name: /Sectors/ })).toBeVisible();
+    await expect(page.getByRole('group', { name: 'Which calls to list' })).toBeVisible();
+  });
+
+  test('offers live search only once there is something to search for', async ({ page }) => {
+    await page.goto('/');
+
+    const liveSearch = page.getByRole('button', { name: 'Live search' });
+    await expect(liveSearch).toHaveCount(0);
+
+    await page.getByPlaceholder('Search opportunities...').fill('kubernetes');
+    await expect(liveSearch).toBeVisible();
+  });
+
+  test('lists calls in three lanes and switches between them', async ({ page }) => {
+    await page.goto('/');
+
+    const lanes = page.getByRole('group', { name: 'Which calls to list' });
+    await expect(lanes.getByRole('button', { name: /Closing/ })).toHaveAttribute('aria-pressed', 'true');
+
+    await lanes.getByRole('button', { name: /Always open/ }).click();
+    await expect(page).toHaveURL(/lane=open/);
+    await expect(lanes.getByRole('button', { name: /Always open/ })).toHaveAttribute('aria-pressed', 'true');
+    // No deadlines in this lane, so the default order is by event date and says so
+    await expect(page.getByLabel('Sort by')).toHaveText('Event date (soonest)');
+
+    await lanes.getByRole('button', { name: /To watch/ }).click();
+    await expect(page).toHaveURL(/lane=watch/);
+
+    await lanes.getByRole('button', { name: /Closing/ }).click();
+    await expect(page).not.toHaveURL(/lane=/);
   });
 
   test('search updates URL with query parameter', async ({ page }) => {

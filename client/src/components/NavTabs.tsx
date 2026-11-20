@@ -86,7 +86,7 @@ export function NavTabs({ tabs }: { tabs: NavTab[] }) {
           key={tab.to}
           to={tab.to}
           aria-current={pathname === tab.to ? 'page' : undefined}
-          className="inline-flex items-center text-sm text-muted-foreground transition-colors duration-[240ms] ease-out hover:text-foreground aria-[current=page]:text-foreground"
+          className="inline-flex items-center text-sm text-muted-foreground transition-colors duration-state ease-out hover:text-foreground aria-[current=page]:text-foreground"
           onPointerEnter={(event) => ruleRef.current?.moveTo(event.currentTarget)}
           onFocus={(event) => ruleRef.current?.moveTo(event.currentTarget)}
         >

@@ -48,14 +48,13 @@ export function SavedSearches({ currentQuery, currentFilters, onApplySearch }: S
   return (
     <Popover open={isOpen} onOpenChange={setIsOpen}>
       <PopoverTrigger asChild>
-        <Button variant="outline" size="sm" className="gap-1.5">
-          <Bookmark className="h-4 w-4" />
-          Saved Searches
+        <Button variant="outline" size="icon" aria-label="Saved searches" title="Saved searches">
+          <Bookmark aria-hidden="true" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-80 p-0" align="start">
+      <PopoverContent className="w-80 p-0" align="end">
         <div className="p-3">
-          <h4 className="text-sm font-medium">Saved Searches</h4>
+          <h4 className="text-sm font-medium">Saved searches</h4>
         </div>
         <Separator />
 

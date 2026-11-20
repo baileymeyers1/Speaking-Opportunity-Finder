@@ -293,12 +293,29 @@ export interface ApiResponse<T> {
   message?: string;
 }
 
+/**
+ * The three lists Browse switches between. `closing`: an open call with a
+ * deadline. `open`: an open call with none (it closes when its event starts,
+ * or never). `watch`: an event whose page was read and has no call yet.
+ */
+export type Lane = 'closing' | 'open' | 'watch';
+
+/** What the listed rows add up to under a request's filters, whichever lane it asked for. */
+export interface LaneSummary {
+  counts: Record<Lane, number>;
+  /** Of the closing lane: deadlines within 7 days, and within 30 (the 30 includes the 7). */
+  closingWithin7: number;
+  closingWithin30: number;
+}
+
 export interface PaginatedResponse<T> {
   items: T[];
   total: number;
   page: number;
   pageSize: number;
   totalPages: number;
+  /** Lane counts and what closes soon. Absent on a response cached before lanes existed. */
+  lanes?: LaneSummary;
   /** Results this live search surfaced: new hits read in the request plus stored copies of known hits. */
   liveResultCount?: number;
   /** Live hits stored but not read yet; they appear once the enrichment worker reads them. */

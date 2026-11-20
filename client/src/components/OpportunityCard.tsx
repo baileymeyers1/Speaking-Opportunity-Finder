@@ -1,8 +1,6 @@
-import { useState } from 'react';
-import { Link, useNavigate, useLocation } from 'react-router-dom';
-import type { Opportunity, SavedCategory } from '../types';
-import { useAuth } from '../hooks/useAuth';
-import { useSaveOpportunity } from '../hooks/useSaveOpportunity';
+import { Link, useLocation } from 'react-router-dom';
+import type { Opportunity } from '../types';
+import { useSaveCall } from '../hooks/useSaveCall';
 import { isDeadlinePast } from '../lib/dates';
 import { sectorLabel } from '../lib/sectors';
 import { getQualityColor, getQualityLabel } from '../lib/opportunityDisplay';
@@ -40,13 +38,9 @@ interface OpportunityCardProps {
 }
 
 export function OpportunityCard({ opportunity, showSave = true, isPast }: OpportunityCardProps) {
-  const { isAuthenticated } = useAuth();
-  const navigate = useNavigate();
   const location = useLocation();
-  const save = useSaveOpportunity();
-  const [savedCategory, setSavedCategory] = useState<SavedCategory | ''>('');
+  const { savedCategory, isSaving, save: handleSave } = useSaveCall(opportunity);
   const current = opportunity;
-  const isSaving = save.isPending;
 
   const isLive = current.isLiveResult;
   const isPastDeadline = isPast ?? isDeadlinePast(current);
@@ -59,20 +53,6 @@ export function OpportunityCard({ opportunity, showSave = true, isPast }: Opport
       ? `${current.compensationType} - $${current.compensationAmount.toLocaleString()}`
       : current.compensationType
     : null;
-
-  const handleSave = (category: SavedCategory) => {
-    if (!isAuthenticated) {
-      navigate('/login');
-      return;
-    }
-    save.mutate(
-      { opportunity: current, category },
-      {
-        onSuccess: () => setSavedCategory(category),
-        onError: (error) => console.error('Failed to save:', error),
-      }
-    );
-  };
 
   return (
     <Card className={cn(
