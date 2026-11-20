@@ -2,7 +2,7 @@ import { type Request, type Response, type NextFunction } from 'express';
 import * as opportunityService from '../services/opportunityService.js';
 import * as liveSearchService from '../services/liveSearchService.js';
 import { recordSearch } from '../services/searchLog.js';
-import * as profileService from '../services/profileService.js';
+import * as speakerService from '../services/speakerService.js';
 import { scoreOpportunities } from '../services/matchScore.js';
 import { buildFilters, liveSearchTopics } from './opportunityFilters.js';
 import { AppError } from '../middleware/errorHandler.js';
@@ -82,7 +82,7 @@ export async function getOpportunities(
     };
 
     // A signed-in user with a speaker profile gets a match score on every row.
-    const profile = req.user ? await profileService.getMatchProfile(req.user.userId) : null;
+    const profile = req.user ? await speakerService.getMatchProfile(req.user.userId) : null;
     const listOptions: opportunityService.ListOptions = { profile };
 
     // Always fetch DB results
@@ -178,7 +178,7 @@ export async function getOpportunityById(
 ): Promise<void> {
   try {
     const { id } = req.params;
-    const profile = req.user ? await profileService.getMatchProfile(req.user.userId) : null;
+    const profile = req.user ? await speakerService.getMatchProfile(req.user.userId) : null;
     const opportunity = await opportunityService.getOpportunityById(id, { profile });
 
     const payload: ApiResponse<OpportunityWithDates> = { success: true, data: opportunity };
@@ -260,7 +260,7 @@ export async function liveSearch(
       userId: req.user?.userId,
     });
 
-    const profile = req.user ? await profileService.getMatchProfile(req.user.userId) : null;
+    const profile = req.user ? await speakerService.getMatchProfile(req.user.userId) : null;
     const { live, stored } = await liveOutcomeToItems(outcome, {}, { profile }, profile);
     res.json({
       success: true,

@@ -20,8 +20,8 @@ export const SENIORITY_OPTIONS: ReadonlyArray<ProfileOption<SpeakerSeniority>> =
 ];
 
 export const TRAVEL_RADIUS_OPTIONS: ReadonlyArray<ProfileOption<TravelRadius>> = [
-  { value: 'local', label: 'My city only', description: 'Events in your home city' },
-  { value: 'country', label: 'My country', description: 'Anywhere in your home country' },
+  { value: 'local', label: 'Home city only', description: 'Events in the home city' },
+  { value: 'country', label: 'Home country', description: 'Anywhere in the home country' },
   { value: 'international', label: 'Anywhere', description: 'International travel is fine' },
 ];
 
@@ -41,8 +41,12 @@ export const COMPENSATION_REQUIREMENT_OPTIONS: ReadonlyArray<ProfileOption<Compe
 export const MAX_TOPICS = 30;
 export const MAX_TOPIC_LENGTH = 40;
 export const MAX_BIO_LENGTH = 500;
+export const MAX_NAME_LENGTH = 80;
+export const MAX_TITLE_LENGTH = 120;
 
 export const EMPTY_PROFILE: SpeakerProfileInput = {
+  name: '',
+  title: '',
   topics: [],
   bio: '',
   seniority: 'experienced',
@@ -58,6 +62,8 @@ export const EMPTY_PROFILE: SpeakerProfileInput = {
 export function profileToInput(profile: SpeakerProfile | null | undefined): SpeakerProfileInput {
   if (!profile) return EMPTY_PROFILE;
   return {
+    name: profile.name,
+    title: profile.title,
     topics: profile.topics,
     bio: profile.bio,
     seniority: profile.seniority,

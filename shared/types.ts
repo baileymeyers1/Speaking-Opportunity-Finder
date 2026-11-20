@@ -41,8 +41,16 @@ export type TravelRadius = 'local' | 'country' | 'international';
 export type RemotePreference = 'remote_only' | 'prefer_remote' | 'either' | 'prefer_in_person';
 export type CompensationRequirement = 'any' | 'travel_covered' | 'paid';
 
-/** Body of `PUT /api/profile`: every field is sent, the server stores the whole thing. */
+/**
+ * One person on an account's roster, as `POST /api/speakers` and
+ * `PUT /api/speakers/:id` take it: every field is sent, the server stores the
+ * whole thing.
+ */
 export interface SpeakerProfileInput {
+  /** Who this is. Required when saving; empty only on a profile saved before the roster existed. */
+  name: string;
+  /** One line under the name, such as "Chief medical officer, Northwind Health". */
+  title: string;
   /** Free-text tags such as "healthcare" or "developer experience". */
   topics: string[];
   bio: string;
@@ -55,7 +63,7 @@ export interface SpeakerProfileInput {
   preferredFormats: OpportunityFormat[];
 }
 
-/** `GET /api/profile` returns this, or `null` while the user has not saved one. */
+/** A stored speaker. `GET /api/speakers` lists the account's, oldest first: the first is whose fit Browse shows. */
 export interface SpeakerProfile extends SpeakerProfileInput {
   id: string;
   userId: string;

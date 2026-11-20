@@ -10,6 +10,8 @@ import { OPPORTUNITY_FORMATS } from '../../filters/constants';
 import {
   COMPENSATION_REQUIREMENT_OPTIONS,
   MAX_BIO_LENGTH,
+  MAX_NAME_LENGTH,
+  MAX_TITLE_LENGTH,
   REMOTE_PREFERENCE_OPTIONS,
   SENIORITY_OPTIONS,
   TRAVEL_RADIUS_OPTIONS,
@@ -24,6 +26,8 @@ interface ProfileFormProps {
   error: string | null;
   /** Set after a successful save so the form can confirm it. */
   savedAt: Date | null;
+  /** What the button does: "Add speaker" for a new one, "Save changes" after. */
+  submitLabel: string;
 }
 
 interface ChoiceFieldProps<T extends string> {
@@ -59,8 +63,11 @@ function ChoiceField<T extends string>({ label, value, options, onChange }: Choi
   );
 }
 
-export function ProfileForm({ initial, onSubmit, isSaving, error, savedAt }: ProfileFormProps) {
+/** One speaker's profile: who they are, what they speak about, where they go and what they need. */
+export function ProfileForm({ initial, onSubmit, isSaving, error, savedAt, submitLabel }: ProfileFormProps) {
   const [draft, setDraft] = useState<SpeakerProfileInput>(initial);
+  const nameId = useId();
+  const titleId = useId();
   const bioId = useId();
   const cityId = useId();
   const countryId = useId();
@@ -81,6 +88,8 @@ export function ProfileForm({ initial, onSubmit, isSaving, error, savedAt }: Pro
     event.preventDefault();
     onSubmit({
       ...draft,
+      name: draft.name.trim(),
+      title: draft.title.trim(),
       bio: draft.bio.trim(),
       homeCity: draft.homeCity?.trim() || null,
       homeCountry: draft.homeCountry?.trim() || null,
@@ -99,8 +108,37 @@ export function ProfileForm({ initial, onSubmit, isSaving, error, savedAt }: Pro
         </div>
       )}
 
+      <section className="space-y-6" aria-labelledby="profile-who">
+        <h2 id="profile-who" className="heading text-foreground">Who</h2>
+        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+          <div className="space-y-2">
+            <Label htmlFor={nameId}>Name</Label>
+            <Input
+              id={nameId}
+              value={draft.name}
+              onChange={(event) => update('name', event.target.value)}
+              placeholder="Dana Okafor"
+              maxLength={MAX_NAME_LENGTH}
+              required
+              autoComplete="off"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor={titleId}>Title</Label>
+            <Input
+              id={titleId}
+              value={draft.title}
+              onChange={(event) => update('title', event.target.value)}
+              placeholder="Chief medical officer, Northwind Health"
+              maxLength={MAX_TITLE_LENGTH}
+              autoComplete="off"
+            />
+          </div>
+        </div>
+      </section>
+
       <section className="space-y-6" aria-labelledby="profile-about">
-        <h2 id="profile-about" className="text-lg font-medium text-foreground">About you</h2>
+        <h2 id="profile-about" className="heading text-foreground">What they speak about</h2>
         <TopicTagInput topics={draft.topics} onChange={(topics) => update('topics', topics)} />
 
         <div className="space-y-2">
@@ -128,7 +166,7 @@ export function ProfileForm({ initial, onSubmit, isSaving, error, savedAt }: Pro
       </section>
 
       <section className="space-y-6" aria-labelledby="profile-where">
-        <h2 id="profile-where" className="text-lg font-medium text-foreground">Where you will speak</h2>
+        <h2 id="profile-where" className="heading text-foreground">Where they will speak</h2>
         <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
           <div className="space-y-2">
             <Label htmlFor={cityId}>Home city</Label>
@@ -136,9 +174,9 @@ export function ProfileForm({ initial, onSubmit, isSaving, error, savedAt }: Pro
               id={cityId}
               value={draft.homeCity ?? ''}
               onChange={(event) => update('homeCity', event.target.value)}
-              placeholder="e.g. Denver"
+              placeholder="Denver"
               maxLength={80}
-              autoComplete="address-level2"
+              autoComplete="off"
             />
           </div>
           <div className="space-y-2">
@@ -147,15 +185,15 @@ export function ProfileForm({ initial, onSubmit, isSaving, error, savedAt }: Pro
               id={countryId}
               value={draft.homeCountry ?? ''}
               onChange={(event) => update('homeCountry', event.target.value)}
-              placeholder="e.g. United States"
+              placeholder="United States"
               maxLength={80}
-              autoComplete="country-name"
+              autoComplete="off"
             />
           </div>
         </div>
         <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
           <ChoiceField
-            label="How far you travel"
+            label="How far they travel"
             value={draft.travelRadius}
             options={TRAVEL_RADIUS_OPTIONS}
             onChange={(value) => update('travelRadius', value)}
@@ -170,7 +208,7 @@ export function ProfileForm({ initial, onSubmit, isSaving, error, savedAt }: Pro
       </section>
 
       <section className="space-y-6" aria-labelledby="profile-terms">
-        <h2 id="profile-terms" className="text-lg font-medium text-foreground">What you need</h2>
+        <h2 id="profile-terms" className="heading text-foreground">What they need</h2>
         <ChoiceField
           label="Compensation"
           value={draft.compensationRequirement}
@@ -201,13 +239,13 @@ export function ProfileForm({ initial, onSubmit, isSaving, error, savedAt }: Pro
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
         <Button type="submit" disabled={isSaving} className="sm:w-auto">
           {isSaving && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
-          {isSaving ? 'Saving...' : 'Save profile'}
+          {isSaving ? 'Saving…' : submitLabel}
         </Button>
         <p role="status" aria-live="polite" className="flex items-center gap-1.5 text-sm text-muted-foreground">
           {savedAt && !isSaving && (
             <>
               <CheckCircle2 className="h-4 w-4 text-good" aria-hidden="true" />
-              Saved. Match scores on the browse page now use this profile.
+              Saved
             </>
           )}
         </p>

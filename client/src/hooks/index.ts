@@ -4,7 +4,7 @@ export { useFilterOptions } from './useFilterOptions';
 export { useLiveSearch } from './useLiveSearch';
 export { useOpportunities, type OpportunityPage } from './useOpportunities';
 export { useOpportunity, LiveResultExpiredError } from './useOpportunity';
-export { useProfile, useUpdateProfile } from './useProfile';
+export { useSpeakers, useCreateSpeaker, useUpdateSpeaker, useRemoveSpeaker } from './useSpeakers';
 export { useSaveOpportunity, type SaveResult } from './useSaveOpportunity';
 export {
   useSavedOpportunities,

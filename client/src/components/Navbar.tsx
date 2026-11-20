@@ -16,7 +16,7 @@ export function Navbar() {
 
   const tabs: NavTab[] = [
     { to: '/', label: 'Browse' },
-    ...(isAuthenticated ? [{ to: '/saved', label: 'Saved' }, { to: '/profile', label: 'Profile' }] : []),
+    ...(isAuthenticated ? [{ to: '/saved', label: 'Saved' }, { to: '/speakers', label: 'Speakers' }] : []),
     ...(isAuthenticated && user?.isAdmin ? [{ to: '/admin/dashboard', label: 'Analytics' }] : []),
   ];
 

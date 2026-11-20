@@ -46,7 +46,7 @@ export function TopicTagInput({ topics, onChange }: TopicTagInputProps) {
     <div className="space-y-2">
       <Label htmlFor={id}>Topics</Label>
       <p id={`${id}-description`} className="text-sm text-muted-foreground">
-        What you speak about, one tag at a time. Press Enter or comma to add; up to {MAX_TOPICS}.
+        One tag at a time. Press Enter or comma to add; up to {MAX_TOPICS}.
       </p>
       <Input
         id={id}

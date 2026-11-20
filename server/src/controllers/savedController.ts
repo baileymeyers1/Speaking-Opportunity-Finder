@@ -3,6 +3,7 @@ import { type Opportunity } from '../generated/prisma/client.js';
 import { prisma } from '../lib/prisma.js';
 import { normalizeSectors } from '../lib/sectors.js';
 import { AppError } from '../middleware/errorHandler.js';
+import { isSavedCategory, saveCall } from '../services/savedCalls.js';
 
 function parseJsonArray(value: string): string[] {
   try {
@@ -79,6 +80,9 @@ export async function saveOpportunity(
     if (!opportunityId) {
       throw new AppError(400, 'Opportunity ID is required');
     }
+    if (!isSavedCategory(category)) {
+      throw new AppError(400, 'Category must be interested, applied, accepted or rejected');
+    }
 
     // Check if opportunity exists
     const opportunity = await prisma.opportunity.findUnique({
@@ -89,23 +93,7 @@ export async function saveOpportunity(
       throw new AppError(404, 'Opportunity not found');
     }
 
-    const saved = await prisma.savedOpportunity.upsert({
-      where: {
-        userId_opportunityId: {
-          userId: req.user.userId,
-          opportunityId,
-        },
-      },
-      update: { category },
-      create: {
-        userId: req.user.userId,
-        opportunityId,
-        category,
-      },
-      include: {
-        opportunity: true,
-      },
-    });
+    const saved = await saveCall({ userId: req.user.userId, opportunityId, category });
 
     res.status(201).json({
       success: true,
@@ -134,8 +122,8 @@ export async function updateSavedOpportunity(
     const { id } = req.params;
     const { category } = req.body;
 
-    if (!category) {
-      throw new AppError(400, 'Category is required');
+    if (!isSavedCategory(category)) {
+      throw new AppError(400, 'Category must be interested, applied, accepted or rejected');
     }
 
     const existing = await prisma.savedOpportunity.findFirst({
