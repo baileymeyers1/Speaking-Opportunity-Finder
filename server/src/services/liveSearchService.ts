@@ -29,6 +29,9 @@ import { buildCreateData } from '../scrapers/persistData.js';
 import type { ScraperResult } from '../scrapers/qualityScore.js';
 import type { PendingLiveHit } from 'shared';
 
+import { isDemoMode } from '../demo/env.js';
+import { claimDemoLiveSearch } from '../demo/searchBudget.js';
+
 /** Live hits enriched synchronously per request; the enrichment cron finishes the rest. */
 export const SYNC_ENRICH_LIMIT = 8;
 
@@ -606,6 +609,10 @@ export interface LiveSearchOutcome {
   noCallCount: number;
   /** When the background worker resumes, if today's limit is spent and hits are still waiting. */
   backgroundChecksResumeAt: string | null;
+  /** Demo only: today's live searches are used up, so nothing was searched. */
+  demoLimitReached?: boolean;
+  /** Demo only: live searches left today after this one. */
+  demoSearchesLeft?: number;
 }
 
 /**
@@ -643,6 +650,14 @@ export async function performLiveSearch(
   if (!apiKey) {
     console.log('[LiveSearch] No WEB_SEARCH_API_KEY configured. Live search disabled.');
     return empty;
+  }
+
+  // The public demo shares production's keys under a small daily allowance (src/demo/searchBudget.ts).
+  let demoSearchesLeft: number | undefined;
+  if (isDemoMode()) {
+    const claim = await claimDemoLiveSearch();
+    if (!claim.allowed) return { ...empty, demoLimitReached: true, demoSearchesLeft: 0 };
+    demoSearchesLeft = claim.left;
   }
 
   console.log(`[LiveSearch] Running ${searchQueries.length} parallel queries:`, searchQueries);
@@ -796,6 +811,7 @@ export async function performLiveSearch(
     notOpenCount: summary.notOpenCount,
     noCallCount: summary.noCallCount,
     backgroundChecksResumeAt: summary.waiting.length > 0 ? await backgroundChecksResumeAt() : null,
+    ...(demoSearchesLeft !== undefined && { demoSearchesLeft }),
   };
 }
 

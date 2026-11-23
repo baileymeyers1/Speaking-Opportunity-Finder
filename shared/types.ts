@@ -355,6 +355,10 @@ export interface PaginatedResponse<T> {
   liveNoCallCount?: number;
   /** Set when the background worker has spent today's Claude limit: when it resumes (ISO, next UTC midnight). */
   backgroundChecksResumeAt?: string | null;
+  /** Demo only: the demo's live searches for today are used up, so this list is stored listings only. */
+  demoLiveSearchLimitReached?: boolean;
+  /** Demo only: live searches the demo has left today, after this one. */
+  demoLiveSearchesLeft?: number;
 }
 
 /** A live-search hit whose page has not been read yet: shown by name, unchecked. */

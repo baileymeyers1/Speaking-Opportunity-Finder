@@ -2,6 +2,7 @@ import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '../generated/prisma/client.js';
 import { config } from '../config/index.js';
 import { databasePoolConfig } from './databasePool.js';
+import { DEMO_SCHEMA, isDemoMode } from '../demo/env.js';
 
 /**
  * Single PrismaClient for the whole process.
@@ -18,7 +19,9 @@ import { databasePoolConfig } from './databasePool.js';
 const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
 
 function createPrismaClient(): PrismaClient {
-  const adapter = new PrismaPg(databasePoolConfig(config.database.url));
+  // The demo's tables live in their own schema of the shared demo database (src/demo/env.ts).
+  const schema = isDemoMode() ? DEMO_SCHEMA : undefined;
+  const adapter = new PrismaPg(databasePoolConfig(config.database.url, { schema }), schema ? { schema } : undefined);
   return new PrismaClient({
     adapter,
     log: config.isDev ? ['warn', 'error'] : ['error'],

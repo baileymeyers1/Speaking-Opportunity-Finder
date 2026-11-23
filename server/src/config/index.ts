@@ -1,6 +1,7 @@
 import { config as dotenvConfig } from 'dotenv';
 import { fileURLToPath } from 'url';
 import { dirname, resolve } from 'path';
+import { demoDatabaseUrl, isDemoMode } from '../demo/env.js';
 
 // Only load .env file in development (production uses environment variables directly)
 if (process.env.NODE_ENV !== 'production') {
@@ -19,8 +20,9 @@ export const config = {
     expiresIn: process.env.JWT_EXPIRES_IN || '7d',
   },
 
+  // The demo runs on its own database and never reads DATABASE_URL (src/demo/env.ts).
   database: {
-    url: process.env.DATABASE_URL,
+    url: isDemoMode() ? demoDatabaseUrl() : process.env.DATABASE_URL,
   },
 
   cors: {
@@ -47,7 +49,7 @@ export const config = {
 };
 
 const REQUIRED_VARS: Array<{ key: string; value: unknown; prodOnly?: boolean }> = [
-  { key: 'DATABASE_URL', value: config.database.url },
+  { key: isDemoMode() ? 'DEMO_DATABASE_URL' : 'DATABASE_URL', value: config.database.url },
   { key: 'JWT_SECRET', value: process.env.JWT_SECRET, prodOnly: true },
 ];
 

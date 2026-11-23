@@ -19,4 +19,13 @@ describe('databasePoolConfig', () => {
     expect(databasePoolConfig(undefined)).toEqual({ connectionString: undefined });
     expect(databasePoolConfig('not a url')).toEqual({ connectionString: 'not a url' });
   });
+
+  it('sets the search path when given a schema (the demo)', () => {
+    expect(databasePoolConfig('postgresql://u:p@ep-x.neon.tech/db?sslmode=require', { schema: 'speaking_demo' })).toMatchObject({
+      ssl: true,
+      options: '-c search_path=speaking_demo',
+    });
+    expect(databasePoolConfig('postgresql://localhost/db', { schema: 'speaking_demo' }).options).toBe('-c search_path=speaking_demo');
+    expect(databasePoolConfig('postgresql://localhost/db').options).toBeUndefined();
+  });
 });

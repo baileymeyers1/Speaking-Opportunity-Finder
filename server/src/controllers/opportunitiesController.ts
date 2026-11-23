@@ -174,6 +174,8 @@ export async function getOpportunities(
           liveNotOpenCount: liveOutcome.notOpenCount,
           liveNoCallCount: liveOutcome.noCallCount,
           backgroundChecksResumeAt: liveOutcome.backgroundChecksResumeAt,
+          ...(liveOutcome.demoLimitReached && { demoLiveSearchLimitReached: true }),
+          ...(liveOutcome.demoSearchesLeft !== undefined && { demoLiveSearchesLeft: liveOutcome.demoSearchesLeft }),
         }),
       },
     };
@@ -281,6 +283,8 @@ export async function liveSearch(
       liveNotOpenCount: outcome.notOpenCount,
       liveNoCallCount: outcome.noCallCount,
       backgroundChecksResumeAt: outcome.backgroundChecksResumeAt,
+      ...(outcome.demoLimitReached && { demoLiveSearchLimitReached: true }),
+      ...(outcome.demoSearchesLeft !== undefined && { demoLiveSearchesLeft: outcome.demoSearchesLeft }),
     });
   } catch (error) {
     next(error);

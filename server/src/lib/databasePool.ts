@@ -23,9 +23,14 @@ function hostOf(connectionString: string): string | null {
  * connection string and that result overrides the `ssl` option set here
  * (`?sslmode=disable` turns TLS off, `?sslrootcert=…` pins a CA).
  */
-export function databasePoolConfig(connectionString: string | undefined): PoolConfig {
-  if (!connectionString) return { connectionString };
+export function databasePoolConfig(
+  connectionString: string | undefined,
+  { schema }: { schema?: string } = {}
+): PoolConfig {
+  // A schema (the demo's) also becomes each connection's search_path, so raw SQL finds its tables too.
+  const searchPath = schema ? { options: `-c search_path=${schema}` } : {};
+  if (!connectionString) return { connectionString, ...searchPath };
   const host = hostOf(connectionString);
-  if (!host || LOCAL_HOSTS.has(host)) return { connectionString };
-  return { connectionString, ssl: true };
+  if (!host || LOCAL_HOSTS.has(host)) return { connectionString, ...searchPath };
+  return { connectionString, ssl: true, ...searchPath };
 }

@@ -7,8 +7,16 @@ import adminRoutes from './admin.js';
 import cronRoutes from './cron.js';
 import savedSearchRoutes from './savedSearches.js';
 import speakersRoutes from './speakers.js';
+import demoRoutes, { blockDisabledInDemo } from '../demo/routes.js';
+import { isDemoMode } from '../demo/env.js';
 
 const router = Router();
+
+// The public demo adds its own routes and switches some off (src/demo/routes.ts).
+if (isDemoMode()) {
+  router.use(blockDisabledInDemo);
+  router.use(demoRoutes);
+}
 
 router.use('/auth', authRoutes);
 router.use('/opportunities', opportunitiesRoutes);
