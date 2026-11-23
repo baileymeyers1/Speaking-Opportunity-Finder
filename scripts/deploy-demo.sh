@@ -7,7 +7,8 @@
 #   - builds from a throwaway git worktree, so this repo's `.vercel` link and
 #     `.env` are never touched or uploaded
 #   - the demo's own vercel.json: the schema goes to the demo database
-#     (DEMO_DATABASE_URL*, schema speaking_demo, never DATABASE_URL), the
+#     (DEMO_DATABASE_URL*, schema speaking_demo; the build points the Prisma
+#     CLI's DATABASE_URL there, and the server never reads it in demo mode), the
 #     listings copy is filled from production's public API at build, and the
 #     only cron is the daily listings refresh (no scrapers, no enrichment)
 #   - functions in iad1, next to the demo database
@@ -41,7 +42,7 @@ git -C "$REPO_ROOT" worktree add --detach "$WT" "$REF" >/dev/null
 
 cat > "$WT/vercel.json" <<'JSON'
 {
-  "buildCommand": "test -n \"$DEMO_DATABASE_URL_UNPOOLED\" && npx prisma generate && DATABASE_URL=\"$(node scripts/demo-schema-url.mjs)\" npx prisma db push && npm run build && node server/dist/scripts/demoRefreshListings.js",
+  "buildCommand": "export DATABASE_URL=\"$(node scripts/demo-schema-url.mjs)\" && npx prisma generate && npx prisma db push && npm run build && node server/dist/scripts/demoRefreshListings.js",
   "outputDirectory": "client/dist",
   "framework": "vite",
   "regions": ["iad1"],
