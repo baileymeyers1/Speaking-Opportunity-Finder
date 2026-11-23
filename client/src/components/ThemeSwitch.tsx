@@ -9,7 +9,7 @@ import { revealFrames } from '@/lib/themeReveal';
 const REVEAL_MS = 720;
 // The switch rides its own view-transition layer and shows only its live image, so the knob never freezes
 // while the rest of the page holds still (styles/jci.css).
-const SWITCH_LAYER = 'jci-theme-switch';
+const SWITCH_LAYER = 'theme-switch';
 
 /**
  * The kit's theme switch. The knob is a bead of clear glass that magnifies the sun or moon it rests on and

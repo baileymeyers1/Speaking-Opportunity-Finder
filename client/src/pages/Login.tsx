@@ -7,8 +7,15 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { AlertCircle, Loader2 } from 'lucide-react';
+import { DemoSignIn } from '@/components/demo/DemoSignIn';
+import { isDemo } from '@/lib/demo';
 
+/** The sign-in page: email and password, or in the public demo its front door (one button, no form). */
 export function Login() {
+  return isDemo ? <DemoSignIn /> : <PasswordLogin />;
+}
+
+function PasswordLogin() {
   const navigate = useNavigate();
   const { login, isAuthenticated, isLoading: authLoading } = useAuth();
   const [email, setEmail] = useState('');

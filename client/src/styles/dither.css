@@ -1,0 +1,64 @@
+/* The public demo's skin, structural rules (tokens: styles/tokens.css under [data-theme='dither']). Square,
+   flat and two-colour: rules and fills instead of shadows, glass and rounding. Every rule is scoped to the
+   theme or to a class only components/demo uses, so the JCI client renders exactly as without this file.
+   Unlayered on purpose: these must outrank jci.css's component rules. */
+
+:root[data-theme='dither'] body { font-weight: 300; }
+:root[data-theme='dither'] ::selection { background: rgb(var(--ink)); color: rgb(var(--page)); }
+
+/* Headlines in Cormorant italic over DM Sans 300; figures and section headings stay DM Sans. */
+:root[data-theme='dither'] :is(.title, .accent-word) {
+  font-family: var(--font-accent); font-style: italic; font-weight: 500; font-variation-settings: normal;
+  letter-spacing: -0.01em; color: rgb(var(--ink));
+}
+:root[data-theme='dither'] .title { font-size: clamp(2rem, 1.5rem + 2vw, 2.625rem); line-height: 1.05; }
+
+/* Flat controls: blue rules, an outline for focus instead of a halo. */
+:root[data-theme='dither'] .btn--secondary { border-color: rgb(var(--ink)); }
+:root[data-theme='dither'] .field:is(:focus, :focus-visible, :focus-within, [data-state='open']) {
+  box-shadow: none; outline: 2px solid rgb(var(--focus)); outline-offset: 1px;
+}
+:root[data-theme='dither'] :is(.rounded, .rounded-\[2px\]) { border-radius: 0; }
+
+/* Menus, selects, popovers and tooltips: white with a blue rule, no shadow. */
+:root[data-theme='dither'] [data-radix-popper-content-wrapper] > * { border-color: rgb(var(--ink)); box-shadow: none; }
+
+/* No liquid glass: the segmented control is a row of hairline buttons, the chosen one filled blue. */
+:root[data-theme='dither'] :is(.lg-lens, .lseg__lens) { display: none; }
+:root[data-theme='dither'] .lseg { gap: 0; padding: 0; background: transparent; box-shadow: none; }
+:root[data-theme='dither'] .lseg button { height: var(--control-height); border: 1px solid rgb(var(--ink)); color: rgb(var(--ink)); }
+:root[data-theme='dither'] .lseg button + button { border-left: 0; }
+:root[data-theme='dither'] .lseg button[aria-pressed='true'] { background: rgb(var(--ink)); color: rgb(var(--page)); }
+:root[data-theme='dither'] .lseg button[aria-pressed='true'] > span { color: rgb(var(--on-field-2)); }
+@media (pointer: coarse) {
+  :root[data-theme='dither'] .lseg button { height: 44px; }
+}
+@media (max-width: 639px) {
+  /* DM Sans runs wider than Outfit: three lanes with their counts fit a phone only on tighter padding. */
+  :root[data-theme='dither'] .lseg button { padding: 0 8px; }
+  :root[data-theme='dither'] .lseg--stacked button { height: 44px; padding: 0 4px; }
+}
+
+/* The dither fades (components/demo/DitherFade.tsx) and the blue fields. */
+.dither-fade { display: block; width: 100%; color: rgb(var(--field)); }
+:root[data-theme='dither'] .demo-field { background: rgb(var(--field)); }
+
+/* The top bar and the front door are the blue field. Their subtrees read the page tokens (and the shadcn
+   roles, which :root has already resolved), so both are re-pointed here: white on blue. */
+:root[data-theme='dither'] :is(.demo-masthead, .demo-field) {
+  --page: 0 47 167; --surface: 0 47 167; --surface-2: 31 72 178; --band: 31 72 178;
+  --ink: 255 255 255; --ink-2: 213 221 241; --ink-3: 213 221 241;
+  --red: 255 255 255; --red-deep: 230 235 247; --red-ink: 0 47 167; --focus: 255 255 255;
+  --rule: rgb(0 47 167); --rule-2: rgb(255 255 255 / 0.6); --rule-hover: rgb(255 255 255 / 0.9);
+  --row-hover: rgb(255 255 255 / 0.1); --focus-ring: rgb(255 255 255 / 0.3);
+
+  --background: var(--page); --foreground: var(--ink);
+  --card: var(--surface); --card-foreground: var(--ink);
+  --popover: var(--surface); --popover-foreground: var(--ink);
+  --primary: var(--red); --primary-foreground: var(--red-ink);
+  --secondary: var(--band); --secondary-foreground: var(--ink);
+  --muted: var(--surface-2); --muted-foreground: var(--ink-2);
+  --accent: var(--band); --accent-foreground: var(--ink);
+  --ring: var(--focus); --check-on: var(--ink);
+  color: rgb(var(--ink));
+}

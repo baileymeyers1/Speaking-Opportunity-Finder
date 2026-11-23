@@ -8,15 +8,17 @@ import { TooltipProvider } from './components/ui/tooltip';
 import { Layout } from './components/Layout';
 import { apiClient } from './api/client';
 import { persistOptions, queryClient, removeLegacyCaches } from './lib/queryClient';
+import { isDemo } from './lib/demo';
 
 const Home = lazy(() => import('./pages/Home'));
 const OpportunityDetail = lazy(() => import('./pages/OpportunityDetail'));
 const SavedOpportunities = lazy(() => import('./pages/SavedOpportunities'));
 const Login = lazy(() => import('./pages/Login'));
-const Register = lazy(() => import('./pages/Register'));
-const AdminDashboard = lazy(() => import('./pages/AdminDashboard'));
-const ForgotPassword = lazy(() => import('./pages/ForgotPassword'));
-const ResetPassword = lazy(() => import('./pages/ResetPassword'));
+// Marked pure so the demo build, which never routes to them, leaves their chunks out.
+const Register = /* @__PURE__ */ lazy(() => import('./pages/Register'));
+const AdminDashboard = /* @__PURE__ */ lazy(() => import('./pages/AdminDashboard'));
+const ForgotPassword = /* @__PURE__ */ lazy(() => import('./pages/ForgotPassword'));
+const ResetPassword = /* @__PURE__ */ lazy(() => import('./pages/ResetPassword'));
 const Speakers = lazy(() => import('./pages/Speakers'));
 const SpeakerDetail = lazy(() => import('./pages/SpeakerDetail'));
 
@@ -46,10 +48,22 @@ function AppContent() {
           {/* The one profile an account had is now the first speaker on its roster. */}
           <Route path="/profile" element={<Navigate to="/speakers" replace />} />
           <Route path="/login" element={<Login />} />
-          <Route path="/register" element={<Register />} />
-          <Route path="/forgot-password" element={<ForgotPassword />} />
-          <Route path="/reset-password" element={<ResetPassword />} />
-          <Route path="/admin/dashboard" element={<AdminDashboard />} />
+          {isDemo ? (
+            <>
+              {/* The demo's one way in is the front door at /login, and it has no admin. */}
+              <Route path="/register" element={<Navigate to="/login" replace />} />
+              <Route path="/forgot-password" element={<Navigate to="/login" replace />} />
+              <Route path="/reset-password" element={<Navigate to="/login" replace />} />
+              <Route path="/admin/*" element={<Navigate to="/" replace />} />
+            </>
+          ) : (
+            <>
+              <Route path="/register" element={<Register />} />
+              <Route path="/forgot-password" element={<ForgotPassword />} />
+              <Route path="/reset-password" element={<ResetPassword />} />
+              <Route path="/admin/dashboard" element={<AdminDashboard />} />
+            </>
+          )}
         </Routes>
       </Suspense>
     </Layout>

@@ -14,6 +14,8 @@ interface AuthContextType {
     password: string,
     preferredIndustries?: string[]
   ) => Promise<void>;
+  /** The public demo's way in: a fresh account with the sample roster, for this visit (`POST /auth/demo`). */
+  enterDemo: () => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -107,6 +109,16 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
   };
 
+  // Answers like a login: the user, with the session cookie set.
+  const enterDemo = async () => {
+    const response = await apiClient.post<AuthCookieResponse>('/auth/demo');
+
+    if (response.data) {
+      setUser(response.data.user);
+      resetUserScopedQueries();
+    }
+  };
+
   const logout = async () => {
     try {
       await apiClient.post('/auth/logout', {});
@@ -125,6 +137,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         isAuthenticated: !!user,
         login,
         register,
+        enterDemo,
         logout,
       }}
     >

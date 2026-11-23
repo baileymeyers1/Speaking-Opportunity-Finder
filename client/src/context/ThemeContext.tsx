@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
+import { isDemo } from '@/lib/demo';
 
 type Theme = 'light' | 'dark' | 'system';
 type ResolvedTheme = 'light' | 'dark';
@@ -15,8 +16,9 @@ const DARK_QUERY = '(prefers-color-scheme: dark)';
 // index.html reads the same key before first paint, so the page never flashes the wrong theme.
 const STORAGE_KEY = 'theme';
 
+// The demo has one theme, the dither skin (data-theme on <html>), and never takes the dark class.
 const resolveTheme = (theme: Theme, systemDark: boolean): ResolvedTheme =>
-  theme === 'dark' || (theme === 'system' && systemDark) ? 'dark' : 'light';
+  !isDemo && (theme === 'dark' || (theme === 'system' && systemDark)) ? 'dark' : 'light';
 
 const applyTheme = (resolved: ResolvedTheme) =>
   document.documentElement.classList.toggle('dark', resolved === 'dark');

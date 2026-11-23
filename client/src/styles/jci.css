@@ -167,6 +167,6 @@
 .theme-swap *, .theme-swap *::before, .theme-swap *::after { transition: none !important; animation-play-state: paused !important; }
 ::view-transition-old(root), ::view-transition-new(root) { animation: none; mix-blend-mode: normal; }
 ::view-transition-new(root) { z-index: 2; }
-::view-transition-group(jci-theme-switch) { z-index: 3; animation: none; }
-::view-transition-old(jci-theme-switch) { display: none; }
-::view-transition-new(jci-theme-switch) { animation: none; }
+::view-transition-group(theme-switch) { z-index: 3; animation: none; }
+::view-transition-old(theme-switch) { display: none; }
+::view-transition-new(theme-switch) { animation: none; }

@@ -103,3 +103,53 @@
   --accent: var(--surface-2);
   --destructive-foreground: 255 255 255;
 }
+
+/* The public demo's skin, "blue dither" (Bailey's own, as in ~/projects/pa-strat-app): Klein blue on white,
+   square and flat. The primary action, focus and good/info are blue; warning is the second blue; only
+   critical (and errors) is alert orange. Only the demo build sets data-theme='dither' on <html>
+   (vite.config.ts writes it into index.html); its structural rules are in styles/dither.css. Outranks
+   .dark, which the demo never sets. */
+:root[data-theme='dither'] {
+  color-scheme: light;
+
+  --page: 255 255 255;        /* #FFFFFF */
+  --surface: 255 255 255;     /* #FFFFFF */
+  --surface-2: 242 245 252;   /* #F2F5FC quiet fills */
+  --band: 238 242 251;        /* #EEF2FB */
+  --ink: 0 47 167;            /* #002FA7 Klein blue */
+  --ink-2: 51 82 178;         /* #3352B2 secondary text (7.0:1 on white) */
+  --ink-3: 84 112 192;        /* #5470C0 placeholders and marks */
+  --red: 0 47 167;            /* #002FA7 the primary action is blue too */
+  --red-deep: 0 34 122;       /* #00227A the primary button's fill */
+  --red-ink: 255 255 255;     /* #FFFFFF */
+  --good: 0 47 167;           /* #002FA7 */
+  --warning: 51 82 178;       /* #3352B2 */
+  --critical: 194 65 12;      /* #C2410C alert orange: critical and errors only */
+  --info: 0 47 167;           /* #002FA7 */
+  --focus: 0 47 167;          /* #002FA7 */
+  --field: 0 47 167;          /* #002FA7 the blue field: top bar, front door, footer */
+  --on-field: 255 255 255;    /* #FFFFFF */
+  --on-field-2: 213 221 241;  /* #D5DDF1 secondary words on the field (7.9:1) */
+
+  --rule: rgb(0 47 167 / 0.16);
+  --rule-2: rgb(0 47 167 / 0.36);
+  --rule-hover: rgb(0 47 167 / 0.6);
+  --row-hover: rgb(0 47 167 / 0.05);
+  --focus-ring: rgb(0 47 167 / 0.16);
+  --scrim: rgb(0 20 70 / 0.42);
+
+  /* No shadows anywhere: floating things sit on a blue rule instead (styles/dither.css). */
+  --panel-shadow: 0 0 #0000;
+  --float-shadow: 0 0 #0000;
+  --btn-primary-shadow: none;
+
+  /* No liquid glass: the segmented control is hairline buttons (styles/dither.css). */
+  --lseg-track: transparent; --lseg-a: 0;
+  --lswitch-track: transparent; --lswitch-knob-a: 0;
+
+  --radius-sheet: 0px; --radius-control: 0px; --radius-tag: 0px;
+
+  /* Loaded from Google Fonts by the demo's index.html only. */
+  --font-sans: 'DM Sans', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-accent: 'Cormorant Garamond', Georgia, 'Times New Roman', serif;
+}

@@ -26,6 +26,7 @@ import { useLiveSearch } from '../hooks/useLiveSearch';
 import { useSpeakers } from '../hooks/useSpeakers';
 import { useForWhom } from '../hooks/useForWhom';
 import { speakerParam } from '../lib/forWhom';
+import { isDemo } from '../lib/demo';
 import { Button } from '@/components/ui/button';
 import { AlertCircle, Sparkles, X } from 'lucide-react';
 
@@ -183,6 +184,8 @@ export function Home() {
               }
               rateLimited={rateLimited}
               liveSearchFailed={liveSearchFailed}
+              demoLiveSearchLimitReached={data?.demoLiveSearchLimitReached}
+              demoLiveSearchesLeft={data?.demoLiveSearchesLeft}
               onClearLiveResults={() => query.refetch()}
               onDismissRateLimit={() => {
                 setRateLimitDismissedFor(serializeFilters(filters));
@@ -222,9 +225,15 @@ export function Home() {
       {!isAuthenticated && !bannerDismissed && (
         <div className="flex items-center justify-between gap-2 border-t pt-4">
           <p className="text-sm text-muted-foreground">
-            <Link to="/register" className="link font-medium">Sign up</Link>
-            {' '}or{' '}
-            <Link to="/login" className="link font-medium">log in</Link>
+            {isDemo ? (
+              <Link to="/login" className="link font-medium">Enter the demo</Link>
+            ) : (
+              <>
+                <Link to="/register" className="link font-medium">Sign up</Link>
+                {' '}or{' '}
+                <Link to="/login" className="link font-medium">log in</Link>
+              </>
+            )}
             {' '}to save opportunities and searches.
           </p>
           <Button variant="ghost" size="icon" onClick={handleDismissBanner} aria-label="Dismiss banner">

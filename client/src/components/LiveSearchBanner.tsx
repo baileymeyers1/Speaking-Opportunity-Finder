@@ -1,6 +1,8 @@
 import { AlertCircle, Clock, X } from 'lucide-react';
 import type { PendingLiveHit } from '@/types';
 import { Button } from '@/components/ui/button';
+import { isDemo } from '@/lib/demo';
+import { DemoLiveSearchNote } from './demo/DemoLiveSearchNote';
 import { LiveSearchSummary } from './LiveSearchSummary';
 
 interface LiveSearchBannerProps {
@@ -19,6 +21,10 @@ interface LiveSearchBannerProps {
   locationMatchedCount: number | null;
   rateLimited: boolean;
   liveSearchFailed: boolean;
+  /** Demo only: today's live searches are spent, so the list is the stored listings. */
+  demoLiveSearchLimitReached?: boolean;
+  /** Demo only: live searches left today, on a live search's answer. */
+  demoLiveSearchesLeft?: number;
   onClearLiveResults: () => void;
   onDismissRateLimit: () => void;
   onDismissLiveError: () => void;
@@ -42,6 +48,8 @@ export function LiveSearchBanner({
   locationMatchedCount,
   rateLimited,
   liveSearchFailed,
+  demoLiveSearchLimitReached,
+  demoLiveSearchesLeft,
   onClearLiveResults,
   onDismissRateLimit,
   onDismissLiveError,
@@ -84,6 +92,10 @@ export function LiveSearchBanner({
             <X className="h-3.5 w-3.5" aria-hidden="true" />
           </button>
         </div>
+      )}
+
+      {isDemo && (
+        <DemoLiveSearchNote limitReached={demoLiveSearchLimitReached} searchesLeft={demoLiveSearchesLeft} />
       )}
 
       <LiveSearchSummary

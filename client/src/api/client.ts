@@ -85,10 +85,11 @@ class ApiClient {
     return this.request<T>(endpoint, { method: 'GET', signal: options.signal });
   }
 
-  async post<T>(endpoint: string, body: unknown): Promise<ApiResponse<T>> {
+  /** Without a body, nothing is sent (`POST /auth/demo`). */
+  async post<T>(endpoint: string, body?: unknown): Promise<ApiResponse<T>> {
     return this.request<T>(endpoint, {
       method: 'POST',
-      body: JSON.stringify(body),
+      body: body === undefined ? undefined : JSON.stringify(body),
     });
   }
 

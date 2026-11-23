@@ -57,3 +57,30 @@ describe('apiClient unauthorized handling', () => {
     expect(listener).not.toHaveBeenCalled();
   });
 });
+
+describe('apiClient.post', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('sends no body when given none, with the cookie (the demo front door, POST /auth/demo)', async () => {
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockImplementation(() => mockResponse(200, { success: true, data: { user: { id: 'demo' } } }));
+
+    await expect(apiClient.post('/auth/demo')).resolves.toMatchObject({ data: { user: { id: 'demo' } } });
+
+    const [url, init] = fetchSpy.mock.calls[0];
+    expect(url).toBe('/api/auth/demo');
+    expect(init).toMatchObject({ method: 'POST', credentials: 'include' });
+    expect(init?.body).toBeUndefined();
+  });
+
+  it('still sends a given body as JSON', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(() => mockResponse(200, { success: true }));
+
+    await apiClient.post('/auth/login', { email: 'a@b.c', password: 'x' });
+
+    expect(fetchSpy.mock.calls[0][1]?.body).toBe(JSON.stringify({ email: 'a@b.c', password: 'x' }));
+  });
+});

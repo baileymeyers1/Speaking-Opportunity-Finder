@@ -1,5 +1,6 @@
 @import './styles/tokens.css';
 @import './styles/jci.css';
+@import './styles/dither.css';
 
 @tailwind base;
 @tailwind components;
