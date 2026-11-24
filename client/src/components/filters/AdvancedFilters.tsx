@@ -69,7 +69,7 @@ export function AdvancedFilters({
                 onChange={(selected) =>
                   onFiltersChange({ ...filters, locations: selected.length > 0 ? selected : undefined })
                 }
-                placeholder="Add locations (e.g., Los Angeles, CA)"
+                placeholder="A state, city or country (e.g. California)"
               />
               <label className="inline-flex items-center mt-3 cursor-pointer">
                 <input

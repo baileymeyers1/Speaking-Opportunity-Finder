@@ -1,6 +1,7 @@
 import { prisma } from '../lib/prisma.js';
 import { storableDate } from '../lib/storableDate.js';
 import { SECTORS, normalizeSectors } from '../lib/sectors.js';
+import { locationMatches, type PlaceQuery } from '../lib/location.js';
 import { sectorsFromTags } from './sectorMapping.js';
 import { AppError } from '../middleware/errorHandler.js';
 import { parseDateConfidence } from './extraction.js';
@@ -12,6 +13,7 @@ import {
   buildOpportunityOrderBy,
   buildOpportunityWhere,
   computeSearchRelevance,
+  filterPlaces,
   matchesSearch,
   sortsByClosing,
   type OpportunityFilters,
@@ -112,6 +114,20 @@ export function withMatchScores(
   });
 }
 
+/**
+ * With places asked for, says on each row whether it is in one of them; the
+ * rest of a filtered list is held online (`placeWhere`). Browse groups by it.
+ */
+function withPlaceFit(items: OpportunityWithDates[], places: readonly PlaceQuery[]): OpportunityWithDates[] {
+  if (places.length === 0) return items;
+  return items.map((item) => ({ ...item, matchesLocationFilter: locationMatches(item.location, places) }));
+}
+
+/** Sort key that puts the calls held in the places asked for before the ones online. */
+function outsidePlaces(places: readonly PlaceQuery[]): (row: { location: string | null }) => number {
+  return (row) => (places.length > 0 && !locationMatches(row.location, places) ? 1 : 0);
+}
+
 function paginate<T>(items: T[], page: number, pageSize: number, total: number): PaginatedResponse<T> {
   const skip = (page - 1) * pageSize;
   return {
@@ -137,7 +153,7 @@ export async function getListedByApplyUrls(
   const where = await buildGroupedWhere({ ...filters, search: undefined }, options.now);
   where.AND = [...(Array.isArray(where.AND) ? where.AND : where.AND ? [where.AND] : []), { applyUrl: { in: [...applyUrls] } }];
   const rows = await prisma.opportunity.findMany({ where });
-  return attachEventContext(withMatchScores(rows.map(transformOpportunity), options));
+  return attachEventContext(withPlaceFit(withMatchScores(rows.map(transformOpportunity), options), filterPlaces(filters.location)));
 }
 
 /**
@@ -157,6 +173,8 @@ export async function getOpportunities(
   const where = lane ? { AND: [everyLane, laneWhere(lane)] } : everyLane;
   const orderBy = buildOpportunityOrderBy(filters.sortBy);
   const sortByMatch = filters.sortBy === 'match' && Boolean(options.roster?.length);
+  const places = filterPlaces(filters.location);
+  const placeRank = outsidePlaces(places);
 
   // A search term is ranked by keyword relevance across every match before
   // paginating; a page-sized DB slice would only re-sort within itself.
@@ -169,14 +187,14 @@ export async function getOpportunities(
     const inLane = lane ? allMatches.filter((item) => laneOf(item) === lane) : allMatches;
     const ranked = inLane
       .map((item) => ({ item, relevance: computeSearchRelevance(item, search) }))
-      .sort((a, b) => b.relevance - a.relevance)
+      .sort((a, b) => placeRank(a.item) - placeRank(b.item) || b.relevance - a.relevance)
       .map((entry) => transformOpportunity(entry.item));
     const result = paginate(withMatchScores(ranked, options, sortByMatch), page, pageSize, inLane.length);
-    return { ...result, items: await attachEventContext(result.items), lanes };
+    return { ...result, items: await attachEventContext(withPlaceFit(result.items, places)), lanes };
   }
 
   // Every lane's rows, as the few columns the summary and the default order need.
-  const keys = await prisma.opportunity.findMany({ where: everyLane, select: LANE_ROW_SELECT });
+  const keys = await prisma.opportunity.findMany({ where: everyLane, select: { ...LANE_ROW_SELECT, location: true } });
   const lanes = summarizeLanes(keys, now);
 
   // Best match has no column to order by: score a capped candidate set in memory.
@@ -187,7 +205,7 @@ export async function getOpportunities(
     ]);
     const ranked = withMatchScores(candidates.map(transformOpportunity), options, true);
     const result = paginate(ranked, page, pageSize, Math.min(count, MATCH_SORT_CANDIDATE_CAP));
-    return { ...result, items: await attachEventContext(result.items), lanes };
+    return { ...result, items: await attachEventContext(withPlaceFit(result.items, places)), lanes };
   }
 
   // The default order is not one column's (a row without a deadline closes
@@ -195,15 +213,16 @@ export async function getOpportunities(
   // by the event): sort the lane's keys in memory, then load the page's rows.
   if (sortsByClosing(filters.sortBy)) {
     const inLane = lane ? keys.filter((key) => laneOf(key) === lane) : keys;
+    const byLane = laneComparator(lane, now);
     const pageIds = inLane
-      .sort(laneComparator(lane, now))
+      .sort((a, b) => placeRank(a) - placeRank(b) || byLane(a, b))
       .slice((page - 1) * pageSize, page * pageSize)
       .map((key) => key.id);
     const rows = pageIds.length > 0 ? await prisma.opportunity.findMany({ where: { id: { in: pageIds } } }) : [];
     const byId = new Map(rows.map((row) => [row.id, row]));
     const ordered = pageIds.flatMap((id) => byId.get(id) ?? []);
     return {
-      items: await attachEventContext(withMatchScores(ordered.map(transformOpportunity), options)),
+      items: await attachEventContext(withPlaceFit(withMatchScores(ordered.map(transformOpportunity), options), places)),
       total: inLane.length,
       page,
       pageSize,
@@ -218,7 +237,7 @@ export async function getOpportunities(
   ]);
 
   return {
-    items: await attachEventContext(withMatchScores(items.map(transformOpportunity), options)),
+    items: await attachEventContext(withPlaceFit(withMatchScores(items.map(transformOpportunity), options), places)),
     total,
     page,
     pageSize,

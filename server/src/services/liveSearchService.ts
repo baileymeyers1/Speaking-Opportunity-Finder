@@ -5,6 +5,7 @@ import { prisma } from '../lib/prisma.js';
 import { assignEvents } from './eventAssignment.js';
 import { cleanTitle, extractOrganization, normalizeIndustries, decodeHtmlEntities, isJunkResult } from './dataNormalization.js';
 import { sectorsFromTags } from './sectorMapping.js';
+import { locationMatches, parsePlaces } from '../lib/location.js';
 import {
   extractOpportunity,
   mergeExtraction,
@@ -524,21 +525,6 @@ function isCfpClosed(content: string, title: string): boolean {
   return closedPatterns.some(p => p.test(text));
 }
 
-// Common abbreviation expansions for location matching
-const locationAliasMap: Record<string, string[]> = {
-  'ny': ['new york', 'nyc', 'manhattan', 'brooklyn', 'queens', 'bronx'],
-  'new york': ['ny', 'nyc', 'manhattan', 'brooklyn', 'queens', 'bronx'],
-  'la': ['los angeles', 'hollywood'],
-  'los angeles': ['la', 'hollywood'],
-  'sf': ['san francisco'],
-  'san francisco': ['sf'],
-  'dc': ['washington dc', 'washington d.c.', 'washington, dc'],
-  'chicago': ['chi'],
-  'boston': ['bos'],
-  'philly': ['philadelphia'],
-  'philadelphia': ['philly'],
-};
-
 export interface LiveQuery {
   q: string;
 }
@@ -558,9 +544,9 @@ export interface LiveQuery {
  */
 export function buildSearchQueries(query: string, industries: string[], locations: string[], now: Date = new Date()): LiveQuery[] {
   const years = `${now.getFullYear()} ${now.getFullYear() + 1}`;
-  const locationSuffix = locations.length > 0
-    ? ` ${locations.join(' OR ')}`
-    : '';
+  // Places spelled out for the engine: "CA" alone reads as Canada as often as California.
+  const placeNames = parsePlaces(locations).map((place) => place.searchText);
+  const locationSuffix = placeNames.length > 0 ? ` ${placeNames.join(' OR ')}` : '';
   const industryTerms = industries.map((ind) => {
     const templates = INDUSTRY_QUERIES[ind.toLowerCase()];
     return templates ? templates[0] : `${ind} conference`;
@@ -734,18 +720,12 @@ export async function performLiveSearch(
   // Enrichment may have found a closed call or a page that is not an opportunity.
   results = results.filter(r => !r.isClosed && r.isRelevant !== false);
 
-  // Location filtering is now handled client-side via matchesLocationFilter flag
-
-  // Recalculate quality scores with location match context
-  if (locations.length > 0) {
+  // A result outside the places asked for is kept and flagged: Browse lists
+  // it after the ones in the place (online, then elsewhere).
+  const places = parsePlaces(locations);
+  if (places.length > 0) {
     for (const r of results) {
-      const matchesLoc = r.location ? locations.some(loc => {
-        const lowerLoc = loc.toLowerCase();
-        const resultLoc = r.location!.toLowerCase();
-        if (resultLoc.includes(lowerLoc)) return true;
-        const aliases = locationAliasMap[lowerLoc] || [];
-        return aliases.some(alias => resultLoc.includes(alias));
-      }) : false;
+      const matchesLoc = locationMatches(r.location, places);
 
       r.matchesLocationFilter = matchesLoc;
       r.qualityScore = computeLiveQualityScore({

@@ -8,6 +8,7 @@ import { getOpportunities } from './opportunityService.js';
  * as rolling calls, and pages cut from that order.
  */
 const MARKER = 'list order test row';
+// The place keeps the list to this file's rows; in person only, since a place also lists every call held online.
 const PLACE = 'Orderville';
 const now = new Date('2026-11-19T12:00:00Z');
 const inDays = (days: number) => new Date(now.getTime() + days * 86_400_000);
@@ -53,29 +54,29 @@ describe('default list order', () => {
   const EXPECTED = ['Soon Deadline', 'Event Next Week', 'This Month Deadline', 'Rolling Podcast', 'Late Deadline', 'Far Event'];
 
   it('lists a row without a deadline where it closes, not after every dated row', async () => {
-    const page = await getOpportunities({ location: PLACE }, { page: 1, pageSize: 20 }, { now });
+    const page = await getOpportunities({ location: PLACE, isRemote: false }, { page: 1, pageSize: 20 }, { now });
     expect(titles(page.items)).toEqual(EXPECTED);
     expect(page.total).toBe(6);
   });
 
   it('is the same order for the explicit deadline sort', async () => {
-    const page = await getOpportunities({ location: PLACE, sortBy: 'deadline' }, { page: 1, pageSize: 20 }, { now });
+    const page = await getOpportunities({ location: PLACE, isRemote: false, sortBy: 'deadline' }, { page: 1, pageSize: 20 }, { now });
     expect(titles(page.items)).toEqual(EXPECTED);
   });
 
   it('cuts pages from that order with exact totals', async () => {
-    const pages = await Promise.all([1, 2, 3, 4].map((page) => getOpportunities({ location: PLACE }, { page, pageSize: 2 }, { now })));
+    const pages = await Promise.all([1, 2, 3, 4].map((page) => getOpportunities({ location: PLACE, isRemote: false }, { page, pageSize: 2 }, { now })));
     expect(pages.map((page) => titles(page.items))).toEqual([EXPECTED.slice(0, 2), EXPECTED.slice(2, 4), EXPECTED.slice(4, 6), []]);
     expect(pages.every((page) => page.total === 6 && page.totalPages === 3)).toBe(true);
   });
 
   it('keeps the other filters: the rolling podcast is first when only podcasts are asked for', async () => {
-    const page = await getOpportunities({ location: PLACE, format: ['podcast'] }, { page: 1, pageSize: 20 }, { now });
+    const page = await getOpportunities({ location: PLACE, isRemote: false, format: ['podcast'] }, { page: 1, pageSize: 20 }, { now });
     expect(titles(page.items)).toEqual(['Rolling Podcast']);
   });
 
   it('leaves the event-date sort to the database', async () => {
-    const page = await getOpportunities({ location: PLACE, sortBy: 'eventDate' }, { page: 1, pageSize: 20 }, { now });
+    const page = await getOpportunities({ location: PLACE, isRemote: false, sortBy: 'eventDate' }, { page: 1, pageSize: 20 }, { now });
     expect(titles(page.items).slice(0, 3)).toEqual(['Event Next Week', 'Far Event', 'This Month Deadline']);
     expect(page.total).toBe(6);
   });
