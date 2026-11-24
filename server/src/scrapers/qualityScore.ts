@@ -34,6 +34,10 @@ export interface ScraperResult {
   isRelevant?: boolean;
   /** Set by extraction: the page asks for speakers now. Undefined when not judged. */
   hasOpenCall?: boolean;
+  /** Set by extraction: speakers pay to present. Null when the page does not say. */
+  payToPresent?: boolean | null;
+  /** Where to apply when the call is on another page than `applyUrl` (services/callFollowing.ts). */
+  callUrl?: string | null;
 }
 
 export const TRUSTED_SOURCES = [

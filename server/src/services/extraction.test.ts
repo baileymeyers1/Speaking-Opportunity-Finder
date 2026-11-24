@@ -6,6 +6,7 @@ import {
   parseDateConfidence,
   parseExtractionOutput,
   serializeDateConfidence,
+  MAX_LISTED_EVENTS,
   type ExtractionResult,
 } from './extraction.js';
 import type { ScraperResult } from '../scrapers/qualityScore.js';
@@ -407,5 +408,88 @@ describe('date confidence serialization', () => {
     expect(serializeDateConfidence(null)).toBeNull();
     expect(parseDateConfidence(null)).toBeNull();
     expect(parseDateConfidence('{nope')).toBeNull();
+  });
+});
+
+describe('links and fees', () => {
+  const PAGE = 'https://www.greenpowerforum.org/2027';
+  const LINKS = [
+    { text: 'Call for Speakers', url: 'https://www.greenpowerforum.org/2027/call-for-speakers' },
+    { text: 'Energy Week 2027', url: 'https://energyweek.example/' },
+    { text: 'Grid Summit', url: 'https://gridsummit.example/2027' },
+  ];
+  const parse = (fields: Record<string, unknown>) => {
+    const parsed = parseExtractionOutput({ ...fullOutput(), ...fields }, { links: LINKS, pageUrl: PAGE });
+    if (!parsed.ok) throw new Error(parsed.error);
+    return parsed.result;
+  };
+
+  it('keeps a call page, an official site and listed events that are among the page links', () => {
+    const result = parse({
+      callPageUrl: 'https://www.greenpowerforum.org/2027/call-for-speakers/',
+      officialUrl: 'https://energyweek.example/',
+      listedEvents: [{ name: 'Grid Summit 2027', url: 'https://gridsummit.example/2027' }],
+    });
+    expect(result.callPageUrl).toBe('https://www.greenpowerforum.org/2027/call-for-speakers');
+    expect(result.officialUrl).toBe('https://energyweek.example/');
+    expect(result.listedEvents).toEqual([{ name: 'Grid Summit 2027', url: 'https://gridsummit.example/2027' }]);
+  });
+
+  it('drops a URL that is not one of the page links, or is the page itself', () => {
+    const result = parse({
+      callPageUrl: 'https://www.greenpowerforum.org/2027/speak',
+      officialUrl: 'https://www.greenpowerforum.org/2027/',
+      listedEvents: [{ name: 'Made Up Expo', url: 'https://made-up.example/' }],
+    });
+    expect(result.callPageUrl).toBeNull();
+    expect(result.officialUrl).toBeNull();
+    expect(result.listedEvents).toEqual([]);
+  });
+
+  it('keeps each listed event once, named, up to the cap', () => {
+    const many = Array.from({ length: 40 }, (_, i) => ({ text: `Event ${i}`, url: `https://events.example/${i}` }));
+    const parsed = parseExtractionOutput(
+      {
+        ...fullOutput(),
+        listedEvents: [
+          { name: '', url: many[0].url },
+          { name: 'Event 1', url: many[1].url },
+          { name: 'Event 1 again', url: many[1].url },
+          ...many.slice(2).map((link) => ({ name: link.text, url: link.url })),
+        ],
+      },
+      { links: many }
+    );
+    if (!parsed.ok) throw new Error(parsed.error);
+    expect(parsed.result.listedEvents).toHaveLength(MAX_LISTED_EVENTS);
+    expect(parsed.result.listedEvents[0]).toEqual({ name: 'Event 1', url: 'https://events.example/1' });
+  });
+
+  it('gives no links when the page had none to give', () => {
+    const parsed = parseExtractionOutput({ ...fullOutput(), callPageUrl: LINKS[0].url });
+    expect(parsed.ok && parsed.result.callPageUrl).toBeNull();
+  });
+
+  it('reads the fee to present as yes, no, or not said', () => {
+    expect(parse({ payToPresent: true }).payToPresent).toBe(true);
+    expect(parse({ payToPresent: false }).payToPresent).toBe(false);
+    expect(parse({ payToPresent: null }).payToPresent).toBeNull();
+    expect(parse({ payToPresent: 'yes' }).payToPresent).toBeNull();
+  });
+
+  it('keeps a fee found earlier when the page read now does not mention one', () => {
+    const existing: ScraperResult = { title: 'Conf', organization: 'Org', isRemote: false, format: 'conference', industries: [], applyUrl: PAGE, source: 'Linkup Search', payToPresent: true };
+    expect(mergeExtraction(existing, parse({ payToPresent: null })).payToPresent).toBe(true);
+    expect(mergeExtraction(existing, parse({ payToPresent: false })).payToPresent).toBe(false);
+  });
+
+  it('lists the page links under the page text, and says when there are none', () => {
+    const prompt = buildExtractionPrompt({ title: 'Green Power Forum', pageText: 'Three days in Denver.', links: LINKS, applyUrl: PAGE });
+    expect(prompt).toContain('Links on the page:\n- Call for Speakers: https://www.greenpowerforum.org/2027/call-for-speakers');
+    expect(buildExtractionPrompt({ title: 'Green Power Forum' })).toContain('Links on the page:\n(none)');
+  });
+
+  it('asks for every new field in the schema', () => {
+    expect(EXTRACTION_SCHEMA.required).toEqual(expect.arrayContaining(['payToPresent', 'callPageUrl', 'officialUrl', 'listedEvents']));
   });
 });

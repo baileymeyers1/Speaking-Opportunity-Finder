@@ -50,6 +50,10 @@ function extraction(overrides: Partial<ExtractionResult> = {}): ExtractionResult
     cleanTitle: null,
     cleanOrganization: null,
     confidence: { eventDate: 'high', cfpDeadline: 'high', location: 'high' },
+    payToPresent: null,
+    callPageUrl: null,
+    officialUrl: null,
+    listedEvents: [],
     ...overrides,
   };
 }

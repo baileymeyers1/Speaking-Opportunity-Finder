@@ -37,7 +37,14 @@ describe('fetchPageText', () => {
     const body = 'Call for speakers: submit a session on platform engineering, observability or developer experience by';
     vi.stubGlobal('fetch', vi.fn(async () => htmlResponse(`<p>${body} <b>Dec 1</b></p>`)));
     const result = await fetchPageText('https://example.test/cfp');
-    expect(result).toEqual({ ok: true, text: `${body} Dec 1`, status: 200 });
+    expect(result).toEqual({ ok: true, text: `${body} Dec 1`, status: 200, links: [] });
+  });
+
+  it("returns the page's links with its text, menus included", async () => {
+    const body = 'Green Power Forum 2027 brings together utilities, developers and regulators in Denver for three days of sessions.';
+    vi.stubGlobal('fetch', vi.fn(async () => htmlResponse(`<nav><a href="/cfp">Call for Speakers</a></nav><p>${body}</p>`)));
+    const result = await fetchPageText('https://example.test/event');
+    expect(result.ok && result.links).toEqual([{ text: 'Call for Speakers', url: 'https://example.test/cfp' }]);
   });
 
   it('reports the empty shell of a JavaScript app as not read, not as a page that says nothing', async () => {

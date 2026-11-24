@@ -1,4 +1,5 @@
 import { fetchWithTimeout, stripTags } from '../scrapers/lib/html.js';
+import { linksFromHtml, type PageLink } from './pageLinks.js';
 
 /**
  * Fetch the visible text of an opportunity's page for Claude extraction.
@@ -19,7 +20,7 @@ export const MIN_READABLE_PAGE_CHARS = 100;
 export type PageFetchFailure = 'gone' | 'http_error' | 'not_text' | 'empty' | 'timeout' | 'network';
 
 export type PageFetchResult =
-  | { ok: true; text: string; status: number }
+  | { ok: true; text: string; status: number; /** The page's links (pageLinks.ts), menus included. */ links?: PageLink[] }
   | { ok: false; reason: PageFetchFailure; status?: number; message: string };
 
 /** Navigation, header and footer blocks are boilerplate; drop them before stripping tags. */
@@ -68,7 +69,7 @@ export async function fetchPageText(
     if (text.length < MIN_READABLE_PAGE_CHARS) {
       return { ok: false, reason: 'empty', status: response.status, message: `No readable text (${text.length} chars)` };
     }
-    return { ok: true, text, status: response.status };
+    return { ok: true, text, status: response.status, links: linksFromHtml(html, response.url || url) };
   } catch (error) {
     return { ok: false, reason: 'network', status: response.status, message: error instanceof Error ? error.message : 'Read error' };
   }

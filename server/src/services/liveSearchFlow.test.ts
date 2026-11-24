@@ -201,6 +201,27 @@ describe('performLiveSearch', () => {
     expect(outcome.storedUrls).toEqual(expect.arrayContaining([urlOf('waiting-a'), urlOf('waiting-b')]));
   });
 
+  it("reads the call page an event's page points to, and stores the event site a listing names", async () => {
+    linkupReturns([hit('event-page')]);
+    const callPage = `${urlOf('event-page')}/call-for-speakers`;
+    mocks.extract.mockImplementation(async (input: { applyUrl: string }) => {
+      const base = extractionOk().result;
+      return input.applyUrl === callPage
+        ? { status: 'ok' as const, result: { ...base, hasOpenCall: true, payToPresent: false, callPageUrl: null, officialUrl: null, listedEvents: [] } }
+        : {
+            status: 'ok' as const,
+            result: { ...base, hasOpenCall: false, payToPresent: null, callPageUrl: callPage, officialUrl: 'https://official.example/', listedEvents: [] },
+          };
+    });
+
+    const outcome = await performLiveSearch('AI for PR', [], []);
+
+    expect(vi.mocked(readPage).mock.calls.map(([url]) => url)).toContain(callPage);
+    expect(outcome.results).toHaveLength(1);
+    expect(outcome.results[0]).toMatchObject({ hasOpenCall: true, callUrl: callPage, payToPresent: false });
+    expect(mocks.table.get('https://official.example/')).toMatchObject({ source: 'Followed Link' });
+  });
+
   it('never reads more than the in-request limit in total', async () => {
     linkupReturns([...Array.from({ length: SYNC_ENRICH_LIMIT - 1 }, (_, i) => hit(`new-${i}`)), hit('waiting-a'), hit('waiting-b')]);
     storedBefore('waiting-a', { enrichmentStatus: null });

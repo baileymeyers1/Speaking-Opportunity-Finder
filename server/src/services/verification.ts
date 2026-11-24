@@ -144,6 +144,8 @@ export function buildVerificationUpdate(
     ...(fromSearch ? { isRelevant } : {}),
     hasOpenCall: openCallAfterRead(existing.source, { isRelevant, hasOpenCall: merged.hasOpenCall }),
     dateConfidence: serializeDateConfidence(merged.dateConfidence),
+    payToPresent: merged.payToPresent ?? null,
+    callUrl: merged.callUrl ?? null,
     qualityScore: computeQualityScore({ ...merged, isRelevant }),
     verifiedAt: now,
     verificationError: null,
@@ -183,6 +185,8 @@ export function buildEnrichmentUpdate(
     // Closed and irrelevant rows score 0, so a later rescore keeps them hidden.
     qualityScore: computeQualityScore(merged),
     dateConfidence: serializeDateConfidence(merged.dateConfidence),
+    payToPresent: merged.payToPresent ?? null,
+    callUrl: merged.callUrl ?? null,
     enrichmentStatus: 'enriched',
     enrichedAt: now,
     enrichmentError: null,

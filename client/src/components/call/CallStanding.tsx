@@ -2,6 +2,7 @@ import { ExternalLink } from 'lucide-react';
 import type { Opportunity, SavedCategory, SavedOpportunity } from '../../types';
 import { callState, countdownText } from '../../lib/callState';
 import { callStanding } from '../../lib/callStanding';
+import { applyHref } from '../../lib/callDisplay';
 import { SaveOpportunityMenu } from '../SaveOpportunityMenu';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -60,7 +61,7 @@ export function CallStanding({ opportunity, savedRows, isSaving, onSave }: CallS
         <SaveOpportunityMenu opportunity={opportunity} savedRows={savedRows} isSaving={isSaving} onSave={onSave} withLabel />
         <Button variant={hasCall ? 'default' : 'outline'} asChild>
           <a
-            href={opportunity.applyUrl}
+            href={applyHref(opportunity)}
             target="_blank"
             rel="noopener noreferrer"
             aria-label={hasCall ? `Apply to ${opportunity.title}` : `View the event page of ${opportunity.title}`}

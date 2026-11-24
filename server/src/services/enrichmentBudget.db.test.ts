@@ -22,6 +22,10 @@ vi.mock('./enrichmentService.js', async (importOriginal) => {
       isRelevant: true,
       hasOpenCall: true,
       dateConfidence: { eventDate: 'low' as const, cfpDeadline: 'low' as const, location: 'low' as const },
+      payToPresent: null,
+      callUrl: null,
+      // The read pointed nowhere: these tests are about claims, not about following links.
+      extraction: { isRelevant: true, hasOpenCall: true, callPageUrl: null, officialUrl: null, listedEvents: [] },
     })),
   };
 });

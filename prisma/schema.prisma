@@ -55,6 +55,13 @@ model Opportunity {
   // Set when Claude reads the page: false = a real event with no call for speakers found (listed, flagged).
   // Null = not judged (scraped CFP sources, rows read before this field existed): treated as an open call.
   hasOpenCall         Boolean?
+  // Set when Claude reads the page: true = speakers must pay to present (registration,
+  // publication or presentation fee), false = the page says they do not. Null = not said.
+  // No @default, like `sectors`: a default would fill every row at once.
+  payToPresent        Boolean?
+  // Where to apply when the event's call is on another page than `applyUrl`
+  // (services/callFollowing.ts). Null = apply at `applyUrl`. Decided again at every read.
+  callUrl             String?
   verifiedAt          DateTime?
   verificationError   String?
   dateConfidence      String?

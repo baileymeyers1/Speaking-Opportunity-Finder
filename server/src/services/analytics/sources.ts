@@ -12,6 +12,7 @@ import type {
 } from 'shared';
 import { daysAgo } from './shared.js';
 import { listedConditions } from '../opportunityQuery.js';
+import { FOLLOWED_LINK_SOURCE, LIVE_SEARCH_SOURCE } from '../searchSources.js';
 
 /**
  * Per-source health: what each scraper's recent runs look like and what its
@@ -28,8 +29,8 @@ export const FAILING_AFTER_EMPTY_RUNS = 3;
 const SOURCE_ALIASES: Record<string, string> = {
   linkup: 'Linkup Search',
 };
-/** Sources that are filled by user actions rather than a scheduled scraper. */
-const MANUAL_SOURCES = new Set(['Live Search']);
+/** Sources that are filled by user actions or by following links, not by a scheduled scraper. */
+const MANUAL_SOURCES = new Set([LIVE_SEARCH_SOURCE, FOLLOWED_LINK_SOURCE]);
 
 export interface ScraperRunRow {
   id: string;

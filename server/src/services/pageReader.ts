@@ -9,6 +9,7 @@ import {
   type PageFetchFailure,
   type PageFetchResult,
 } from './pageText.js';
+import { linksFromHtml, linksFromMarkdown, type PageLink } from './pageLinks.js';
 
 /**
  * Reads an opportunity's page for extraction: our own fetch first, and when
@@ -46,7 +47,7 @@ export function readerCanHelp(reason: PageFetchFailure): boolean {
   return READER_FALLBACK_REASONS.includes(reason);
 }
 
-export type ReaderOutcome = { ok: true; text: string } | { ok: false; message: string };
+export type ReaderOutcome = { ok: true; text: string; links?: PageLink[] } | { ok: false; message: string };
 
 export interface ReaderRequest {
   apiKey: string;
@@ -109,6 +110,14 @@ export function readerText(body: ReaderResponseBody, maxChars: number): string {
   return typeof body.markdown === 'string' ? markdownToText(body.markdown).slice(0, maxChars) : '';
 }
 
+/** The page's links from a reader response: its raw HTML when it sent some, else its markdown. */
+export function readerLinks(body: ReaderResponseBody, url: string): PageLink[] {
+  if (typeof body.rawContent === 'string' && typeof body.contentType === 'string' && /html/i.test(body.contentType)) {
+    return linksFromHtml(body.rawContent, url);
+  }
+  return typeof body.markdown === 'string' ? linksFromMarkdown(body.markdown, url) : [];
+}
+
 async function readerErrorCode(response: Response): Promise<string> {
   try {
     const body = (await response.json()) as { error?: { code?: unknown } };
@@ -130,10 +139,11 @@ export async function fetchViaReader(url: string, request: ReaderRequest): Promi
     });
     if (!response.ok) return { ok: false, message: await readerErrorCode(response) };
 
-    const text = readerText((await response.json()) as ReaderResponseBody, request.maxChars);
+    const body = (await response.json()) as ReaderResponseBody;
+    const text = readerText(body, request.maxChars);
     if (text.length < MIN_READABLE_PAGE_CHARS) return { ok: false, message: `no readable text (${text.length} chars)` };
     if (looksLikeChallengePage(text)) return { ok: false, message: 'got a challenge page' };
-    return { ok: true, text };
+    return { ok: true, text, links: readerLinks(body, url) };
   } catch (error) {
     const timedOut = error instanceof Error && (error.name === 'TimeoutError' || error.name === 'AbortError');
     return {
@@ -212,5 +222,5 @@ export async function readPage(
     return { ...page, message: `${page.message} (reader: ${outcome.message})` };
   }
   console.log(`[PageReader] ${hostOf(url)}: ${page.message}, read through the reader (${outcome.text.length} chars)`);
-  return { ok: true, text: outcome.text, status: 200, via: 'reader' };
+  return { ok: true, text: outcome.text, status: 200, via: 'reader', links: outcome.links };
 }

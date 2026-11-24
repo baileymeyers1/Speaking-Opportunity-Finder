@@ -143,7 +143,7 @@ describe('fetchViaReader', () => {
       contentType: 'html',
       rawContent: `<html><body><nav>Home About Membership Join</nav><main><h1>Call for Papers</h1><p>${PAGE_TEXT}</p></main><footer>Copyright</footer></body></html>`,
     });
-    expect(await fetchViaReader(URL_UNDER_TEST, request)).toEqual({ ok: true, text: `Call for Papers ${PAGE_TEXT}` });
+    expect(await fetchViaReader(URL_UNDER_TEST, request)).toEqual({ ok: true, text: `Call for Papers ${PAGE_TEXT}`, links: [] });
   });
 
   it('reads a PDF call from the markdown the reader made of it', async () => {
@@ -151,6 +151,7 @@ describe('fetchViaReader', () => {
     expect(await fetchViaReader('https://example.org/call.pdf', request)).toEqual({
       ok: true,
       text: `Call for Proposals ${PAGE_TEXT} See the guidelines.`,
+      links: [{ text: 'the guidelines', url: 'https://example.org/guidelines.pdf' }],
     });
   });
 

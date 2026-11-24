@@ -6,6 +6,7 @@ import { storableDate } from '../lib/storableDate.js';
 import { SECTORS, SECTOR_IDS, normalizeSectors, type Sector } from '../lib/sectors.js';
 import { sectorsFromTags } from './sectorMapping.js';
 import type { ScraperResult } from '../scrapers/qualityScore.js';
+import { formatLinksForPrompt, normalizeLinkUrl, type PageLink } from './pageLinks.js';
 
 /**
  * The one Claude call that reads a speaking-opportunity page (or its listing
@@ -53,7 +54,23 @@ export interface ExtractionResult {
   cleanTitle: string | null;
   cleanOrganization: string | null;
   confidence: DateConfidence;
+  /** True when the page says speakers must pay to present (registration, publication or presentation fee); null when it does not say. */
+  payToPresent: boolean | null;
+  /** The event's own call page among the page's links, when this page is about the event but the call is elsewhere. */
+  callPageUrl: string | null;
+  /** The event's own site among the page's links, when this page is a listing of one event hosted elsewhere. */
+  officialUrl: string | null;
+  /** The events a directory or calendar page lists, each with its link from the page. */
+  listedEvents: ListedEvent[];
 }
+
+export interface ListedEvent {
+  name: string;
+  url: string;
+}
+
+/** A calendar page can list hundreds; this many are queued from one read. */
+export const MAX_LISTED_EVENTS = 25;
 
 export interface ExtractionInput {
   title: string;
@@ -62,6 +79,8 @@ export interface ExtractionInput {
   description?: string | null;
   /** Visible text of the apply page, when it could be fetched. */
   pageText?: string | null;
+  /** The page's links (pageLinks.ts); the extraction may only point at one of these. */
+  links?: readonly PageLink[];
   applyUrl?: string | null;
 }
 
@@ -95,6 +114,10 @@ export const EXTRACTION_SCHEMA = {
     'cleanTitle',
     'cleanOrganization',
     'confidence',
+    'payToPresent',
+    'callPageUrl',
+    'officialUrl',
+    'listedEvents',
   ],
   properties: {
     eventDate: { ...nullableString, description: 'Start date of the event as YYYY-MM-DD, or null when not stated.' },
@@ -135,6 +158,19 @@ export const EXTRACTION_SCHEMA = {
       required: ['eventDate', 'cfpDeadline', 'location'],
       properties: { eventDate: confidenceSchema, cfpDeadline: confidenceSchema, location: confidenceSchema },
     },
+    payToPresent: { type: ['boolean', 'null'] },
+    callPageUrl: { ...nullableString, description: 'A URL copied exactly from the links list, or null.' },
+    officialUrl: { ...nullableString, description: 'A URL copied exactly from the links list, or null.' },
+    // As with sectors, the length is the prompt's and the parser's to enforce.
+    listedEvents: {
+      type: 'array',
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['name', 'url'],
+        properties: { name: { type: 'string' }, url: { type: 'string', description: 'Copied exactly from the links list.' } },
+      },
+    },
   },
 } as const;
 
@@ -172,6 +208,11 @@ Rules:
 ${SECTOR_LINES}
 - cleanTitle is the event name without suffixes like "Call for Speakers" or "| Company Name"; keep the year if it is part of the name. cleanOrganization is the body running the event, not the event name. Null when unknown.
 - confidence: "high" when the value is stated explicitly, "medium" when inferred (for example an assumed year), "low" when guessed from weak cues. For a null value, report how sure you are that the text does not state it.
+- payToPresent is true when the page says speakers, presenters or authors must pay to present: a registration fee required of accepted speakers or authors, a publication or presentation fee, "at least one author must register". False when it says speakers attend free or get a complimentary pass. Null when it does not say. An attendee ticket is not a fee to present.
+- callPageUrl: when this page is about one event but its call for speakers, papers or proposals, or its speaker application, is on another page, that page's URL. Null when this page itself holds the call, when no link leads to it, or when the page is not about one event.
+- officialUrl: when this page is a listing, calendar entry, directory entry or article about one event that has its own website elsewhere, that website's URL. Null when this page is on the event's own site.
+- listedEvents: when the page lists several different upcoming events (a directory, a calendar, a list of conferences), up to ${MAX_LISTED_EVENTS} of them where people could speak, each with its name and the URL of its own page; the most notable first. Empty otherwise. Leave out past events, articles, and links to sign-up, sponsorship or category pages.
+- callPageUrl, officialUrl and every listedEvents url must be copied exactly from the links listed below the page text. Never write a URL that is not in that list.
 
 Title: ${input.title}
 Organization: ${input.organization || 'unknown'}
@@ -181,7 +222,10 @@ Listing text:
 ${description || '(none)'}
 
 Page text:
-${pageText || '(the page could not be fetched; use the listing text)'}`;
+${pageText || '(the page could not be fetched; use the listing text)'}
+
+Links on the page:
+${formatLinksForPrompt(input.links ?? [])}`;
 }
 
 let anthropic: Anthropic | null = null;
@@ -231,12 +275,48 @@ function confidenceOf(value: unknown): Confidence {
 
 export type ParsedExtraction = { ok: true; result: ExtractionResult } | { ok: false; error: string };
 
+export interface ParseContext {
+  /** The links the prompt listed; a URL the model gives is kept only when it is one of them. */
+  links?: readonly PageLink[];
+  /** The page that was read; a link back to it is not a link to follow. */
+  pageUrl?: string | null;
+}
+
+/** The URLs the model may answer with, and a checker that keeps a given one only when it is among them. */
+function linkChecker({ links = [], pageUrl }: ParseContext): (value: unknown) => string | null {
+  const allowed = new Set(links.map((link) => link.url));
+  const page = pageUrl ? normalizeLinkUrl(pageUrl) : null;
+  return (value) => {
+    const given = optionalString(value);
+    const url = given ? normalizeLinkUrl(given) : null;
+    return url && allowed.has(url) && url !== page ? url : null;
+  };
+}
+
+function parseListedEvents(raw: unknown, link: (value: unknown) => string | null): ListedEvent[] {
+  if (!Array.isArray(raw)) return [];
+  const seen = new Set<string>();
+  const events: ListedEvent[] = [];
+  for (const entry of raw) {
+    if (!entry || typeof entry !== 'object') continue;
+    const item = entry as Record<string, unknown>;
+    const name = optionalString(item.name)?.slice(0, 150);
+    const url = link(item.url);
+    if (!name || !url || seen.has(url)) continue;
+    seen.add(url);
+    events.push({ name, url });
+    if (events.length === MAX_LISTED_EVENTS) break;
+  }
+  return events;
+}
+
 /**
  * Validate the model's JSON into an ExtractionResult. Invalid dates are
  * dropped (null) rather than failing the whole extraction; a value that is
- * not an object at all fails.
+ * not an object at all fails. A URL that is not one of the page's links is
+ * dropped: the model could otherwise invent an address.
  */
-export function parseExtractionOutput(raw: unknown): ParsedExtraction {
+export function parseExtractionOutput(raw: unknown, context: ParseContext = {}): ParsedExtraction {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
     return { ok: false, error: 'Extraction output is not an object' };
   }
@@ -259,6 +339,7 @@ export function parseExtractionOutput(raw: unknown): ParsedExtraction {
   const amount = typeof data.compensationAmount === 'number' && Number.isFinite(data.compensationAmount) && data.compensationAmount > 0
     ? Math.round(data.compensationAmount)
     : null;
+  const link = linkChecker(context);
 
   return {
     ok: true,
@@ -286,6 +367,10 @@ export function parseExtractionOutput(raw: unknown): ParsedExtraction {
         cfpDeadline: cfpDeadline === undefined ? 'low' : confidenceOf(confidence.cfpDeadline),
         location: confidenceOf(confidence.location),
       },
+      payToPresent: typeof data.payToPresent === 'boolean' ? data.payToPresent : null,
+      callPageUrl: link(data.callPageUrl),
+      officialUrl: link(data.officialUrl),
+      listedEvents: parseListedEvents(data.listedEvents, link),
     },
   };
 }
@@ -332,7 +417,7 @@ export async function extractOpportunity(
       return { status: 'failed', error: `Invalid JSON: ${error instanceof Error ? error.message : 'parse error'}` };
     }
 
-    const parsed = parseExtractionOutput(json);
+    const parsed = parseExtractionOutput(json, { links: input.links, pageUrl: input.applyUrl });
     return parsed.ok ? { status: 'ok', result: parsed.result } : { status: 'failed', error: parsed.error };
   } catch (error) {
     return { status: 'failed', error: error instanceof Error ? error.message : 'Unknown extraction error' };
@@ -345,6 +430,9 @@ export interface MergedOpportunity extends ScraperResult {
   isRelevant: boolean;
   hasOpenCall: boolean;
   dateConfidence: DateConfidence;
+  payToPresent: boolean | null;
+  /** Null from a merge: each read decides it afresh (services/callFollowing.ts). */
+  callUrl: string | null;
 }
 
 /**
@@ -399,6 +487,9 @@ export function mergeExtraction(
     isRelevant: extraction.isRelevant,
     hasOpenCall: extraction.hasOpenCall,
     dateConfidence: extraction.confidence,
+    // A page that does not mention fees leaves what an earlier read found.
+    payToPresent: extraction.payToPresent ?? existing.payToPresent ?? null,
+    callUrl: null,
   };
 }
 

@@ -3,6 +3,11 @@ import type { Opportunity } from '../types';
 /** How a call's own facts are worded, the same on a Browse row and on the call page. */
 
 /** The organization, unless it only repeats the title (a scraper often has nothing else to put there). */
+/** Where Apply goes: the call's own page when it is not the event's page, else the event's page. */
+export function applyHref(opportunity: Pick<Opportunity, 'applyUrl' | 'callUrl' | 'hasOpenCall'>): string {
+  return opportunity.hasOpenCall !== false && opportunity.callUrl ? opportunity.callUrl : opportunity.applyUrl;
+}
+
 export function organizationLabel(opportunity: Pick<Opportunity, 'organization' | 'title'>): string | null {
   const organization = (opportunity.organization ?? '').trim();
   if (!organization || organization.toLowerCase() === opportunity.title.trim().toLowerCase()) return null;

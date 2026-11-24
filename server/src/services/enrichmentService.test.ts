@@ -57,10 +57,12 @@ describe('planEnrichment', () => {
     });
   });
 
-  it('extracts from the page text when the fetch succeeded', () => {
-    expect(planEnrichment(row(), { ok: true, text: 'Deadline Dec 1 '.repeat(5), status: 200 })).toEqual({
+  it('extracts from the page text when the fetch succeeded, with the page links', () => {
+    const links = [{ text: 'Call for Speakers', url: 'https://example.test/cfp' }];
+    expect(planEnrichment(row(), { ok: true, text: 'Deadline Dec 1 '.repeat(5), status: 200, links })).toEqual({
       action: 'extract',
       pageText: 'Deadline Dec 1 '.repeat(5),
+      pageLinks: links,
       pageError: null,
     });
   });
@@ -70,7 +72,7 @@ describe('planEnrichment', () => {
       ok: false,
       reason: 'timeout',
       message: 'Timed out after 8000ms',
-    })).toEqual({ action: 'extract', pageText: null, pageError: 'Timed out after 8000ms' });
+    })).toEqual({ action: 'extract', pageText: null, pageLinks: [], pageError: 'Timed out after 8000ms' });
   });
 
   it.each(['Linkup Search', 'Live Search'])('makes no Claude call for a %s hit whose page cannot be read', (source) => {
