@@ -1,5 +1,6 @@
 import type { PrismaClient } from '../generated/prisma/client.js';
 import { verificationCandidates } from './verification.js';
+import { LIVE_SEARCH_SOURCE } from './searchSources.js';
 
 /**
  * Daily Claude budget, the daily cap on reader calls, and per-row claims for
@@ -98,11 +99,10 @@ async function reserveDailySlot(
   date: string,
   limit: number
 ): Promise<{ reserved: boolean; count: number }> {
-  await prisma.enrichmentUsage.upsert({
-    where: { date },
-    create: { date, count: 0 },
-    update: {},
-  });
+  // INSERT … ON CONFLICT DO NOTHING. An upsert with an empty update is a find
+  // then a create, so the first callers of a day raced each other and all but
+  // one failed on the primary key.
+  await prisma.enrichmentUsage.createMany({ data: [{ date, count: 0 }], skipDuplicates: true });
 
   // Conditional increment: only one of N concurrent callers can take the last slot.
   const result = await prisma.enrichmentUsage.updateMany({
@@ -134,20 +134,25 @@ export async function getTodayEnrichmentCount(prisma: PrismaClient, now: Date = 
  * Eligible rows have no status yet, fewer than MAX attempts, and either no
  * claim or a stale one. The claim is an optimistic update keyed on the
  * previous `enrichmentClaimedAt`, so two workers cannot take the same row.
+ * Hits a live search left unread come first: someone searched for them and
+ * may still be waiting. Then the newest of everything else.
  * Returns the row with `enrichmentAttempts` already incremented.
  */
 export async function claimNextUnenriched(prisma: PrismaClient, now: Date = new Date()) {
-  const candidates = await prisma.opportunity.findMany({
-    where: claimableWhere(now),
-    orderBy: { createdAt: 'desc' },
-    take: 5,
-  });
-
-  for (const candidate of candidates) {
-    const claimed = await tryClaim(prisma, candidate, now);
-    if (claimed) return claimed;
+  const liveSearchFirst = [{ ...claimableWhere(now), source: { startsWith: LIVE_SEARCH_SOURCE } }, claimableWhere(now)];
+  for (const where of liveSearchFirst) {
+    // Workers running side by side can take all five candidates first. A
+    // claimed row leaves `claimableWhere`, so ask again until one is won or
+    // none is left; giving up early would read "nothing waiting" while rows wait.
+    for (;;) {
+      const candidates = await prisma.opportunity.findMany({ where, orderBy: { createdAt: 'desc' }, take: 5 });
+      if (candidates.length === 0) break;
+      for (const candidate of candidates) {
+        const claimed = await tryClaim(prisma, candidate, now);
+        if (claimed) return claimed;
+      }
+    }
   }
-
   return null;
 }
 

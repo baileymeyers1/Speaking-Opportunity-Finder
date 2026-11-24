@@ -355,9 +355,17 @@ describe('buildSearchQueries', () => {
   it('asks the ways calls are worded and other formats, with PR spelled out', () => {
     const text = buildSearchQueries('AI for PR', [], [], now).map((q) => q.q).join(' | ');
     expect(text).toContain('call for speakers');
-    expect(text).toContain('call for proposals');
+    expect(text).toContain('call for presentations');
+    expect(text).not.toContain('call for proposals');
     expect(text).toContain('podcast guest');
     expect(text).toContain('public relations');
+  });
+
+  it('spells out a place for the engine, whichever way it was typed', () => {
+    for (const query of buildSearchQueries('Energy', [], ['CA'], now)) expect(query.q.endsWith(' California')).toBe(true);
+    for (const query of buildSearchQueries('Energy', [], ['california', 'nyc'], now)) {
+      expect(query.q.endsWith(' California OR New York')).toBe(true);
+    }
   });
 
   it('searches for a sector on its own when there is no query text', () => {

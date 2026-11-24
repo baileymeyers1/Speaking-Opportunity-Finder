@@ -16,6 +16,7 @@ import { config } from '../config/index.js';
 import { promotedLinkupQueries } from '../services/searchLog.js';
 import { computeQualityScore, type ScraperResult } from './qualityScore.js';
 import { persistResults } from './persistResults.js';
+import { deadLiveHitsWhere, expiredRowsWhere } from '../services/retention.js';
 
 export { computeQualityScore } from './qualityScore.js';
 export type { ScraperResult } from './qualityScore.js';
@@ -302,46 +303,13 @@ async function orderByLeastRecentlyRun(defs: ScraperDefinition[]): Promise<Scrap
   return [...defs].sort((a, b) => (lastRunAt.get(a.name) ?? 0) - (lastRunAt.get(b.name) ?? 0));
 }
 
-/**
- * A row stored before deadlines carried a zone holds midnight UTC of its
- * closing day, which under the AoE reading stays open until 11:59:59 UTC the
- * next day: 36 hours later. Deleting only what closed at least that long ago
- * never removes a call that is still open anywhere on Earth, whichever shape
- * the row has (see lib/deadlines.ts and scripts/shiftLegacyDeadlines.ts).
- */
-export const EXPIRED_GRACE_MS = 36 * 60 * 60 * 1000;
-
+/** Deletes what `services/retention.ts` says has run its course; saved rows never. */
 async function cleanupExpired(): Promise<number> {
   const now = new Date();
-  const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-  const expiredBefore = new Date(now.getTime() - EXPIRED_GRACE_MS);
-
-  // Rows a user has saved are never deleted: deleting them would cascade to
-  // their SavedOpportunity rows. They stay in the DB and are hidden from
-  // browse by the future-deadline filter.
-  const notSaved = { savedBy: { none: {} } };
-
-  // Delete expired, unsaved, non-live results
-  const expiredResult = await prisma.opportunity.deleteMany({
-    where: {
-      cfpDeadline: { lt: expiredBefore },
-      NOT: { source: { startsWith: 'Live Search' } },
-      ...notSaved,
-    },
-  });
-
-  // Delete stale, unsaved live search results (7-day TTL)
-  const staleLiveResult = await prisma.opportunity.deleteMany({
-    where: {
-      source: { startsWith: 'Live Search' },
-      createdAt: { lt: sevenDaysAgo },
-      ...notSaved,
-    },
-  });
-
-  const total = expiredResult.count + staleLiveResult.count;
-  console.log(`[Cleanup] Removed ${expiredResult.count} expired + ${staleLiveResult.count} stale live results`);
-  return total;
+  const expired = await prisma.opportunity.deleteMany({ where: expiredRowsWhere(now) });
+  const deadLiveHits = await prisma.opportunity.deleteMany({ where: deadLiveHitsWhere(now) });
+  console.log(`[Cleanup] Removed ${expired.count} expired + ${deadLiveHits.count} live-search dead ends`);
+  return expired.count + deadLiveHits.count;
 }
 
 async function cleanupPlaceholderData(): Promise<number> {

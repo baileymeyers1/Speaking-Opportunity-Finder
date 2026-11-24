@@ -5,6 +5,7 @@ import { prisma } from '../lib/prisma.js';
 import { assignEvents } from './eventAssignment.js';
 import { cleanTitle, extractOrganization, normalizeIndustries, decodeHtmlEntities, isJunkResult } from './dataNormalization.js';
 import { sectorsFromTags } from './sectorMapping.js';
+import { locationMatches, parsePlaces } from '../lib/location.js';
 import {
   extractOpportunity,
   mergeExtraction,
@@ -14,7 +15,7 @@ import {
 } from './extraction.js';
 import { readPage } from './pageReader.js';
 import { expandQuery, matchesAllTerms, searchTerms } from './searchTerms.js';
-import { callSignal, looksLikeArticle } from './liveHitTriage.js';
+import { looksLikeArticle, readPriority } from './liveHitTriage.js';
 import { LIVE_SEARCH_SOURCE } from './opportunityQuery.js';
 import {
   backgroundChecksResumeAt,
@@ -29,8 +30,12 @@ import { buildCreateData } from '../scrapers/persistData.js';
 import type { ScraperResult } from '../scrapers/qualityScore.js';
 import type { PendingLiveHit } from 'shared';
 
-/** Live hits enriched synchronously per request; the enrichment cron finishes the rest. */
-export const SYNC_ENRICH_LIMIT = 8;
+/**
+ * Live hits read and extracted in the request, all at once; the enrichment
+ * cron finishes the rest. 8 read too few to find the open calls among a
+ * search's 40-odd pages; the request waits for its slowest hit, not their sum.
+ */
+export const SYNC_ENRICH_LIMIT = 16;
 
 export interface EnrichedLiveResult {
   id: string;
@@ -524,21 +529,6 @@ function isCfpClosed(content: string, title: string): boolean {
   return closedPatterns.some(p => p.test(text));
 }
 
-// Common abbreviation expansions for location matching
-const locationAliasMap: Record<string, string[]> = {
-  'ny': ['new york', 'nyc', 'manhattan', 'brooklyn', 'queens', 'bronx'],
-  'new york': ['ny', 'nyc', 'manhattan', 'brooklyn', 'queens', 'bronx'],
-  'la': ['los angeles', 'hollywood'],
-  'los angeles': ['la', 'hollywood'],
-  'sf': ['san francisco'],
-  'san francisco': ['sf'],
-  'dc': ['washington dc', 'washington d.c.', 'washington, dc'],
-  'chicago': ['chi'],
-  'boston': ['bos'],
-  'philly': ['philadelphia'],
-  'philadelphia': ['philly'],
-};
-
 export interface LiveQuery {
   q: string;
 }
@@ -549,7 +539,7 @@ export interface LiveQuery {
  * year's events are already open (same as linkupQueries.ts).
  *
  * A search term gets several angles, because calls are worded many ways:
- * "call for speakers", "call for proposals / submit a session", and formats
+ * "call for speakers", "call for presentations / submit a session", and formats
  * beyond conferences (podcast guests, panels, webinars). Ambiguous
  * abbreviations are spelled out ("PR" → "public relations") for the engine;
  * the relevance check accepts both (searchTerms.ts). A variant limited to
@@ -558,9 +548,9 @@ export interface LiveQuery {
  */
 export function buildSearchQueries(query: string, industries: string[], locations: string[], now: Date = new Date()): LiveQuery[] {
   const years = `${now.getFullYear()} ${now.getFullYear() + 1}`;
-  const locationSuffix = locations.length > 0
-    ? ` ${locations.join(' OR ')}`
-    : '';
+  // Places spelled out for the engine: "CA" alone reads as Canada as often as California.
+  const placeNames = parsePlaces(locations).map((place) => place.searchText);
+  const locationSuffix = placeNames.length > 0 ? ` ${placeNames.join(' OR ')}` : '';
   const industryTerms = industries.map((ind) => {
     const templates = INDUSTRY_QUERIES[ind.toLowerCase()];
     return templates ? templates[0] : `${ind} conference`;
@@ -570,7 +560,9 @@ export function buildSearchQueries(query: string, industries: string[], location
     const expanded = expandQuery(query);
     const queries: LiveQuery[] = [
       { q: `${query} conference call for speakers ${years}${locationSuffix}` },
-      { q: `${expanded} call for proposals submit a session ${years}${locationSuffix}` },
+      // "Call for presentations", not "proposals": in energy and government a call for
+      // proposals is a request for bids (measured 2026-11-24: 11 → 16 explicit calls in 20 hits).
+      { q: `${expanded} call for presentations submit a session ${years}${locationSuffix}` },
       { q: `${expanded} speakers wanted podcast guest panel webinar ${years}${locationSuffix}` },
     ];
     if (industryTerms.length > 0) {
@@ -683,7 +675,9 @@ export async function performLiveSearch(
   //    word in the title, tags or snippet. Same rule as the stored search.
   const terms = searchTerms(query);
   if (terms.length > 0) {
-    hits = hits.filter(r => matchesAllTerms(terms, [r.title, r.industries.join(' '), r.description]));
+    // A sector word's phrases count in the title only: a hit's tags are regex guesses
+    // seeded with the sector searched for, and its sectors likewise, so neither is passed.
+    hits = hits.filter(r => matchesAllTerms(terms, [r.title, r.industries.join(' '), r.description], { headline: [r.title] }));
   }
 
   // 3. Articles about the topic (how-tos, listicles, blogs, forums) are never calls.
@@ -695,8 +689,8 @@ export async function performLiveSearch(
   const fresh = hits.filter(r => !stored.has(r.applyUrl));
 
   // --- Synchronous enrichment of the best new hits only ---
-  // Pages that look like a call go first, so the few in-request reads find the open ones.
-  fresh.sort((a, b) => callSignal(b) - callSignal(a) || b.qualityScore - a.qualityScore);
+  // Pages that look like a call go first and lists of events last, so the in-request reads find the open ones.
+  fresh.sort((a, b) => readPriority(b) - readPriority(a) || b.qualityScore - a.qualityScore);
   const toEnrich = fresh.slice(0, SYNC_ENRICH_LIMIT);
   // Calls the new hits leave over read hits an earlier search stored but nobody has read.
   const waitingToRead = storedHits.waitingIds.slice(0, SYNC_ENRICH_LIMIT - toEnrich.length);
@@ -734,18 +728,12 @@ export async function performLiveSearch(
   // Enrichment may have found a closed call or a page that is not an opportunity.
   results = results.filter(r => !r.isClosed && r.isRelevant !== false);
 
-  // Location filtering is now handled client-side via matchesLocationFilter flag
-
-  // Recalculate quality scores with location match context
-  if (locations.length > 0) {
+  // A result outside the places asked for is kept and flagged: Browse lists
+  // it after the ones in the place (online, then elsewhere).
+  const places = parsePlaces(locations);
+  if (places.length > 0) {
     for (const r of results) {
-      const matchesLoc = r.location ? locations.some(loc => {
-        const lowerLoc = loc.toLowerCase();
-        const resultLoc = r.location!.toLowerCase();
-        if (resultLoc.includes(lowerLoc)) return true;
-        const aliases = locationAliasMap[lowerLoc] || [];
-        return aliases.some(alias => resultLoc.includes(alias));
-      }) : false;
+      const matchesLoc = locationMatches(r.location, places);
 
       r.matchesLocationFilter = matchesLoc;
       r.qualityScore = computeLiveQualityScore({

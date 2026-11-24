@@ -1,8 +1,9 @@
 import { Prisma } from '../generated/prisma/client.js';
 import type { Lane, SortBy } from 'shared';
 import type { Sector } from '../lib/sectors.js';
+import { parsePlaces, type LocationPattern, type PlaceQuery } from '../lib/location.js';
 import { SEARCH_SOURCES } from './searchSources.js';
-import { matchesAllTerms, searchTerms, termAlternatives, termMatches } from './searchTerms.js';
+import { matchesAllTerms, searchTerms, sectorOfTerm, sectorPhrases, termAlternatives, termMatches } from './searchTerms.js';
 
 /** Filters accepted by `getOpportunities`, as the controller builds them from the query string. */
 export interface OpportunityFilters {
@@ -78,6 +79,26 @@ export function containsInsensitive(value: string): Prisma.StringFilter {
   return { contains: value, mode: 'insensitive' };
 }
 
+/** The places a location filter names; the controller joins several with "|", since a place can hold a comma. */
+export function filterPlaces(location: string | undefined): PlaceQuery[] {
+  return location ? parsePlaces(location.split('|')) : [];
+}
+
+function patternWhere(pattern: LocationPattern): Prisma.OpportunityWhereInput {
+  const filter: Prisma.StringNullableFilter = pattern.caseSensitive ? {} : { mode: 'insensitive' };
+  filter[pattern.kind] = pattern.value;
+  return { location: filter };
+}
+
+/**
+ * Rows in any of the places, by the patterns `locationMatches` checks in
+ * memory, and rows held online: a speaker anywhere can take those. The list
+ * puts the ones in the place first (`opportunityService`).
+ */
+export function placeWhere(places: readonly PlaceQuery[]): Prisma.OpportunityWhereInput {
+  return { OR: [...places.flatMap((place) => place.patterns.map(patternWhere)), { isRemote: true }] };
+}
+
 /**
  * The Prisma `where` for a filter set: future or missing deadline, visible
  * (`listedConditions`), plus every active filter. A search term narrows by ILIKE on each word; the
@@ -97,13 +118,24 @@ export function buildOpportunityWhere(filters: OpportunityFilters, now: Date = n
   if (filters.search) {
     const terms = searchTerms(filters.search);
     for (const term of terms.length > 0 ? terms : [filters.search.trim()]) {
+      // A word that names a sector ("energy") also takes the rows in that
+      // sector, and its phrases ("oil and gas") in a title, organization or tag.
+      const sector = sectorOfTerm(term);
       andConditions.push({
-        OR: termAlternatives(term).flatMap((form) => [
-          { title: containsInsensitive(form) },
-          { organization: containsInsensitive(form) },
-          { description: containsInsensitive(form) },
-          { industries: containsInsensitive(form) },
-        ]),
+        OR: [
+          ...termAlternatives(term).flatMap((form) => [
+            { title: containsInsensitive(form) },
+            { organization: containsInsensitive(form) },
+            { description: containsInsensitive(form) },
+            { industries: containsInsensitive(form) },
+          ]),
+          ...sectorPhrases(term).flatMap((phrase) => [
+            { title: containsInsensitive(phrase) },
+            { organization: containsInsensitive(phrase) },
+            { industries: containsInsensitive(phrase) },
+          ]),
+          ...(sector ? [{ sectors: { has: sector } }] : []),
+        ],
       });
     }
   }
@@ -122,15 +154,8 @@ export function buildOpportunityWhere(filters: OpportunityFilters, now: Date = n
     where.isRemote = filters.isRemote;
   }
 
-  // Location filter (supports multiple pipe-separated locations, fuzzy contains)
-  if (filters.location) {
-    const locations = filters.location.split('|').map((l) => l.trim()).filter(Boolean);
-    if (locations.length === 1) {
-      andConditions.push({ location: containsInsensitive(locations[0]) });
-    } else if (locations.length > 1) {
-      andConditions.push({ OR: locations.map((loc) => ({ location: containsInsensitive(loc) })) });
-    }
-  }
+  const places = filterPlaces(filters.location);
+  if (places.length > 0) andConditions.push(placeWhere(places));
 
   if (filters.compensationType && filters.compensationType.length > 0) {
     where.compensationType = { in: filters.compensationType };
@@ -220,6 +245,7 @@ interface RelevanceInput {
   organization?: string | null;
   industries?: string | null;
   description?: string | null;
+  sectors?: readonly string[] | null;
   qualityScore?: number | null;
 }
 
@@ -235,11 +261,16 @@ function parseIndustries(value: string | null | undefined): string[] {
 /**
  * Whether a row matches a search query under the whole-word rule of
  * `searchTerms.ts`: every word in the title, organization, industries or
- * description. ILIKE in the `where` is only a coarse first pass.
+ * description, or a sector word the row's sectors hold. ILIKE in the `where`
+ * is only a coarse first pass.
  */
 export function matchesSearch(opportunity: RelevanceInput, query: string): boolean {
   const industries = parseIndustries(opportunity.industries).join(' ');
-  return matchesAllTerms(searchTerms(query), [opportunity.title, opportunity.organization, industries, opportunity.description]);
+  const headline = [opportunity.title, opportunity.organization, industries];
+  return matchesAllTerms(searchTerms(query), [...headline, opportunity.description], {
+    sectors: opportunity.sectors ?? [],
+    headline,
+  });
 }
 
 /** Keyword relevance of a row to a search term; higher is better. */
@@ -278,6 +309,12 @@ export function computeSearchRelevance(opportunity: RelevanceInput, query: strin
       if (termMatches(term, industries)) score += 15;
       if (termMatches(term, opportunity.description)) score += 5;
     }
+  }
+
+  // A row in the sector a word names counts, below a row that says the word.
+  for (const term of terms) {
+    const sector = sectorOfTerm(term);
+    if (sector && opportunity.sectors?.includes(sector)) score += 15;
   }
 
   score += (opportunity.qualityScore || 0) * 0.1;
