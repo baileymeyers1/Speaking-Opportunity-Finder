@@ -152,7 +152,7 @@ For these, the routes are scheduled search with the wording associations use ("c
    - The one extraction call returns `callPageUrl` (the event's call-for-speakers page), `officialUrl` (when the page describes an event hosted elsewhere), `listedEvents` (when the page is a directory) and `payToPresent`.
    - The worker follows each link once.
    - This is the one schema change: a `payToPresent` column, and probably a `discoveredFrom` column.
-4. **Calendar sources.**
+4. **Calendar sources.** Started (PR "calendar sources"): The Trade Show Calendar, Civic Tech Field Guide and WDO, through `server/src/scrapers/calendars/`. No `CalendarSource` table: a calendar is a scraper in the registry, and `ScraperRun` already records when it ran and what it yielded. The Events Calendar reader is generic (a site is one line); Civic Tech is read from its page because calendar.google.com's robots.txt bars the iCal feed. Rows are written insert-only, so cross-calendar duplicates of a stored address are skipped and the rest meet the event matcher once the worker has read them. Next: the remaining green readers (iCal, RSS, sitemap plus JSON-LD; Product Talk, FINTRX). The Trade Show Calendar is still to be confirmed with them by email. As first planned:
    - A `CalendarSource` table holds each calendar's URL, reader kind, sectors, terms note, when it was last read and what it yielded.
    - Generic readers: Events Calendar JSON, iCal, RSS, sitemap plus JSON-LD.
    - Small dedicated readers for The Trade Show Calendar, Product Talk and FINTRX.
