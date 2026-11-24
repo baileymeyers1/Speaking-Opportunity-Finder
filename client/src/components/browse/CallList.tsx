@@ -12,7 +12,7 @@ interface CallListProps {
   lane: Lane;
   /** Calls in each lane under the filters in force; used to point at a lane that has rows when this one is empty. */
   counts: LaneSummary['counts'] | undefined;
-  /** Active location filter; when set, matching rows come first and the rest follow under a rule. */
+  /** Active location filter; when set, the rows in the place come first, then online ones, then any elsewhere. */
   locations?: string[];
   /** True when a search term or any filter is narrowing the list. */
   isFiltered: boolean;
@@ -130,9 +130,16 @@ export function CallList({
     );
   }
 
+  // With a place asked for, the server lists the calls held there first, then
+  // the ones held online; a live search can add calls held somewhere else.
   const hasLocationFilter = Boolean(locations && locations.length > 0);
   const inPlace = hasLocationFilter ? opportunities.filter((item) => item.matchesLocationFilter) : opportunities;
-  const elsewhere = hasLocationFilter ? opportunities.filter((item) => !item.matchesLocationFilter) : [];
+  const online = hasLocationFilter ? opportunities.filter((item) => !item.matchesLocationFilter && item.isRemote) : [];
+  const elsewhere = hasLocationFilter ? opportunities.filter((item) => !item.matchesLocationFilter && !item.isRemote) : [];
+  const groups = [
+    { title: 'Online', rows: online },
+    { title: 'Elsewhere', rows: elsewhere },
+  ].filter((group) => group.rows.length > 0);
 
   return (
     <section>
@@ -144,19 +151,20 @@ export function CallList({
           ))}
         </ul>
       ) : (
-        <p className="border-t py-6 text-sm text-muted-foreground">Nothing found in {locations!.join(', ')}.</p>
+        // Later pages can hold only online calls: the ones in the place came first.
+        page === 1 && <p className="border-t py-6 text-sm text-muted-foreground">Nothing found in {locations!.join(', ')}.</p>
       )}
 
-      {elsewhere.length > 0 && (
-        <>
-          <h3 className={cn('heading pb-3 text-foreground', inPlace.length > 0 ? 'pt-10' : 'pt-4')}>Elsewhere</h3>
+      {groups.map((group, index) => (
+        <div key={group.title}>
+          <h3 className={cn('heading pb-3 text-foreground', inPlace.length > 0 || index > 0 ? 'pt-10' : 'pt-4')}>{group.title}</h3>
           <ul className={rowList}>
-            {elsewhere.map((opportunity) => (
+            {group.rows.map((opportunity) => (
               <CallRow key={opportunity.id} opportunity={opportunity} />
             ))}
           </ul>
-        </>
-      )}
+        </div>
+      ))}
 
       {showPagination && totalPages > 1 && (
         <nav aria-label="Pagination" className="flex items-center justify-center gap-2 pt-8">
