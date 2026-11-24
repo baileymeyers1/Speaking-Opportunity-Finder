@@ -18,14 +18,34 @@ export const LINKUP_SEARCH_SOURCE = 'Linkup Search';
  */
 export const FOLLOWED_LINK_SOURCE = 'Followed Link';
 
-export const SEARCH_SOURCES: readonly string[] = [LIVE_SEARCH_SOURCE, LINKUP_SEARCH_SOURCE, FOLLOWED_LINK_SOURCE];
+/**
+ * Curated event calendars read on a schedule (scrapers/calendars/). A
+ * calendar vouches that an event exists, not that it wants speakers, so its
+ * rows are links like any other: hidden until the event's own page is read.
+ * The source is the calendar's site, which is the credit Civic Tech Field
+ * Guide's CC BY licence asks for.
+ */
+export const CALENDAR_SOURCES = {
+  tradeShowCalendar: 'thetradeshowcalendar.com',
+  civicTechGuide: 'civictech.guide',
+  worldDesignOrganization: 'wdo.org',
+} as const;
+
+/** Sources whose rows were reached by a link from another page, not by a search. */
+const LINKED_SOURCES: readonly string[] = [FOLLOWED_LINK_SOURCE, ...Object.values(CALENDAR_SOURCES)];
+
+export const SEARCH_SOURCES: readonly string[] = [LIVE_SEARCH_SOURCE, LINKUP_SEARCH_SOURCE, ...LINKED_SOURCES];
 
 export function isSearchSource(source: string): boolean {
   return SEARCH_SOURCES.includes(source);
 }
 
+/**
+ * A row reached by a link (a followed link or a calendar's entry): it is read
+ * only when robots.txt allows every crawler, and never fans out a directory.
+ */
 export function isFollowedLink(source: string): boolean {
-  return source === FOLLOWED_LINK_SOURCE;
+  return LINKED_SOURCES.includes(source);
 }
 
 export interface ReadState {

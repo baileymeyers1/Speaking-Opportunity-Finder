@@ -2,6 +2,18 @@
 
 Reverse chronological. Current state lives in `docs/STATUS.md`.
 
+## 2026-11-24: calendar sources
+
+Step 4 of the plan in `docs/plans/2026-11-24-industry-calendars.md`, first part: three calendars from the green list. No schema change.
+- **A calendar entry is a link to the event's own site** (`server/src/scrapers/calendars/`). Its source is the calendar's host (`CALENDAR_SOURCES` in `searchSources.ts`, part of `SEARCH_SOURCES`), so the row is hidden until the worker reads its page, which then lists it as an open call, an event to watch, or nothing, and follows its call page. `sourceUrl` is the listing; the call page links it as "Source" with the calendar's name (`client/src/lib/eventHints.ts`), which is the credit Civic Tech Field Guide's CC BY licence asks for.
+- **Insert only** (`persistCalendarResults`). The usual persistence refreshes a stored row and merges a row of the same name into another source's, rewriting its source: a calendar listing an event a CFP listing already holds would have turned that row into an unread link and hidden it. A calendar now only adds addresses nobody holds. `ScraperDefinition.persist` lets a source choose its write; everything else still uses `persistResults`.
+- **What is worth a row** (`worthReading`): a listed call until its deadline; an event between 30 and 550 days out (a call closes months before the event; further out there is no call yet).
+- **The Trade Show Calendar** (`tradeShowCalendar.ts`, daily): the database behind TSNN's and 100+ associations' calendars, 1,431 US shows across 100 industries. Four 30-row pages a run from a rotating 60-page window, so the whole list comes round every two weeks and a day brings about 120 events.
+- **Civic Tech Field Guide** (`civicTechGuide.ts`, daily): its calendar page, since calendar.google.com's robots.txt bars the iCal feed. Events and open calls are kept, funding and jobs left out; a card's date is when an open call closes. Its events are mostly webinars within the month, so in practice it brings the open calls.
+- **The Events Calendar JSON API** (`eventsCalendar.ts`, weekly): one reader for any WordPress site on that plugin (`/wp-json/tribe/events/v1/events`), a site being one line in `EVENTS_CALENDAR_SITES`. First site: World Design Organization. An event's `website` is used unless it is a form or a meeting link (Zoom, HubSpot forms, Teams, Google Forms and the like), then the calendar's own page; a venue named "Online" counts as online.
+- **Measured locally**, through the real sync: 120 trade shows, 8 Civic Tech open calls and 11 WDO events in 5.2s. Eight of them read by the worker in 13s: 3 open calls with their call page found (Excipient World's abstract page, Foam Expo's call for speakers, Maison&Objet's stage programme), 1 event to watch, 4 rightly hidden (two Civic Tech calls that closed at 04:59 and 14:00 UTC today, SAMPE's call closed a week ago, a WDO link that is a 404).
+- **Tests.** The three readers against saved pages (`__fixtures__/`, contact addresses scrubbed), `persistCalendarResults` on a fake database (calendar rows are unread and claimable, which the shared test database must not hold), and the verification candidate test now builds its expected source list from `SEARCH_SOURCES`. Server: 883.
+
 ## 2026-11-24: following links, and a label where speakers pay
 
 Step 3 of the plan in `docs/plans/2026-11-24-industry-calendars.md`. Schema: two nullable columns, `payToPresent` and `callUrl`, no default.

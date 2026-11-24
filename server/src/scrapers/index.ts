@@ -15,7 +15,8 @@ import { scrapeRadioGuestList } from './radioGuestList.js';
 import { config } from '../config/index.js';
 import { promotedLinkupQueries } from '../services/searchLog.js';
 import { computeQualityScore, type ScraperResult } from './qualityScore.js';
-import { persistResults } from './persistResults.js';
+import { persistResults, type PersistOptions, type PersistSummary } from './persistResults.js';
+import { CALENDAR_SCRAPERS } from './calendars/index.js';
 import { deadLiveHitsWhere, expiredRowsWhere } from '../services/retention.js';
 
 export { computeQualityScore } from './qualityScore.js';
@@ -175,6 +176,8 @@ export interface ScraperDefinition {
   name: string;
   cadence: ScraperCadence;
   run: () => Promise<ScraperResult[]>;
+  /** How its results are stored; `persistResults` unless the source needs its own rule (calendars: insert only). */
+  persist?: (results: ScraperResult[], options: PersistOptions) => Promise<PersistSummary>;
 }
 
 const LINKUP_QUERIES_PER_RUN = 6;
@@ -215,6 +218,7 @@ export const SCRAPERS: ScraperDefinition[] = [
   },
   { name: 'wikicfp.com', cadence: 'weekly', run: scrapeWikiCFP },
   { name: 'conferencealerts.com', cadence: 'weekly', run: scrapeConferenceAlertsUSA },
+  ...CALENDAR_SCRAPERS,
 ];
 
 export interface ScraperRunSummary {
@@ -262,7 +266,7 @@ export async function runScraper(def: ScraperDefinition, timeoutMs: number): Pro
 
   try {
     const results = deduplicateResults(await withTimeout(def.run(), timeoutMs, def.name));
-    const { added, updated, deferred } = await persistResults(results, { deadline });
+    const { added, updated, deferred } = await (def.persist ?? persistResults)(results, { deadline });
     const finishedAt = new Date();
     await prisma.scraperRun.update({
       where: { id: run.id },

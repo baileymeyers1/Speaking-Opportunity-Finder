@@ -10,6 +10,10 @@ const SOURCE_LABELS: Record<string, string> = {
   'radioguestlist.com': 'RadioGuestList',
   'wikicfp.com': 'WikiCFP',
   'conferencealerts.com': 'Conference Alerts',
+  // Industry calendars (server/src/scrapers/calendars): the credit their terms ask for, linked to the listing.
+  'thetradeshowcalendar.com': 'The Trade Show Calendar',
+  'civictech.guide': 'Civic Tech Field Guide',
+  'wdo.org': 'World Design Organization',
   linkup: 'web search',
   'Live Search': 'live search',
 };
