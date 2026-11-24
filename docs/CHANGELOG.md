@@ -2,6 +2,15 @@
 
 Reverse chronological. Current state lives in `docs/STATUS.md`.
 
+## 2026-11-24 — Location filter matches places, not substrings
+
+Found from a search for "Energy" in "california" that returned nothing although production lists 6 California energy calls. No schema change.
+- **Why it failed.** The filter looked for the typed text inside the stored location, and extraction stores a US place as "City, ST". On the 835 cards production listed that day: "california" found 1 of 34 California calls, "texas", "florida" and "illinois" none, "USA" 25 of about 240 US calls; "CA" found 69, of which 31 were in California (the rest Canada, Chicago, Costa Rica, Caen), and "NY" 40, of which 7 were in New York (the rest mostly cities in "Germany").
+- **Places** (`server/src/lib/location.ts`, tables in `lib/places.ts`). A typed place becomes a list of patterns: a US state by code (only after a comma, case-sensitive) or name (as a whole part, so "Kansas" is not found in "Arkansas"), its larger cities when a row names the city alone, the US, the UK and Canada by any of their names, a few nicknames (NYC, SF, Bay Area; "LA" is Louisiana and Los Angeles), and a short name as a word. `opportunityQuery.placeWhere` builds the SQL from the same patterns `locationMatches` checks in memory. Run over production's locations: California 36, Texas 17, USA 244, UK 32, Canada 6.
+- **Online calls** are listed under a location filter too, after the calls in the place (default order and search), and every row says whether it is in the place (`matchesLocationFilter`). Browse groups the rows: in the place, "Online", then "Elsewhere" (live-search results outside the place). Before, stored rows carried no flag, so every location filter read "Nothing found in …" above an "Elsewhere" list.
+- **Live search** checks its results with the same matcher (the old alias list is gone) and names the place in full in its queries ("California", not "CA").
+- **Tests.** `lib/location.test.ts`; `locationFilter.db.test.ts` checks the SQL against Postgres; the lane and list-order suites scope their rows by a made-up place, and now ask for in-person rows so an online row from another suite cannot join them.
+
 ## 2026-11-20 — For whom: fit and saved calls per speaker
 
 Third and last PR for the roster. No schema change.
