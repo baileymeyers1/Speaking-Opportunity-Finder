@@ -73,4 +73,4 @@ Vercel. Push to main auto-deploys; the build runs `prisma generate`, then `prism
 ## Sync Schedule (Vercel Cron)
 - **Daily 06:00 UTC:** structured scrapers, least-recently-run first, within a 50s budget
 - **Weekly Mon 08:00 UTC:** slower sources (WikiCFP, ConferenceAlerts)
-- **Every 5 min:** batch of 5 within 50s: unenriched rows first (page fetch + extraction), then re-verification of stored rows (deadline within 14 days every 2 days, everything else weekly). DB-backed daily cap of Claude calls shared by both (600 by default; `ENRICHMENT_DAILY_LIMIT` overrides), and one of reader calls (300; `PAGE_READER_DAILY_LIMIT`, 0 turns the reader off).
+- **Every 5 min:** up to 15 rows, three at a time, none started after 35s: unenriched rows first, a live search's leftovers before anything else (page fetch + extraction), then re-verification of stored rows (deadline within 14 days every 2 days, everything else weekly). DB-backed daily cap of Claude calls shared by both (600 by default; `ENRICHMENT_DAILY_LIMIT` overrides), and one of reader calls (300; `PAGE_READER_DAILY_LIMIT`, 0 turns the reader off).

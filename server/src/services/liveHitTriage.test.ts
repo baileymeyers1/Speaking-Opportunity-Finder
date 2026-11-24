@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { callSignal, looksLikeArticle } from './liveHitTriage.js';
+import { callSignal, looksLikeArticle, looksLikeDirectory, readPriority } from './liveHitTriage.js';
 
 const hit = (title: string, description = '', applyUrl = 'https://example.org/page') => ({ title, description, applyUrl });
 
@@ -60,5 +60,65 @@ describe('callSignal', () => {
   it('counts speaker-call wording in the title or the snippet', () => {
     expect(callSignal(hit('Speakers wanted: AI in Comms webinar series'))).toBeGreaterThan(0);
     expect(callSignal(hit('Comms Summit', 'Apply to speak at our 2027 summit'))).toBeGreaterThan(0);
+  });
+});
+
+describe('pay-to-present aggregators', () => {
+  it.each([
+    'https://conferenceinusa.com/cities/california/energy',
+    'https://www.allconferencealert.com/usa/energy',
+    'https://conferencealerts.co.in/california/energy',
+    'https://www.conferenceineurope.org/los-angeles/energy',
+  ])('drops %s, whose pages are never an event', (applyUrl) => {
+    expect(looksLikeArticle(hit('Energy Conference in California 2026', 'Call for papers open', applyUrl))).toBe(true);
+  });
+});
+
+// Titles from a live search for "Energy" in California, 2026-11-24.
+describe('looksLikeDirectory', () => {
+  it.each([
+    'Energy Conferences & Events in the US — Sovereignty Founders',
+    'Events - California Energy Commission',
+    'Calendar — California Solar & Storage Assoc. (CALSSA)',
+    'Webinars - Clean Energy Group',
+    'Energy Sector, Webinars | JD Supra',
+    'Upcoming Energy Conferences in USA 2026-2027',
+    'Energy Conferences in USA 2026 & 2027 | ACA',
+    'Energy Conferences in California 2026–27',
+  ])('takes "%s" for a list of events', (title) => {
+    expect(looksLikeDirectory(hit(title))).toBe(true);
+  });
+
+  it.each([
+    'Energy Conference 2026: Call for Speakers - OATI',
+    'CALL FOR SPEAKERS - The Battery Show Asia',
+    'Solar Valley Consortium 2026 Virtual Conference - UC Riverside',
+    '2027 Carbon Solutions Forum + Geothermal Day - Energy Dialogues',
+    'California Powers Up: Energy & Policy Solutions Summit August 11, 2026',
+    'ICICT 2027 - 10th International Conference on Information and Computer Technologies',
+    'Expo West 2027 - 15 March, Anaheim',
+  ])('takes "%s" for one event', (title) => {
+    expect(looksLikeDirectory(hit(title))).toBe(false);
+  });
+
+  it('never takes a title that asks for speakers for a list', () => {
+    expect(looksLikeDirectory(hit('Call for Speakers | Events Industry Council 2027'))).toBe(false);
+  });
+});
+
+describe('readPriority', () => {
+  it('reads a call first, then an event page, then the rest, and a list of events last', () => {
+    const order = [
+      hit('Upcoming Energy Conferences in USA 2026-2027', 'Call for papers, submit your abstract'),
+      hit('Energy Policy Notes'),
+      hit('Clean Energy Summit | March 3, 2027'),
+      hit('Energy Conference 2026: Call for Speakers - OATI'),
+    ].sort((a, b) => readPriority(b) - readPriority(a));
+    expect(order.map((h) => h.title)).toEqual([
+      'Energy Conference 2026: Call for Speakers - OATI',
+      'Clean Energy Summit | March 3, 2027',
+      'Energy Policy Notes',
+      'Upcoming Energy Conferences in USA 2026-2027',
+    ]);
   });
 });

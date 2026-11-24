@@ -74,15 +74,20 @@ router.get('/weekly-sync', async (req: Request, res: Response) => {
 });
 
 /**
- * Enrichment batch — process up to 5 unenriched opportunities
- * Triggered by Vercel cron every 5 minutes
+ * Enrichment batch, every 5 minutes: up to 15 rows, three at a time, none
+ * started after 35s. A row is a page fetch (8s, then the reader's 12s) and a
+ * Claude call, typically 5 to 10s in all, so a run ends near 45s, inside the
+ * function's 60s. One row at a time read 5 a run, and a live search's 35
+ * leftover pages waited over half an hour.
  */
+const ENRICHMENT_BATCH = { count: 15, concurrency: 3, timeBudgetMs: 35_000 };
+
 router.get('/enrichment', async (req: Request, res: Response) => {
   if (!verifyCronSecret(req, res)) return;
 
   try {
     console.log('[Cron] Running enrichment batch...');
-    const result = await processNextBatch(5, { timeBudgetMs: CRON_TIME_BUDGET_MS });
+    const result = await processNextBatch(ENRICHMENT_BATCH.count, ENRICHMENT_BATCH);
     console.log(`[Cron] Enrichment batch complete: ${result.processed} processed, ${result.enriched} enriched, ${result.verified} verified`);
     res.json({ success: true, ...result });
   } catch (error) {

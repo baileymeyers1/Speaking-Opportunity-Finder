@@ -185,7 +185,8 @@ async function processNextUnenriched(): Promise<WorkerOutcome> {
  */
 export async function enrichRowsNow(
   ids: readonly string[],
-  concurrency: number = 8
+  // All at once by default, like the new hits read beside them: the live search caps how many it names.
+  concurrency: number = Math.max(1, ids.length)
 ): Promise<{ claimed: number; read: number }> {
   if (!config.claude.apiKey || ids.length === 0) return { claimed: 0, read: 0 };
   const claimed = await claimUnenrichedByIds(prisma, ids);
@@ -383,6 +384,8 @@ export async function getBackgroundEnrichmentStateWithBudget(): Promise<Backgrou
 export interface BatchOptions {
   /** Stop starting new rows once this much wall-clock time has passed. */
   timeBudgetMs?: number;
+  /** Rows read side by side (default 1, one after another). */
+  concurrency?: number;
   now?: () => number;
 }
 
@@ -406,17 +409,29 @@ export async function processNextBatch(count: number, options: BatchOptions = {}
   const startedAt = now();
   const withinBudget = () => options.timeBudgetMs === undefined || now() - startedAt < options.timeBudgetMs;
 
-  let phase: 'enrich' | 'verify' = 'enrich';
-  for (let i = 0; i < count && withinBudget(); i++) {
-    if (phase === 'enrich') {
-      const outcome = await processNextUnenriched();
-      if (outcome === 'processed') continue;
-      if (outcome === 'budget_exhausted') break;
-      phase = 'verify';
+  // Each lane takes rows one after another; the lanes run side by side. Claims
+  // are atomic in the database (claimNextUnenriched, claimNextForVerification),
+  // so two lanes never read the same row.
+  let started = 0;
+  let enrichDone = false;
+  let stopped = false;
+  const lane = async () => {
+    while (!stopped && started < count && withinBudget()) {
+      started++;
+      if (!enrichDone) {
+        const outcome = await processNextUnenriched();
+        if (outcome === 'processed') continue;
+        if (outcome === 'budget_exhausted') {
+          stopped = true;
+          break;
+        }
+        enrichDone = true;
+      }
+      if ((await verifyNext()) !== 'processed') stopped = true;
     }
-    const outcome = await verifyNext();
-    if (outcome !== 'processed') break;
-  }
+  };
+  const lanes = Math.max(1, Math.min(options.concurrency ?? 1, count));
+  await Promise.all(Array.from({ length: lanes }, lane));
 
   return {
     processed: state.processed - before.processed,

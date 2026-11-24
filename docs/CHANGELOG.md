@@ -2,6 +2,17 @@
 
 Reverse chronological. Current state lives in `docs/STATUS.md`.
 
+## 2026-11-24: live search keeps more of what it finds
+
+The second step of the plan in `docs/plans/2026-11-24-industry-calendars.md`. A search for "Energy" in California had found 43 pages, read 8 of them (3 were directory pages, 1 a funding call, 2 closed calls), and left 35 for a worker that reads 5 rows every 5 minutes. A week later every one of those rows was deleted, read or not. No schema change.
+- **Live results are kept** (`services/retention.ts`, used by the daily sync's cleanup). A live result now expires like any other row: 36 hours after its deadline, unless saved. A live result that is not listed (closed, not an event, never readable) is deleted 30 days after it was found, so a later search reads the page afresh; the worker gives up on an unreadable hit after the same 30 days. Before, every unsaved live result went after 7 days, listed ones included.
+- **16 reads per search instead of 8** (`SYNC_ENRICH_LIMIT`). Pages and extractions run all at once, so the request waits for its slowest hit, not their sum.
+- **Event pages are read first.** `readPriority` (`liveHitTriage.ts`) puts pages that list many events last ("Energy Conferences in USA 2026-2027", "Events - …", "Calendar — …", a title spanning two years), unless the title itself asks for speakers. They are still stored and read by the worker. The aggregators of pay-to-present conferences (conferenceinusa.com, allconferencealert.com, conferencealerts.co.in, conferenceineurope.org, conferenceindex.org, waset.org) are dropped at triage, live and scheduled.
+- **The worker reads a search's leftovers first and three at a time.** `claimNextUnenriched` claims live-search rows before any other unread row. The cron reads up to 15 rows a run, three side by side, none started after 35s. One local run read 15 in 30.3s.
+- **Two concurrency bugs found on the way.** The daily usage counter created its row for the day with an `upsert` whose update was empty, which Prisma runs as a find then a create. The first callers of a day raced each other and all but one failed on the primary key. A live search's 8 parallel reads could already hit this just after midnight UTC. It is now `createMany` with `skipDuplicates`; the new test fails 3 runs in 3 on the old code. And `claimNextUnenriched` gave up when other workers had taken its five candidates, which would have read as "nothing waiting". It now asks again.
+- **Measured.** The same "Energy" + California search on the local database: 37 candidate pages (the aggregator pages are gone), 16 read in 11.4s, 3 shown (2 before), 22 left for the worker. Most of the extra reads were energy procurement pages ("Solicitations", "RFO", "Bids & RFPs"). In energy, "call for proposals" means a request for bids, which is a fix for the query-wording step.
+- **Tests.** `retention.db.test.ts` checks both cleanup rules against Postgres, read-only and scoped to its own rows. `enrichmentBudget.db.test.ts` gained the live-first claim, a batch read three at a time with each row read once, and same-moment slot reservations. The triage tests use titles from the real search. Server: 777 tests, 26 of them new.
+
 ## 2026-11-24 — Location filter matches places, not substrings
 
 Found from a search for "Energy" in "california" that returned nothing although production lists 6 California energy calls. No schema change.
