@@ -11,11 +11,21 @@
 export const LIVE_SEARCH_SOURCE = 'Live Search';
 /** Hits the scheduled Linkup queries stored (see scrapers/linkupcfp.ts). */
 export const LINKUP_SEARCH_SOURCE = 'Linkup Search';
+/**
+ * Pages a read page linked to: an event's own site named by a listing, or
+ * the events a directory lists (services/followedLinks.ts). Like a search
+ * hit, a link is only an address and a name until its page is read.
+ */
+export const FOLLOWED_LINK_SOURCE = 'Followed Link';
 
-export const SEARCH_SOURCES: readonly string[] = [LIVE_SEARCH_SOURCE, LINKUP_SEARCH_SOURCE];
+export const SEARCH_SOURCES: readonly string[] = [LIVE_SEARCH_SOURCE, LINKUP_SEARCH_SOURCE, FOLLOWED_LINK_SOURCE];
 
 export function isSearchSource(source: string): boolean {
   return SEARCH_SOURCES.includes(source);
+}
+
+export function isFollowedLink(source: string): boolean {
+  return source === FOLLOWED_LINK_SOURCE;
 }
 
 export interface ReadState {

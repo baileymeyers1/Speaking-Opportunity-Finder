@@ -12,7 +12,10 @@ import {
   serializeDateConfidence,
   type DateConfidence,
   type ExtractionResult,
+  type MergedOpportunity,
 } from './extraction.js';
+import { followCallPage, type FollowDeps } from './callFollowing.js';
+import { queueFollowedLinks } from './followedLinks.js';
 import { readPage } from './pageReader.js';
 import { expandQuery, matchesAllTerms, searchTerms } from './searchTerms.js';
 import { looksLikeArticle, readPriority } from './liveHitTriage.js';
@@ -75,6 +78,12 @@ export interface EnrichedLiveResult {
   extracted?: boolean;
   /** True when the apply page itself was fetched (so the extraction counts as a verification). */
   pageFetched?: boolean;
+  /** Set by extraction: speakers pay to present; null when the page does not say. */
+  payToPresent?: boolean | null;
+  /** Where to apply when the call is on another page than `applyUrl` (callFollowing.ts). */
+  callUrl?: string | null;
+  /** The read's answer, kept to queue the links it found once the hit is stored (followedLinks.ts). */
+  linksFound?: ExtractionResult;
 }
 
 // Search query templates for different industries
@@ -709,6 +718,17 @@ export async function performLiveSearch(
   } catch (error) {
     console.error('[LiveSearch] Failed to persist live results:', error);
   }
+  // What the pages read in the request pointed to (a listing's event site, a directory's
+  // events) is stored for the worker, now that the hits that found it are stored.
+  try {
+    await Promise.all(
+      fresh
+        .filter((r) => r.linksFound)
+        .map((r) => queueFollowedLinks({ applyUrl: r.applyUrl, source: LIVE_SEARCH_SOURCE, title: r.title }, r.linksFound!))
+    );
+  } catch (error) {
+    console.error('[LiveSearch] Could not queue linked pages:', error);
+  }
 
   let summary: HitSummary;
   try {
@@ -805,7 +825,11 @@ interface LinkupResponse {
  * See mergeExtraction for the rules.
  */
 export function applyExtractionToLiveResult(result: EnrichedLiveResult, extraction: ExtractionResult, now: Date = new Date()): void {
-  const merged = mergeExtraction(liveResultToScraperResult(result), extraction, now);
+  applyMergedToLiveResult(result, mergeExtraction(liveResultToScraperResult(result), extraction, now));
+}
+
+/** Copy what a read (and its call page, when it was followed) found onto a live result. */
+export function applyMergedToLiveResult(result: EnrichedLiveResult, merged: MergedOpportunity): void {
   result.title = merged.title;
   result.organization = merged.organization;
   result.location = merged.location ?? null;
@@ -822,6 +846,19 @@ export function applyExtractionToLiveResult(result: EnrichedLiveResult, extracti
   result.isRelevant = merged.isRelevant;
   result.hasOpenCall = merged.hasOpenCall;
   result.dateConfidence = merged.dateConfidence;
+  result.payToPresent = merged.payToPresent;
+  result.callUrl = merged.callUrl;
+}
+
+/** A live search reads a call page the way it reads a hit: the reader's shorter wait, and never refused by the daily limit (a search caps itself). */
+function liveFollowDeps(now: Date): FollowDeps {
+  return {
+    readPage: (url) => readPage(url, { readerTimeoutMs: LIVE_READER_TIMEOUT_MS }),
+    extract: extractOpportunity,
+    reserveCall: async () => true,
+    releaseCall: async () => {},
+    now,
+  };
 }
 
 /**
@@ -858,10 +895,15 @@ async function enrichResultsFromPages(
         organization: r.organization,
         description: r.description,
         pageText,
+        links: page.ok ? page.links : undefined,
         applyUrl: r.applyUrl,
       });
       if (outcome.status === 'ok') {
-        applyExtractionToLiveResult(r, outcome.result);
+        // When the page names its call page, that page is read too, in the request.
+        const now = new Date();
+        const first = { merged: mergeExtraction(liveResultToScraperResult(r), outcome.result, now), extraction: outcome.result };
+        applyMergedToLiveResult(r, await followCallPage(first, liveFollowDeps(now)));
+        r.linksFound = outcome.result;
         r.extracted = true;
         extractedCount++;
       } else if (outcome.status === 'failed') {
@@ -1030,6 +1072,8 @@ export function buildLiveCreateData(result: EnrichedLiveResult, now: Date = new 
     isRelevant: result.isRelevant !== false,
     hasOpenCall: extracted ? (result.hasOpenCall ?? null) : null,
     dateConfidence: serializeDateConfidence(result.dateConfidence),
+    payToPresent: extracted ? (result.payToPresent ?? null) : null,
+    callUrl: extracted ? (result.callUrl ?? null) : null,
     enrichmentStatus: extracted ? 'enriched' : null,
     enrichedAt: extracted ? now : null,
     verifiedAt: extracted && result.pageFetched ? now : null,

@@ -31,6 +31,8 @@ function merged(overrides: Partial<MergedOpportunity> = {}): MergedOpportunity {
     isRelevant: true,
     hasOpenCall: true,
     dateConfidence: { eventDate: 'high', cfpDeadline: 'low', location: 'high' },
+    payToPresent: null,
+    callUrl: null,
     ...overrides,
   };
 }
@@ -80,7 +82,7 @@ describe('verificationCandidates', () => {
   it('stops retrying a search hit that could not be read for a month', () => {
     for (const candidate of verificationCandidates(NOW)) {
       expect(JSON.stringify(candidate.where)).toContain(
-        '{"NOT":{"source":{"in":["Live Search","Linkup Search"]},"enrichmentStatus":{"not":"enriched"},"createdAt":{"lt":"2026-10-03T15:30:00.000Z"}}}'
+        '{"NOT":{"source":{"in":["Live Search","Linkup Search","Followed Link"]},"enrichmentStatus":{"not":"enriched"},"createdAt":{"lt":"2026-10-03T15:30:00.000Z"}}}'
       );
     }
   });

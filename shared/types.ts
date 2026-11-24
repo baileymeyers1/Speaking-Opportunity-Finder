@@ -175,6 +175,10 @@ export interface OpportunityBase<DateType> {
    * speakers: listed, flagged. Null or absent = not judged, treated as an open call.
    */
   hasOpenCall?: boolean | null;
+  /** Where to apply when the event's call is on another page than `applyUrl`; null or absent = apply at `applyUrl`. */
+  callUrl?: string | null;
+  /** True when the page says speakers must pay to present (registration, publication or presentation fee); null = not said. */
+  payToPresent?: boolean | null;
   /** True for a row produced by a live search that has not been stored yet. */
   isLiveResult?: boolean;
   /** The page a live result was found on. */

@@ -4,9 +4,11 @@ import {
   extractOpportunity,
   mergeExtraction,
   type ExtractionInput,
+  type ExtractionResult,
   type MergedOpportunity,
 } from './extraction.js';
 import type { PageFetchResult } from './pageText.js';
+import type { PageLink } from './pageLinks.js';
 import { isSearchSource } from './searchSources.js';
 
 /**
@@ -19,12 +21,14 @@ export type EnrichmentStatus = 'enriched' | 'failed' | 'skipped';
 
 /** The merged row when the extraction ran; otherwise the row as it was, with why. */
 export type EnrichedOpportunity =
-  | (MergedOpportunity & { enrichmentStatus: 'enriched'; enrichedAt: Date })
+  | (MergedOpportunity & { enrichmentStatus: 'enriched'; enrichedAt: Date; /** What the read said, links included, for the follow-ups. */ extraction: ExtractionResult })
   | (ScraperResult & { enrichmentStatus: 'failed' | 'skipped'; enrichedAt: Date; enrichmentError?: string });
 
 export interface EnrichOptions {
   /** Visible text of `applyUrl`, when it was fetched. */
   pageText?: string | null;
+  /** The links on that page (pageLinks.ts). */
+  links?: readonly PageLink[];
   now?: Date;
 }
 
@@ -58,7 +62,7 @@ export function shouldSkipEnrichment(result: ScraperResult, pageText?: string | 
 export type EnrichmentPlan =
   | { action: 'closed'; reason: string }
   | { action: 'skip'; reason: string }
-  | { action: 'extract'; pageText: string | null; pageError: string | null };
+  | { action: 'extract'; pageText: string | null; pageLinks: PageLink[]; pageError: string | null };
 
 /**
  * Decide what to do with a row given the outcome of fetching its apply page.
@@ -78,15 +82,16 @@ export function planEnrichment(result: ScraperResult, page: PageFetchResult): En
   const pageText = page.ok ? page.text : null;
   const skipReason = shouldSkipEnrichment(result, pageText);
   if (skipReason) return { action: 'skip', reason: skipReason };
-  return { action: 'extract', pageText, pageError: page.ok ? null : page.message };
+  return { action: 'extract', pageText, pageLinks: page.ok ? (page.links ?? []) : [], pageError: page.ok ? null : page.message };
 }
 
-export function toExtractionInput(result: ScraperResult, pageText?: string | null): ExtractionInput {
+export function toExtractionInput(result: ScraperResult, pageText?: string | null, links?: readonly PageLink[]): ExtractionInput {
   return {
     title: result.title,
     organization: result.organization,
     description: result.description,
     pageText,
+    links,
     applyUrl: result.applyUrl,
   };
 }
@@ -110,7 +115,7 @@ export async function enrichOpportunity(
     return { ...result, enrichmentStatus: 'skipped', enrichedAt: now, enrichmentError: skipReason };
   }
 
-  const outcome = await extractOpportunity(toExtractionInput(result, options.pageText), { now });
+  const outcome = await extractOpportunity(toExtractionInput(result, options.pageText, options.links), { now });
 
   if (outcome.status === 'skipped') {
     return { ...result, enrichmentStatus: 'skipped', enrichedAt: now, enrichmentError: outcome.reason };
@@ -121,5 +126,5 @@ export async function enrichOpportunity(
   }
 
   const merged = mergeExtraction(result, outcome.result, now);
-  return { ...merged, enrichmentStatus: 'enriched', enrichedAt: now };
+  return { ...merged, enrichmentStatus: 'enriched', enrichedAt: now, extraction: outcome.result };
 }

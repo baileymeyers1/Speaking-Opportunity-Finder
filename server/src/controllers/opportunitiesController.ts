@@ -46,6 +46,8 @@ function liveResultToOpportunity(r: liveSearchService.EnrichedLiveResult): Oppor
     isLiveResult: true,
     liveSearchUrl: r.liveSearchUrl,
     matchesLocationFilter: r.matchesLocationFilter,
+    callUrl: r.callUrl ?? null,
+    payToPresent: r.payToPresent ?? null,
     hasOpenCall: r.hasOpenCall ?? null,
   };
 }

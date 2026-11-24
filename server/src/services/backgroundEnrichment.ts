@@ -21,7 +21,33 @@ import {
 } from './enrichmentBudget.js';
 import { mapWithConcurrency } from '../scrapers/lib/html.js';
 import { buildEnrichmentUpdate, buildGoneUpdate, buildVerificationErrorUpdate, buildVerificationUpdate } from './verification.js';
-import { isSearchSource } from './searchSources.js';
+import { isFollowedLink, isSearchSource } from './searchSources.js';
+import { followCallPage, type FollowDeps } from './callFollowing.js';
+import { queueFollowedLinks, type LinkingPage } from './followedLinks.js';
+import type { ExtractionResult } from './extraction.js';
+import { robotsAllows } from './robots.js';
+
+/** The worker reads a call page with the same reader, and its extraction is one more call against today's budget. */
+function workerFollowDeps(dailyLimit: number, now: Date): FollowDeps {
+  return {
+    readPage: (url) => readPage(url),
+    extract: extractOpportunity,
+    reserveCall: async () => (await reserveEnrichmentSlot(prisma, dailyLimit)).reserved,
+    releaseCall: () => releaseEnrichmentSlot(prisma),
+    now,
+  };
+}
+
+/** Stores what a read pointed to; a failure here never fails the read that found it. */
+async function queueLinks(from: LinkingPage, extraction: ExtractionResult): Promise<void> {
+  try {
+    await queueFollowedLinks(from, extraction);
+  } catch (error) {
+    console.error('[FollowedLinks] Could not queue links:', error instanceof Error ? error.message : error);
+  }
+}
+
+const ROBOTS_DISALLOW = 'robots.txt does not allow reading this page';
 
 /**
  * In-process counters for the admin dashboard. These are informational only;
@@ -81,6 +107,7 @@ function toScraperResult(opportunity: OpportunityRow): ScraperResult {
     applyUrl: opportunity.applyUrl,
     source: opportunity.source,
     sourceUrl: opportunity.sourceUrl || undefined,
+    payToPresent: opportunity.payToPresent,
   };
 }
 
@@ -205,6 +232,14 @@ async function enrichClaimedRow(
   dailyLimit: number = DAILY_ENRICHMENT_LIMIT
 ): Promise<WorkerOutcome> {
   try {
+    // A page reached by following a link is read only when its site lets every crawler read it.
+    if (isFollowedLink(opportunity.source) && !(await robotsAllows(opportunity.applyUrl))) {
+      await markSkipped(opportunity.id, ROBOTS_DISALLOW);
+      state.processed++;
+      state.skipped++;
+      return 'processed';
+    }
+
     const scraperResult = toScraperResult(opportunity);
     const page = await readPage(opportunity.applyUrl);
     const plan = planEnrichment(scraperResult, page);
@@ -238,17 +273,23 @@ async function enrichClaimedRow(
       `Background enrichment: Processing "${opportunity.title}" (attempt ${opportunity.enrichmentAttempts}/${MAX_ENRICHMENT_ATTEMPTS}, page ${plan.pageText ? `${plan.pageText.length} chars` : `unavailable: ${plan.pageError}`})`
     );
 
-    const enriched = await enrichOpportunity(scraperResult, { pageText: plan.pageText });
+    const enriched = await enrichOpportunity(scraperResult, { pageText: plan.pageText, links: plan.pageLinks });
 
     if (enriched.enrichmentStatus === 'enriched') {
       // enrichOpportunity already merged the extraction into the row (extraction.ts rules).
       // Extracting from the live page is a verification; from the description alone it is not.
+      // A page that names its call page has that page read too (callFollowing.ts).
+      const pageRead = plan.pageText !== null;
+      const final = pageRead
+        ? await followCallPage({ merged: enriched, extraction: enriched.extraction }, workerFollowDeps(dailyLimit, enriched.enrichedAt))
+        : enriched;
       await prisma.opportunity.update({
         where: { id: opportunity.id },
-        data: buildEnrichmentUpdate(enriched, { pageRead: plan.pageText !== null, now: enriched.enrichedAt }),
+        data: buildEnrichmentUpdate(final, { pageRead, now: enriched.enrichedAt }),
       });
 
       await assignEventIfMissing(opportunity.id);
+      if (pageRead) await queueLinks(opportunity, enriched.extraction);
       state.enriched++;
       if (enriched.isClosed) console.log(`Background enrichment: Marked "${opportunity.title}" as closed CFP`);
       if (!enriched.isRelevant) console.log(`Background enrichment: Marked "${opportunity.title}" as not a speaking opportunity`);
@@ -304,6 +345,12 @@ async function verifyNext(): Promise<WorkerOutcome> {
     }
 
     const now = new Date();
+    if (isFollowedLink(row.source) && !(await robotsAllows(row.applyUrl))) {
+      await prisma.opportunity.update({ where: { id: row.id }, data: buildVerificationErrorUpdate(ROBOTS_DISALLOW, now) });
+      state.processed++;
+      state.verifyFailed++;
+      return 'processed';
+    }
     const page = await readPage(row.applyUrl);
     state.processed++;
     state.lastRunTime = now;
@@ -331,7 +378,7 @@ async function verifyNext(): Promise<WorkerOutcome> {
     }
 
     const scraperResult = toScraperResult(row);
-    const outcome = await extractOpportunity(toExtractionInput(scraperResult, page.text), { now });
+    const outcome = await extractOpportunity(toExtractionInput(scraperResult, page.text, page.links), { now });
     if (outcome.status !== 'ok') {
       if (outcome.status === 'skipped') await releaseEnrichmentSlot(prisma);
       const error = outcome.status === 'failed' ? outcome.error : outcome.reason;
@@ -341,7 +388,12 @@ async function verifyNext(): Promise<WorkerOutcome> {
       return 'processed';
     }
 
-    const merged = mergeExtraction(scraperResult, outcome.result, now);
+    // Every check reads the call page again when the event's page names one, so an event
+    // to watch becomes an open call the week its call goes up.
+    const merged = await followCallPage(
+      { merged: mergeExtraction(scraperResult, outcome.result, now), extraction: outcome.result },
+      workerFollowDeps(DAILY_ENRICHMENT_LIMIT, now)
+    );
     // A search hit enrichment could not read is enriched by the first check that can.
     const firstRead = isSearchSource(row.source) && row.enrichmentStatus !== 'enriched';
     await prisma.opportunity.update({
@@ -349,6 +401,7 @@ async function verifyNext(): Promise<WorkerOutcome> {
       data: firstRead ? buildEnrichmentUpdate(merged, { pageRead: true, now }) : buildVerificationUpdate(row, merged, now),
     });
     if (firstRead) await assignEventIfMissing(row.id);
+    await queueLinks(row, outcome.result);
     state.verified++;
     const deadlineChanged = (merged.cfpDeadline?.getTime() ?? null) !== (row.cfpDeadline?.getTime() ?? null);
     console.log(
