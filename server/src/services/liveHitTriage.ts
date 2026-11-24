@@ -61,9 +61,27 @@ function hostname(url: string): string {
   }
 }
 
+/**
+ * Titles of procurement and funding notices. Searches that say "call for
+ * proposals" bring them in by the dozen (an energy search on 2026-11-24 read
+ * eight: RFOs, "Solicitations", "Bids & RFPs", a funding call), and none asks
+ * for speakers. "Procurement" alone is left out: a procurement summit is a
+ * conference like any other.
+ */
+const PROCUREMENT_TITLE_PATTERNS: readonly RegExp[] = [
+  /\b(rfps?|rfos?|rfqs?|rfis?)\b/i,
+  /\brequests? for (proposals?|qualifications|offers|information|bids)\b/i,
+  /\bsolicitations?\b/i,
+  /\b(bids|tenders)\b/i,
+  /\bfunding (calls?|opportunit(y|ies)|workshops?)\b/i,
+  /\bjoint call\b/i,
+];
+
+/** A page that is never a call for speakers: an article, a forum or social post, an aggregator page or a procurement notice. */
 export function looksLikeArticle(hit: TriageInput): boolean {
   const host = hostname(hit.applyUrl);
   if (NON_EVENT_HOSTS.some((blocked) => host === blocked || host.endsWith(`.${blocked}`))) return true;
+  if (PROCUREMENT_TITLE_PATTERNS.some((pattern) => pattern.test(hit.title))) return true;
   return ARTICLE_TITLE_PATTERNS.some((pattern) => pattern.test(hit.title));
 }
 

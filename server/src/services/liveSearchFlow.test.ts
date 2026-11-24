@@ -355,7 +355,8 @@ describe('buildSearchQueries', () => {
   it('asks the ways calls are worded and other formats, with PR spelled out', () => {
     const text = buildSearchQueries('AI for PR', [], [], now).map((q) => q.q).join(' | ');
     expect(text).toContain('call for speakers');
-    expect(text).toContain('call for proposals');
+    expect(text).toContain('call for presentations');
+    expect(text).not.toContain('call for proposals');
     expect(text).toContain('podcast guest');
     expect(text).toContain('public relations');
   });

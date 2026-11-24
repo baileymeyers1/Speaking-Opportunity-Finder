@@ -122,3 +122,26 @@ describe('readPriority', () => {
     ]);
   });
 });
+
+// Titles from a live search for "Energy" in California, 2026-11-24.
+describe('procurement and funding notices', () => {
+  it.each([
+    '2026 Clean Energy and Reliability RFO | Clean Power Alliance',
+    'Request For Proposals - Central Coast Community Energy',
+    'Solicitations - SVCE',
+    'California Renewable Energy Government Bids & RFPs',
+    'Ava Community Energy / San José Clean Energy 2026 RFO For Long Term Energy',
+    'Joint Call 2026: Clean Energy Funding - CETPartnership',
+    'Funding Workshops - California Energy Commission - CA.gov',
+  ])('drops "%s"', (title) => {
+    expect(looksLikeArticle(hit(title))).toBe(true);
+  });
+
+  it.each([
+    'Call for Proposals: 2027 Annual Conference on Public Procurement',
+    'ProcureCon Indirect 2027 – Call for Speakers',
+    'Energy Conference 2026: Call for Speakers - OATI',
+  ])('keeps "%s"', (title) => {
+    expect(looksLikeArticle(hit(title))).toBe(false);
+  });
+});

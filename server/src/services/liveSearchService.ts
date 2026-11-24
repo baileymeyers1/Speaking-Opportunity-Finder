@@ -553,7 +553,7 @@ export interface LiveQuery {
  * year's events are already open (same as linkupQueries.ts).
  *
  * A search term gets several angles, because calls are worded many ways:
- * "call for speakers", "call for proposals / submit a session", and formats
+ * "call for speakers", "call for presentations / submit a session", and formats
  * beyond conferences (podcast guests, panels, webinars). Ambiguous
  * abbreviations are spelled out ("PR" → "public relations") for the engine;
  * the relevance check accepts both (searchTerms.ts). A variant limited to
@@ -574,7 +574,9 @@ export function buildSearchQueries(query: string, industries: string[], location
     const expanded = expandQuery(query);
     const queries: LiveQuery[] = [
       { q: `${query} conference call for speakers ${years}${locationSuffix}` },
-      { q: `${expanded} call for proposals submit a session ${years}${locationSuffix}` },
+      // "Call for presentations", not "proposals": in energy and government a call for
+      // proposals is a request for bids (measured 2026-11-24: 11 → 16 explicit calls in 20 hits).
+      { q: `${expanded} call for presentations submit a session ${years}${locationSuffix}` },
       { q: `${expanded} speakers wanted podcast guest panel webinar ${years}${locationSuffix}` },
     ];
     if (industryTerms.length > 0) {
@@ -687,7 +689,9 @@ export async function performLiveSearch(
   //    word in the title, tags or snippet. Same rule as the stored search.
   const terms = searchTerms(query);
   if (terms.length > 0) {
-    hits = hits.filter(r => matchesAllTerms(terms, [r.title, r.industries.join(' '), r.description]));
+    // A sector word's phrases count in the title only: a hit's tags are regex guesses
+    // seeded with the sector searched for, and its sectors likewise, so neither is passed.
+    hits = hits.filter(r => matchesAllTerms(terms, [r.title, r.industries.join(' '), r.description], { headline: [r.title] }));
   }
 
   // 3. Articles about the topic (how-tos, listicles, blogs, forums) are never calls.
