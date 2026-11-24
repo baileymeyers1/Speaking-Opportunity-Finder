@@ -130,14 +130,15 @@ describe('enrichment budget against Postgres', () => {
   });
 
   it('claims an unenriched row once and increments its attempt counter', async () => {
-    const row = await prisma.opportunity.create({ data: opportunityRow('claim-me') });
+    // Dated ahead of real time, so an unread row another suite has just written is older.
+    const row = await prisma.opportunity.create({ data: { ...opportunityRow('claim-me'), createdAt: new Date(Date.now() + 24 * 60 * 60 * 1000) } });
 
     const first = await claimNextUnenriched(prisma, now);
     expect(first?.id).toBe(row.id);
     expect(first?.enrichmentAttempts).toBe(1);
 
-    // The claim is fresh, so a second worker finds nothing.
-    expect(await claimNextUnenriched(prisma, now)).toBeNull();
+    // The claim is fresh, so a second worker cannot take the same row.
+    expect((await claimNextUnenriched(prisma, now))?.id).not.toBe(row.id);
 
     const stored = await prisma.opportunity.findUniqueOrThrow({ where: { id: row.id } });
     expect(stored.enrichmentClaimedAt?.toISOString()).toBe(now.toISOString());
@@ -163,12 +164,15 @@ describe('enrichment budget against Postgres', () => {
       ['a', 'b', 'c', 'd', 'e', 'f'].map((suffix) => prisma.opportunity.create({ data: { ...searchHit(`batch-${suffix}`), source: 'Live Search' } }))
     );
     const page = { ok: true as const, status: 200, text: 'Call for speakers: submit a talk on AI in communications by the deadline.' };
+    // Each read holds until three are in flight (or a second passes), so the count
+    // does not depend on how fast the claims run on a loaded test database.
     let inFlight = 0;
     let mostInFlight = 0;
     vi.mocked(readPage).mockImplementation(async () => {
       inFlight++;
       mostInFlight = Math.max(mostInFlight, inFlight);
-      await new Promise((resolve) => setTimeout(resolve, 30));
+      const until = Date.now() + 1000;
+      while (inFlight < 3 && mostInFlight < 3 && Date.now() < until) await new Promise((resolve) => setTimeout(resolve, 5));
       inFlight--;
       return page;
     });
