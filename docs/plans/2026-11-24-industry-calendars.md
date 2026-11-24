@@ -147,7 +147,7 @@ For these, the routes are scheduled search with the wording associations use ("c
    - read 16 pages per search instead of 8;
    - have the worker read a search's waiting hits first;
    - hand directory pages to the worker instead of reading them in the request.
-3. **The extraction follows links and labels pay-to-present events.**
+3. **The extraction follows links and labels pay-to-present events.** Done (PR "link following"); robots.txt is checked for followed links only, for `*`.
    - The page reader also returns the page's links.
    - The one extraction call returns `callPageUrl` (the event's call-for-speakers page), `officialUrl` (when the page describes an event hosted elsewhere), `listedEvents` (when the page is a directory) and `payToPresent`.
    - The worker follows each link once.

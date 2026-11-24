@@ -2,6 +2,17 @@
 
 Reverse chronological. Current state lives in `docs/STATUS.md`.
 
+## 2026-11-24: following links, and a label where speakers pay
+
+Step 3 of the plan in `docs/plans/2026-11-24-industry-calendars.md`. Schema: two nullable columns, `payToPresent` and `callUrl`, no default.
+- **The page reader returns the page's links** (`services/pageLinks.ts`): up to 60, menus included (the text reader drops navigation, and an event's "Call for Speakers" link is usually there), calls first, then other sites, then the rest; anchors, mail, social, asset and chore links (sign-in, privacy, cart) left out. Our fetch takes them from the HTML, the Linkup reader from its raw HTML or its markdown.
+- **The one extraction answers four more things**: `callPageUrl` (the event's call page when it is not this page), `officialUrl` (the event's own site when this page is a listing of it), up to 25 `listedEvents` (a directory's or calendar's events) and `payToPresent`. A URL that is not one of the page's links, or is the page itself, is dropped: the model cannot invent an address.
+- **The call page is read in the same read** (`services/callFollowing.ts`): the worker's first read, every verification and live search. It replaces what the event page said only when it holds an open call; the row then applies at `callUrl` and keeps `applyUrl` (scrapers and searches find rows by it). A closed call page changes nothing: it may be last year's.
+- **Official sites and listed events become `Followed Link` rows** (`services/followedLinks.ts`), hidden until read like search hits, with the page they came from in `sourceUrl`. Stored addresses, social pages and the pay-to-present aggregators are skipped; a followed page never queues another directory. The worker reads one only when the site's robots.txt allows every crawler (`services/robots.ts`).
+- **"Speakers pay"** on a row, and "Fee to present" on the call page, when the page says speakers must pay a registration, publication or presentation fee. A label, not a filter (decided 2026-11-24). Apply goes to `callUrl` when there is one.
+- **Measured** on 16 real pages, 17 Claude calls: one of 11 production "to watch" events had an open call on its call page (TIIKM's education conference, which also asks speakers to pay); three listed "events" were lists of events; Sovereignty Founders' energy page gave 10 events to follow, Renewables Calendar 5; a calendar entry and a pay-to-present listing named the official sites.
+- **Tests.** `pageLinks`, `callFollowing`, `followedLinks` (fake database: a followed row is unread and claimable, which the shared test database must not hold), `robots`, the extraction's new fields, and live search reading a call page and queuing an official site. Server: 856.
+
 ## 2026-11-24: search words that name a sector, and no more procurement pages
 
 Steps 6 and 7 of the plan in `docs/plans/2026-11-24-industry-calendars.md`, the parts that need no schema change. Stacked on the live search branch.
