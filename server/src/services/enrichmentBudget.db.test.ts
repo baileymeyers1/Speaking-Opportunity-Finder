@@ -27,7 +27,7 @@ vi.mock('./enrichmentService.js', async (importOriginal) => {
 });
 
 import { prisma } from '../lib/prisma.js';
-import { enrichRowsNow } from './backgroundEnrichment.js';
+import { enrichRowsNow, processNextBatch } from './backgroundEnrichment.js';
 import { readPage } from './pageReader.js';
 import {
   claimNextUnenriched,
@@ -101,6 +101,12 @@ describe('enrichment budget against Postgres', () => {
     expect(await getTodayEnrichmentCount(prisma, now)).toBe(1);
   });
 
+  it('reserves the first slots of a day for callers that arrive together', async () => {
+    const outcomes = await Promise.all(Array.from({ length: 6 }, () => reserveEnrichmentSlot(prisma, 4, now)));
+    expect(outcomes.filter((outcome) => outcome.reserved)).toHaveLength(4);
+    expect(await getTodayEnrichmentCount(prisma, now)).toBe(4);
+  });
+
   it('keeps the reader cap apart from the Claude budget, in the same table', async () => {
     expect(pageReaderUsageKey(now)).toBe('2026-11-03:reader');
     expect(await reservePageReaderSlot(prisma, 2, now)).toEqual({ reserved: true, count: 1 });
@@ -136,6 +142,48 @@ describe('enrichment budget against Postgres', () => {
     const stored = await prisma.opportunity.findUniqueOrThrow({ where: { id: row.id } });
     expect(stored.enrichmentClaimedAt?.toISOString()).toBe(now.toISOString());
     expect(stored.enrichmentAttempts).toBe(1);
+  });
+
+  it('claims what a live search left unread before newer rows from anywhere else', async () => {
+    // Dated ahead of real time, so rows another suite has just written are older than these.
+    const tomorrow = Date.now() + 24 * 60 * 60 * 1000;
+    const live = await prisma.opportunity.create({
+      data: { ...searchHit('live-leftover'), source: 'Live Search', createdAt: new Date(tomorrow - 60 * 60 * 1000) },
+    });
+    const scheduled = await prisma.opportunity.create({ data: { ...searchHit('scheduled-newer'), createdAt: new Date(tomorrow) } });
+    const scraped = await prisma.opportunity.create({ data: { ...opportunityRow('scraped-newest'), createdAt: new Date(tomorrow) } });
+
+    expect((await claimNextUnenriched(prisma, now))?.id).toBe(live.id);
+    const next = [(await claimNextUnenriched(prisma, now))?.id, (await claimNextUnenriched(prisma, now))?.id];
+    expect(next.sort()).toEqual([scheduled.id, scraped.id].sort());
+  });
+
+  it('reads a batch several rows at a time, each row once', async () => {
+    const rows = await Promise.all(
+      ['a', 'b', 'c', 'd', 'e', 'f'].map((suffix) => prisma.opportunity.create({ data: { ...searchHit(`batch-${suffix}`), source: 'Live Search' } }))
+    );
+    const page = { ok: true as const, status: 200, text: 'Call for speakers: submit a talk on AI in communications by the deadline.' };
+    let inFlight = 0;
+    let mostInFlight = 0;
+    vi.mocked(readPage).mockImplementation(async () => {
+      inFlight++;
+      mostInFlight = Math.max(mostInFlight, inFlight);
+      await new Promise((resolve) => setTimeout(resolve, 30));
+      inFlight--;
+      return page;
+    });
+
+    try {
+      const result = await processNextBatch(rows.length, { concurrency: 3 });
+      expect(result.enriched).toBe(rows.length);
+    } finally {
+      vi.mocked(readPage).mockReset();
+      vi.mocked(readPage).mockImplementation(async () => page);
+    }
+
+    expect(mostInFlight).toBe(3);
+    const stored = await prisma.opportunity.findMany({ where: { id: { in: rows.map((row) => row.id) } } });
+    expect(stored.every((row) => row.enrichmentStatus === 'enriched' && row.enrichmentAttempts === 1)).toBe(true);
   });
 
   it('claims named rows for a live search, skipping rows another worker holds or that are done', async () => {
