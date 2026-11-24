@@ -94,7 +94,7 @@ export function MultiLocationInput({
         </div>
       )}
       <p className="text-xs text-muted-foreground mt-1">
-        Type a location and press Enter or comma to add multiple.
+        Press Enter or type a comma to add another place. Calls held online are listed after the ones in the place.
       </p>
     </div>
   );
