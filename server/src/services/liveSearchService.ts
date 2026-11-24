@@ -14,7 +14,7 @@ import {
 } from './extraction.js';
 import { readPage } from './pageReader.js';
 import { expandQuery, matchesAllTerms, searchTerms } from './searchTerms.js';
-import { callSignal, looksLikeArticle } from './liveHitTriage.js';
+import { looksLikeArticle, readPriority } from './liveHitTriage.js';
 import { LIVE_SEARCH_SOURCE } from './opportunityQuery.js';
 import {
   backgroundChecksResumeAt,
@@ -29,8 +29,12 @@ import { buildCreateData } from '../scrapers/persistData.js';
 import type { ScraperResult } from '../scrapers/qualityScore.js';
 import type { PendingLiveHit } from 'shared';
 
-/** Live hits enriched synchronously per request; the enrichment cron finishes the rest. */
-export const SYNC_ENRICH_LIMIT = 8;
+/**
+ * Live hits read and extracted in the request, all at once; the enrichment
+ * cron finishes the rest. 8 read too few to find the open calls among a
+ * search's 40-odd pages; the request waits for its slowest hit, not their sum.
+ */
+export const SYNC_ENRICH_LIMIT = 16;
 
 export interface EnrichedLiveResult {
   id: string;
@@ -695,8 +699,8 @@ export async function performLiveSearch(
   const fresh = hits.filter(r => !stored.has(r.applyUrl));
 
   // --- Synchronous enrichment of the best new hits only ---
-  // Pages that look like a call go first, so the few in-request reads find the open ones.
-  fresh.sort((a, b) => callSignal(b) - callSignal(a) || b.qualityScore - a.qualityScore);
+  // Pages that look like a call go first and lists of events last, so the in-request reads find the open ones.
+  fresh.sort((a, b) => readPriority(b) - readPriority(a) || b.qualityScore - a.qualityScore);
   const toEnrich = fresh.slice(0, SYNC_ENRICH_LIMIT);
   // Calls the new hits leave over read hits an earlier search stored but nobody has read.
   const waitingToRead = storedHits.waitingIds.slice(0, SYNC_ENRICH_LIMIT - toEnrich.length);

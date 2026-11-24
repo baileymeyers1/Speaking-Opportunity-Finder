@@ -70,7 +70,7 @@ export function LiveSearchSummary({
             <span className="font-normal text-muted-foreground group-open:hidden">(show)</span>
           </summary>
           <p className="mt-2">
-            We have not read these pages yet, so they may not be open calls. Each live search reads up to 8 of them
+            We have not read these pages yet, so they may not be open calls. Each live search reads up to 16 of them
             right away. {backgroundNote(backgroundChecksResumeAt)}
           </p>
           <ul className="mt-2 space-y-1">
