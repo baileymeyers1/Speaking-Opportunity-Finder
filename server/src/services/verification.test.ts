@@ -8,6 +8,7 @@ import {
   verificationWindows,
 } from './verification.js';
 import type { MergedOpportunity } from './extraction.js';
+import { SEARCH_SOURCES } from './searchSources.js';
 
 const NOW = new Date('2026-11-02T15:30:00Z');
 
@@ -80,9 +81,10 @@ describe('verificationCandidates', () => {
   });
 
   it('stops retrying a search hit that could not be read for a month', () => {
+    expect(SEARCH_SOURCES).toEqual(expect.arrayContaining(['Live Search', 'Linkup Search', 'Followed Link', 'thetradeshowcalendar.com']));
     for (const candidate of verificationCandidates(NOW)) {
       expect(JSON.stringify(candidate.where)).toContain(
-        '{"NOT":{"source":{"in":["Live Search","Linkup Search","Followed Link"]},"enrichmentStatus":{"not":"enriched"},"createdAt":{"lt":"2026-10-03T15:30:00.000Z"}}}'
+        JSON.stringify({ NOT: { source: { in: SEARCH_SOURCES }, enrichmentStatus: { not: 'enriched' }, createdAt: { lt: '2026-10-03T15:30:00.000Z' } } })
       );
     }
   });
