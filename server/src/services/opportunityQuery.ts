@@ -1,6 +1,7 @@
 import { Prisma } from '../generated/prisma/client.js';
 import type { Lane, SortBy } from 'shared';
 import type { Sector } from '../lib/sectors.js';
+import { parsePlaces, type LocationPattern, type PlaceQuery } from '../lib/location.js';
 import { SEARCH_SOURCES } from './searchSources.js';
 import { matchesAllTerms, searchTerms, sectorOfTerm, sectorPhrases, termAlternatives, termMatches } from './searchTerms.js';
 
@@ -78,6 +79,26 @@ export function containsInsensitive(value: string): Prisma.StringFilter {
   return { contains: value, mode: 'insensitive' };
 }
 
+/** The places a location filter names; the controller joins several with "|", since a place can hold a comma. */
+export function filterPlaces(location: string | undefined): PlaceQuery[] {
+  return location ? parsePlaces(location.split('|')) : [];
+}
+
+function patternWhere(pattern: LocationPattern): Prisma.OpportunityWhereInput {
+  const filter: Prisma.StringNullableFilter = pattern.caseSensitive ? {} : { mode: 'insensitive' };
+  filter[pattern.kind] = pattern.value;
+  return { location: filter };
+}
+
+/**
+ * Rows in any of the places, by the patterns `locationMatches` checks in
+ * memory, and rows held online: a speaker anywhere can take those. The list
+ * puts the ones in the place first (`opportunityService`).
+ */
+export function placeWhere(places: readonly PlaceQuery[]): Prisma.OpportunityWhereInput {
+  return { OR: [...places.flatMap((place) => place.patterns.map(patternWhere)), { isRemote: true }] };
+}
+
 /**
  * The Prisma `where` for a filter set: future or missing deadline, visible
  * (`listedConditions`), plus every active filter. A search term narrows by ILIKE on each word; the
@@ -133,15 +154,8 @@ export function buildOpportunityWhere(filters: OpportunityFilters, now: Date = n
     where.isRemote = filters.isRemote;
   }
 
-  // Location filter (supports multiple pipe-separated locations, fuzzy contains)
-  if (filters.location) {
-    const locations = filters.location.split('|').map((l) => l.trim()).filter(Boolean);
-    if (locations.length === 1) {
-      andConditions.push({ location: containsInsensitive(locations[0]) });
-    } else if (locations.length > 1) {
-      andConditions.push({ OR: locations.map((loc) => ({ location: containsInsensitive(loc) })) });
-    }
-  }
+  const places = filterPlaces(filters.location);
+  if (places.length > 0) andConditions.push(placeWhere(places));
 
   if (filters.compensationType && filters.compensationType.length > 0) {
     where.compensationType = { in: filters.compensationType };
