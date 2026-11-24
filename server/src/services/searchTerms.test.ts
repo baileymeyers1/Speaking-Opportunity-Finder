@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { expandQuery, matchesAllTerms, searchTerms, termMatches } from './searchTerms.js';
+import { expandQuery, matchesAllTerms, searchTerms, sectorOfTerm, sectorPhrases, termAlternatives, termMatches } from './searchTerms.js';
 
 describe('searchTerms', () => {
   it('keeps short meaningful words and drops stopwords', () => {
@@ -89,5 +89,40 @@ describe('expandQuery', () => {
 
   it('leaves a query without abbreviations alone', () => {
     expect(expandQuery('developer experience')).toBe('developer experience');
+  });
+});
+
+describe('a word that names a sector', () => {
+  it('knows the sector a word names, and nothing for other words', () => {
+    expect(sectorOfTerm('energy')).toBe('energy');
+    expect(sectorOfTerm('logistics')).toBe('transport');
+    expect(sectorOfTerm('sustainability')).toBe('environment');
+    expect(sectorOfTerm('biotech')).toBe('life-sciences');
+    expect(sectorOfTerm('podcast')).toBeNull();
+  });
+
+  it("also matches the sector's phrases of two words or more, in the headline only", () => {
+    const phrases = sectorPhrases('energy');
+    expect(phrases).toContain('oil and gas');
+    expect(phrases).toContain('offshore wind');
+    // Single words mean too many other things ("Power BI", "battery of tests").
+    expect(phrases).not.toContain('power');
+    expect(phrases).not.toContain('battery');
+    expect(termAlternatives('energy')).toEqual(['energy']);
+    const title = 'Digital Oil and Gas Summit 2026';
+    expect(matchesAllTerms(['energy'], [title], { headline: [title] })).toBe(true);
+    // The same phrase in a description is mostly a passing mention.
+    expect(matchesAllTerms(['energy'], ['Cloud Summit', 'Talks on Kubernetes for oil and gas firms'], { headline: ['Cloud Summit'] })).toBe(false);
+    expect(matchesAllTerms(['energy'], ['Power Platform Days Barcelona'], { headline: ['Power Platform Days Barcelona'] })).toBe(false);
+  });
+
+  it('matches a row the sector holds, whatever its words', () => {
+    expect(matchesAllTerms(['energy'], ['Valve World Expo Americas 2027'], { sectors: ['manufacturing', 'energy'] })).toBe(true);
+    expect(matchesAllTerms(['energy'], ['Valve World Expo Americas 2027'], { sectors: ['manufacturing'] })).toBe(false);
+  });
+
+  it('asks every other word of the query as before', () => {
+    expect(matchesAllTerms(['energy', 'summit'], ['Valve World Expo Americas 2027'], { sectors: ['energy'] })).toBe(false);
+    expect(matchesAllTerms(['energy', 'expo'], ['Valve World Expo Americas 2027'], { sectors: ['energy'] })).toBe(true);
   });
 });
