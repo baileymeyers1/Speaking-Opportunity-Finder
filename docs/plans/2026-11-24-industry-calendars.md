@@ -141,8 +141,8 @@ For these, the routes are scheduled search with the wording associations use ("c
 
 ## Build order
 
-1. **Location matching.** Done on branch `fix/location-matching`.
-2. **Live search keeps more:**
+1. **Location matching.** Done (#38).
+2. **Live search keeps more.** Done (#40):
    - don't delete live results after 7 days;
    - read 16 pages per search instead of 8;
    - have the worker read a search's waiting hits first;
@@ -160,8 +160,8 @@ For these, the routes are scheduled search with the wording associations use ("c
    - Each event becomes a row pointing at its own site. The worker reads it and lists it as an open call or an event to watch. Calendars that carry calls create rows with their deadline directly. Duplicates across calendars go through the existing event matcher.
 5. **Budget before switching it on.**
    - The green list alone is a few thousand events. An event more than six months away doesn't need a weekly check.
-   - Measure tokens per extraction, then set the check cadence and the daily Claude cap.
-6. **Wider scheduled search:** association wording and a rotation of regions.
-7. **Search words that match their sector.**
+   - Tokens per extraction are measured (#41): about 5,300 in and 300 out, $0.00068 a call on Haiku 5.5, so 600 calls a day is at most about $12 a month. What remains is the check cadence and the daily Claude cap.
+6. **Wider scheduled search.** Live search now asks for "call for presentations" and drops procurement notices (#41). Still to do: the same wording in the scheduled queries, more queries a day, and a rotation of regions.
+7. **Search words that match their sector.** Done (#41).
 
 Raw research (pages, robots files and the five reports) was kept only in the session's scratch folder and is not in the repository.
