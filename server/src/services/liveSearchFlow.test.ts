@@ -360,6 +360,13 @@ describe('buildSearchQueries', () => {
     expect(text).toContain('public relations');
   });
 
+  it('spells out a place for the engine, whichever way it was typed', () => {
+    for (const query of buildSearchQueries('Energy', [], ['CA'], now)) expect(query.q.endsWith(' California')).toBe(true);
+    for (const query of buildSearchQueries('Energy', [], ['california', 'nyc'], now)) {
+      expect(query.q.endsWith(' California OR New York')).toBe(true);
+    }
+  });
+
   it('searches for a sector on its own when there is no query text', () => {
     const queries = buildSearchQueries('', ['public relations'], [], now);
     expect(queries.length).toBeGreaterThanOrEqual(2);

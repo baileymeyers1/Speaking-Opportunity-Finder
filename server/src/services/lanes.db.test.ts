@@ -41,8 +41,9 @@ async function store(title: string, row: RowDates = {}) {
 
 const reset = () => prisma.opportunity.deleteMany({ where: { description: MARKER } });
 const titles = (items: Array<{ title: string }>) => items.map((item) => item.title);
+// The place keeps the list to this file's rows; in person only, since a place also lists every call held online.
 const list = (filters: Parameters<typeof getOpportunities>[0], pageSize = 20, page = 1) =>
-  getOpportunities({ location: PLACE, ...filters }, { page, pageSize }, { now });
+  getOpportunities({ location: PLACE, isRemote: false, ...filters }, { page, pageSize }, { now });
 
 describe('lanes', () => {
   beforeAll(async () => {
