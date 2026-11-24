@@ -137,8 +137,9 @@ describe('enrichment budget against Postgres', () => {
     expect(first?.id).toBe(row.id);
     expect(first?.enrichmentAttempts).toBe(1);
 
-    // The claim is fresh, so a second worker cannot take the same row.
-    expect((await claimNextUnenriched(prisma, now))?.id).not.toBe(row.id);
+    // The claim is fresh, so nobody can take the same row. Asked by name: a worker's
+    // claim would take some other suite's unread row from the shared database.
+    expect(await claimUnenrichedByIds(prisma, [row.id], now)).toEqual([]);
 
     const stored = await prisma.opportunity.findUniqueOrThrow({ where: { id: row.id } });
     expect(stored.enrichmentClaimedAt?.toISOString()).toBe(now.toISOString());
@@ -202,8 +203,8 @@ describe('enrichment budget against Postgres', () => {
     expect(claimed.map((row) => row.id)).toEqual([free.id]);
     expect(claimed[0].enrichmentAttempts).toBe(1);
 
-    // The worker cannot take it now, and neither can a second search.
-    expect(await claimNextUnenriched(prisma, now)).toBeNull();
+    // Nobody can take it now: worker and searches claim through the same lock. Asked by
+    // name, since a worker's claim would take some other suite's unread row.
     expect(await claimUnenrichedByIds(prisma, [free.id], now)).toEqual([]);
   });
 
