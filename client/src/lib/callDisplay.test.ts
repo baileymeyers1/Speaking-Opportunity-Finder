@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { organizationLabel, payLabel, plainDescription, whereLabel } from './callDisplay';
+import { applyHref, organizationLabel, payLabel, plainDescription, whereLabel } from './callDisplay';
 
 describe('organizationLabel', () => {
   it('is the organization, unless it only repeats the title', () => {
@@ -41,5 +41,20 @@ describe('plainDescription', () => {
 
   it('closes up runs of blank lines', () => {
     expect(plainDescription('One\n\n\n\nTwo\n')).toBe('One\n\nTwo');
+  });
+});
+
+describe('applyHref', () => {
+  const event = 'https://greenpowerforum.example/2027';
+  const call = 'https://greenpowerforum.example/2027/call-for-speakers';
+
+  it("goes to the call's own page when the call is on another page than the event's", () => {
+    expect(applyHref({ applyUrl: event, callUrl: call, hasOpenCall: true })).toBe(call);
+  });
+
+  it("goes to the event's page when the call is on it, or there is no call to apply to", () => {
+    expect(applyHref({ applyUrl: event, callUrl: null, hasOpenCall: true })).toBe(event);
+    expect(applyHref({ applyUrl: event, hasOpenCall: null })).toBe(event);
+    expect(applyHref({ applyUrl: event, callUrl: call, hasOpenCall: false })).toBe(event);
   });
 });

@@ -58,6 +58,15 @@ export function CallFacts({ opportunity }: { opportunity: Opportunity }) {
         {pay ? capitalize(pay) : <span className="text-muted-foreground">Not stated</span>}
         {payDetails && <p className="mt-1 line-clamp-4 text-[13px] text-muted-foreground">{payDetails}</p>}
       </Fact>
+      <Fact label="Fee to present">
+        {opportunity.payToPresent === true ? (
+          'Speakers pay a registration, publication or presentation fee'
+        ) : opportunity.payToPresent === false ? (
+          'None: speakers attend free'
+        ) : (
+          <span className="text-muted-foreground">Not stated</span>
+        )}
+      </Fact>
 
       {sectors.length > 0 && <Fact label={sectors.length > 1 ? 'Sectors' : 'Sector'}>{sectors.join(', ')}</Fact>}
 

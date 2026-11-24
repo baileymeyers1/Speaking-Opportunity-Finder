@@ -1,9 +1,9 @@
 import type { ReactNode } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Calendar, ExternalLink, MapPin, Wallet, Zap } from 'lucide-react';
+import { Calendar, ExternalLink, MapPin, Receipt, Wallet, Zap } from 'lucide-react';
 import type { Opportunity } from '../../types';
 import { useSaveCall } from '../../hooks/useSaveCall';
-import { organizationLabel, payLabel, whereLabel } from '../../lib/callDisplay';
+import { applyHref, organizationLabel, payLabel, whereLabel } from '../../lib/callDisplay';
 import { callState } from '../../lib/callState';
 import { formatDeadline } from '../../lib/dates';
 import { FORMAT_ICONS } from '../../lib/formatIcons';
@@ -95,6 +95,14 @@ export function CallRowFrame({ opportunity, lead, actions, dimmed = false, tag }
               {pay}
             </li>
           )}
+          {opportunity.payToPresent && (
+            <li>
+              <Badge variant="warning" title="The call says speakers must pay a registration, publication or presentation fee">
+                <Receipt aria-hidden="true" />
+                Speakers pay
+              </Badge>
+            </li>
+          )}
           {/* Below the wide layout the dates column folds into this line. */}
           <li className="relative z-[1] inline-flex items-center gap-1.5 lg:hidden">
             <Calendar aria-hidden="true" />
@@ -144,7 +152,7 @@ export function ApplyLink({ opportunity, applied = false }: { opportunity: Oppor
       : { label: 'Apply', name: `Apply to ${opportunity.title}` };
   return (
     <Button variant="outline" size="sm" asChild>
-      <a href={opportunity.applyUrl} target="_blank" rel="noopener noreferrer" aria-label={words.name}>
+      <a href={applyHref(opportunity)} target="_blank" rel="noopener noreferrer" aria-label={words.name}>
         {words.label}
         <ExternalLink aria-hidden="true" />
       </a>
