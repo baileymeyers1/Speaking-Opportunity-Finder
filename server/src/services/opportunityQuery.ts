@@ -3,7 +3,7 @@ import type { Lane, SortBy } from 'shared';
 import type { Sector } from '../lib/sectors.js';
 import { parsePlaces, type LocationPattern, type PlaceQuery } from '../lib/location.js';
 import { SEARCH_SOURCES } from './searchSources.js';
-import { matchesAllTerms, searchTerms, termAlternatives, termMatches } from './searchTerms.js';
+import { matchesAllTerms, searchTerms, sectorOfTerm, sectorPhrases, termAlternatives, termMatches } from './searchTerms.js';
 
 /** Filters accepted by `getOpportunities`, as the controller builds them from the query string. */
 export interface OpportunityFilters {
@@ -118,13 +118,24 @@ export function buildOpportunityWhere(filters: OpportunityFilters, now: Date = n
   if (filters.search) {
     const terms = searchTerms(filters.search);
     for (const term of terms.length > 0 ? terms : [filters.search.trim()]) {
+      // A word that names a sector ("energy") also takes the rows in that
+      // sector, and its phrases ("oil and gas") in a title, organization or tag.
+      const sector = sectorOfTerm(term);
       andConditions.push({
-        OR: termAlternatives(term).flatMap((form) => [
-          { title: containsInsensitive(form) },
-          { organization: containsInsensitive(form) },
-          { description: containsInsensitive(form) },
-          { industries: containsInsensitive(form) },
-        ]),
+        OR: [
+          ...termAlternatives(term).flatMap((form) => [
+            { title: containsInsensitive(form) },
+            { organization: containsInsensitive(form) },
+            { description: containsInsensitive(form) },
+            { industries: containsInsensitive(form) },
+          ]),
+          ...sectorPhrases(term).flatMap((phrase) => [
+            { title: containsInsensitive(phrase) },
+            { organization: containsInsensitive(phrase) },
+            { industries: containsInsensitive(phrase) },
+          ]),
+          ...(sector ? [{ sectors: { has: sector } }] : []),
+        ],
       });
     }
   }
@@ -234,6 +245,7 @@ interface RelevanceInput {
   organization?: string | null;
   industries?: string | null;
   description?: string | null;
+  sectors?: readonly string[] | null;
   qualityScore?: number | null;
 }
 
@@ -249,11 +261,16 @@ function parseIndustries(value: string | null | undefined): string[] {
 /**
  * Whether a row matches a search query under the whole-word rule of
  * `searchTerms.ts`: every word in the title, organization, industries or
- * description. ILIKE in the `where` is only a coarse first pass.
+ * description, or a sector word the row's sectors hold. ILIKE in the `where`
+ * is only a coarse first pass.
  */
 export function matchesSearch(opportunity: RelevanceInput, query: string): boolean {
   const industries = parseIndustries(opportunity.industries).join(' ');
-  return matchesAllTerms(searchTerms(query), [opportunity.title, opportunity.organization, industries, opportunity.description]);
+  const headline = [opportunity.title, opportunity.organization, industries];
+  return matchesAllTerms(searchTerms(query), [...headline, opportunity.description], {
+    sectors: opportunity.sectors ?? [],
+    headline,
+  });
 }
 
 /** Keyword relevance of a row to a search term; higher is better. */
@@ -292,6 +309,12 @@ export function computeSearchRelevance(opportunity: RelevanceInput, query: strin
       if (termMatches(term, industries)) score += 15;
       if (termMatches(term, opportunity.description)) score += 5;
     }
+  }
+
+  // A row in the sector a word names counts, below a row that says the word.
+  for (const term of terms) {
+    const sector = sectorOfTerm(term);
+    if (sector && opportunity.sectors?.includes(sector)) score += 15;
   }
 
   score += (opportunity.qualityScore || 0) * 0.1;

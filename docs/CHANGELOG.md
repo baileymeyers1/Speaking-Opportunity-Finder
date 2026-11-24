@@ -2,6 +2,16 @@
 
 Reverse chronological. Current state lives in `docs/STATUS.md`.
 
+## 2026-11-24: search words that name a sector, and no more procurement pages
+
+Steps 6 and 7 of the plan in `docs/plans/2026-11-24-industry-calendars.md`, the parts that need no schema change. Stacked on the live search branch.
+- **A word that names a sector finds the sector** (`searchTerms.ts`). "energy", "healthcare", "finance", "logistics" and the rest (a sector's id or one-word search term) also take the rows in that sector, and the sector's phrases of two words or more ("oil and gas", "offshore wind", "credit union", "mental health") in a row's title, organization or tags. Single words such as "power" or "battery" are left out. So are phrases in a description: measured on production's 835 listings, a phrase there was mostly a passing mention (a DevOps conference on "risk management", a .NET day on "social media"). A row in the sector ranks below a row that says the word.
+- **Measured on those 835 listings, before → after:** energy 44 → 52, healthcare 48 → 76, finance 15 → 32, legal 8 → 24, government 19 → 41, construction 6 → 20, logistics 8 → 18, media 20 → 51, sustainability 23 → 44. What is left of the noise is rows Claude itself put in the sector ("DataGrillen" in agriculture for its barbecue).
+- **Procurement and funding notices are dropped at triage** (`liveHitTriage.ts`, live and scheduled search): RFP/RFO/RFQ/RFI, "Request for Proposals", "Solicitations", bids, tenders, funding calls. "Procurement" alone is kept: a procurement summit is a conference.
+- **Live search asks for "call for presentations", not "call for proposals".** In energy and government a call for proposals is a request for bids. On 20 hits per query, explicit calls for speakers: energy 11 → 16, healthcare 16 → 18, education 17 → 19, legal 17 → 17.
+- **What a Claude call costs**, measured on four real pages: about 5,300 input and 300 output tokens, $0.00068 a call on Haiku 5.5. The daily cap of 600 is at most about $12 a month.
+- **Tests.** Sector words in `searchTerms.test.ts`, the sector search against Postgres in `sectorFilter.db.test.ts`, procurement titles from the real search in `liveHitTriage.test.ts`.
+
 ## 2026-11-24: live search keeps more of what it finds
 
 The second step of the plan in `docs/plans/2026-11-24-industry-calendars.md`. A search for "Energy" in California had found 43 pages, read 8 of them (3 were directory pages, 1 a funding call, 2 closed calls), and left 35 for a worker that reads 5 rows every 5 minutes. A week later every one of those rows was deleted, read or not. No schema change.

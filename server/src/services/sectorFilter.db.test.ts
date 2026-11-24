@@ -89,6 +89,15 @@ describe('the sector filter', () => {
     expect(withSector).not.toContain('legacy-null');
   });
 
+  it('takes the rows in a sector when a search word names it, though their text never says it', async () => {
+    const search = async (words: string) => {
+      const page = await getOpportunities({ search: `${SEARCH} ${words}` }, { page: 1, pageSize: 50 }, { now });
+      return page.items.map((item) => item.title.replace(`${SEARCH} `, '')).sort();
+    };
+    expect(await search('finance')).toEqual(['fintech']);
+    expect(await search('healthcare')).toEqual(['ai-health', 'nursing']);
+  });
+
   it('maps an old industries link to the sector it meant', async () => {
     expect(await titles({ industries: 'kubernetes' })).toEqual(['kube']);
     expect(await titles({ industries: ['artificial intelligence'] })).toEqual(['ai-health']);
