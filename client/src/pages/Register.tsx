@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate, Navigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
+import { useBrowsePath } from '../hooks/useBrowsePath';
 
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -10,6 +11,7 @@ import { AlertCircle, Loader2 } from 'lucide-react';
 
 export function Register() {
   const navigate = useNavigate();
+  const browsePath = useBrowsePath();
   const { register, isAuthenticated, isLoading: authLoading } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -26,7 +28,7 @@ export function Register() {
   }
 
   if (isAuthenticated) {
-    return <Navigate to="/" replace />;
+    return <Navigate to={browsePath} replace />;
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -47,7 +49,7 @@ export function Register() {
 
     try {
       await register(email, password);
-      navigate('/');
+      navigate(browsePath);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Registration failed');
     } finally {

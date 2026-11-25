@@ -3,7 +3,10 @@ import { Link, useLocation } from 'react-router-dom';
 import { Spring, animator } from '@/lib/motion';
 
 export interface NavTab {
-  to: string;
+  /** The page the tab is for: it is the current tab while this is the path. */
+  path: string;
+  /** Where the link goes when that is more than the path (Browse returns to its last search). */
+  to?: string;
   label: string;
 }
 
@@ -83,9 +86,9 @@ export function NavTabs({ tabs }: { tabs: NavTab[] }) {
     >
       {tabs.map((tab) => (
         <Link
-          key={tab.to}
-          to={tab.to}
-          aria-current={pathname === tab.to ? 'page' : undefined}
+          key={tab.path}
+          to={tab.to ?? tab.path}
+          aria-current={pathname === tab.path ? 'page' : undefined}
           className="inline-flex items-center text-sm text-muted-foreground transition-colors duration-state ease-out hover:text-foreground aria-[current=page]:text-foreground"
           onPointerEnter={(event) => ruleRef.current?.moveTo(event.currentTarget)}
           onFocus={(event) => ruleRef.current?.moveTo(event.currentTarget)}

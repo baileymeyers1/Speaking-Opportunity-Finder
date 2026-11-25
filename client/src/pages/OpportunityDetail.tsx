@@ -1,5 +1,6 @@
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, MapPin, Zap } from 'lucide-react';
+import { useBrowsePath } from '../hooks/useBrowsePath';
 import { useOpportunity } from '../hooks/useOpportunity';
 import { useSaveCall } from '../hooks/useSaveCall';
 import { organizationLabel, plainDescription, whereLabel } from '../lib/callDisplay';
@@ -30,7 +31,8 @@ export function OpportunityDetail() {
       }
     },
   });
-  const backTo = (location.state as { from?: string } | null)?.from || '/';
+  const browsePath = useBrowsePath();
+  const backTo = (location.state as { from?: string } | null)?.from || browsePath;
 
   if (isLoading) return <OpportunityDetailSkeleton />;
 
@@ -42,7 +44,7 @@ export function OpportunityDetail() {
           It may have closed and left the list, or the link is wrong.
         </p>
         <Button variant="outline" className="mt-5" asChild>
-          <Link to="/">
+          <Link to={browsePath}>
             <ArrowLeft aria-hidden="true" />
             Back to calls
           </Link>

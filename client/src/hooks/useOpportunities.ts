@@ -20,6 +20,18 @@ export async function fetchOpportunityPage(
   return response.data;
 }
 
+/** A page a live search answered: only those carry the live search's summary (`pendingLiveHits`). */
+export function isLiveSearchPage(page: OpportunityPage | undefined): boolean {
+  return page?.pendingLiveHits !== undefined;
+}
+
+/** How long a list is fresh. A live search's list stays until a new search replaces it. */
+export function listStaleTime(page: OpportunityPage | undefined): number {
+  // Refetching it would bring back the stored list without what the search surfaced, so it
+  // is never refetched on its own; "Clear live results" refetches on purpose.
+  return isLiveSearchPage(page) ? Infinity : 5 * ONE_MINUTE;
+}
+
 /**
  * The list for one URL. The key is the serialized filters, so the same URL
  * always maps to the same cache entry (back navigation restores it) and any
@@ -34,8 +46,7 @@ export function useOpportunities(filters: BrowseFilters, speakerId?: string) {
     queryKey: queryKeys.opportunities.list(filters, speakerId),
     queryFn: ({ signal }) => fetchOpportunityPage(filters, { signal, speakerId }),
     placeholderData: keepPreviousData,
-    // Long enough that a live search result survives a round trip to a detail page.
-    staleTime: 5 * ONE_MINUTE,
+    staleTime: (query) => listStaleTime(query.state.data),
     meta: { persist: true },
   });
 }

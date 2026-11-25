@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Menu } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
+import { useBrowsePath } from '../hooks/useBrowsePath';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { Separator } from '@/components/ui/separator';
@@ -13,11 +14,12 @@ export function Navbar() {
   const { isAuthenticated, user, logout } = useAuth();
   const { pathname } = useLocation();
   const [sheetOpen, setSheetOpen] = useState(false);
+  const browsePath = useBrowsePath();
 
   const tabs: NavTab[] = [
-    { to: '/', label: 'Browse' },
-    ...(isAuthenticated ? [{ to: '/saved', label: 'Saved' }, { to: '/speakers', label: 'Speakers' }] : []),
-    ...(isAuthenticated && user?.isAdmin ? [{ to: '/admin/dashboard', label: 'Analytics' }] : []),
+    { path: '/', to: browsePath, label: 'Browse' },
+    ...(isAuthenticated ? [{ path: '/saved', label: 'Saved' }, { path: '/speakers', label: 'Speakers' }] : []),
+    ...(isAuthenticated && user?.isAdmin ? [{ path: '/admin/dashboard', label: 'Analytics' }] : []),
   ];
 
   const closeSheet = () => setSheetOpen(false);
@@ -65,10 +67,10 @@ export function Navbar() {
               <nav aria-label="Mobile navigation" className="mt-6 flex flex-col">
                 {tabs.map((tab) => (
                   <Link
-                    key={tab.to}
-                    to={tab.to}
+                    key={tab.path}
+                    to={tab.to ?? tab.path}
                     onClick={closeSheet}
-                    aria-current={pathname === tab.to ? 'page' : undefined}
+                    aria-current={pathname === tab.path ? 'page' : undefined}
                     className="-ml-px border-l-2 border-transparent py-2 pl-3 text-[15px] text-muted-foreground transition-colors hover:text-foreground aria-[current=page]:border-primary aria-[current=page]:text-foreground"
                   >
                     {tab.label}
