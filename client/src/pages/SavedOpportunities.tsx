@@ -3,6 +3,7 @@ import { AlertTriangle, Loader2 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { useRowLeaving } from '../hooks/useRowLeaving';
 import { useForWhom } from '../hooks/useForWhom';
+import { useBrowsePath } from '../hooks/useBrowsePath';
 import { EVERYONE, savedFor, savedForLabel } from '../lib/forWhom';
 import {
   useRemoveSavedOpportunity,
@@ -67,6 +68,7 @@ export function SavedOpportunities() {
   const removeSaved = useRemoveSavedOpportunity();
   const changeSaved = useChangeSavedCall();
   const forWhom = useForWhom({ allowNobody: true });
+  const browsePath = useBrowsePath();
 
   const stageParam = searchParams.get('stage');
   const stage = isStage(stageParam) ? stageParam : DEFAULT_STAGE;
@@ -198,7 +200,7 @@ export function SavedOpportunities() {
             </p>
             {(nothingSaved || stage === 'interested') && (
               <Button variant="outline" size="sm" className="mt-4" asChild>
-                <Link to="/">Browse calls</Link>
+                <Link to={browsePath}>Browse calls</Link>
               </Button>
             )}
           </div>

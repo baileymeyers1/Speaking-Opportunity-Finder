@@ -26,6 +26,7 @@ import { useLiveSearch } from '../hooks/useLiveSearch';
 import { useSpeakers } from '../hooks/useSpeakers';
 import { useForWhom } from '../hooks/useForWhom';
 import { speakerParam } from '../lib/forWhom';
+import { rememberBrowseSearch } from '../lib/lastBrowse';
 import { Button } from '@/components/ui/button';
 import { AlertCircle, Sparkles, X } from 'lucide-react';
 
@@ -35,6 +36,9 @@ const BANNER_DISMISSED_KEY = 'loginBannerDismissed';
 function useBrowseFilters() {
   const [searchParams, setSearchParams] = useSearchParams();
   const filters = useMemo(() => searchParamsToFilters(searchParams), [searchParams]);
+  // Links back to Browse (useBrowsePath) return to this URL, so the search outlives a visit to another tab.
+  const search = searchParams.toString();
+  useEffect(() => rememberBrowseSearch(search), [search]);
   const updateFilters = useCallback(
     (updater: (previous: BrowseFilters) => BrowseFilters) => {
       setSearchParams(
